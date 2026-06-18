@@ -1,0 +1,32 @@
+{
+  "name": "@tabipla/search-core",
+  "version": "0.1.0",
+  "description": "Elasticsearch を用いた検索ロジックを集約する共通ライブラリ",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.15.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
