@@ -241,7 +241,9 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     async (req) => {
       const mode = req.body.mode ?? "hybrid";
       const size = req.body.size ?? 30;
-      const embedding = await embedText(req.body.query);
+      const embedding = await embedText(req.body.query, {
+        taskType: "RETRIEVAL_QUERY",
+      });
 
       if (mode === "vector") {
         const results = await vectorSearch(client, {

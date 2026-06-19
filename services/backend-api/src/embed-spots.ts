@@ -14,10 +14,11 @@ import { toSpotDocument } from "./mapper.js";
  *
  * 前提:
  *   - reindex 相当の DB → ES 同期後、または seed 投入後に実行する。
- *   - embedding 生成は backend-api 側（現状 hash。Gemini 対応予定）。
+ *   - embedding 生成は backend-api 側（Gemini Embeddings / hash フォールバック）。
  *
  * 環境変数:
  *   - DATABASE_URL, ES_NODE など（reindex と同様）
+ *   - GEMINI_API_KEY, EMBEDDING_PROVIDER（reindex と同様）
  *   - EMBED_BATCH_SIZE: 1バッチあたりの件数（既定 50）
  */
 
@@ -45,7 +46,9 @@ async function main(): Promise<void> {
   let hadErrors = false;
 
   console.log(
-    `[embed-spots] embedding プロバイダ: ${provider}${provider === "hash" ? "（意味的類似度は限定的）" : ""}`,
+    `[embed-spots] embedding プロバイダ: ${provider}${
+      provider === "hash" ? "（意味的類似度は限定的）" : ""
+    }`,
   );
 
   try {
@@ -59,7 +62,9 @@ async function main(): Promise<void> {
       for (const row of batch) {
         const base = toSpotDocument(row);
         const text = buildSpotEmbedText(base);
-        const embedding = await embedText(text);
+        const embedding = await embedText(text, {
+          taskType: "RETRIEVAL_DOCUMENT",
+        });
         documents.push({ ...base, embedding });
       }
 
