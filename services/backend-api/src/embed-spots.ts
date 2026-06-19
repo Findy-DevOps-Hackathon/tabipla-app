@@ -14,11 +14,10 @@ import { toSpotDocument } from "./mapper.js";
  *
  * 前提:
  *   - reindex 相当の DB → ES 同期後、または seed 投入後に実行する。
- *   - embedding 生成は backend-api 側（OpenAI または hash フォールバック）。
+ *   - embedding 生成は backend-api 側（現状 hash。Gemini 対応予定）。
  *
  * 環境変数:
  *   - DATABASE_URL, ES_NODE など（reindex と同様）
- *   - EMBEDDING_PROVIDER: 既定 hash（API キー不要）。openai は明示設定時のみ
  *   - EMBED_BATCH_SIZE: 1バッチあたりの件数（既定 50）
  */
 

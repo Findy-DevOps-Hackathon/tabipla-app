@@ -10,7 +10,7 @@ export const DEFAULT_INDEX_NAME = process.env.ES_INDEX ?? "spots";
  * Embedding 生成は search-core の責務外だが、mapping を確定するために次元数だけは
  * 定数として管理する。利用する埋め込みモデルに合わせて環境変数 ES_VECTOR_DIMS で上書きする。
  *
- * 既定値 1536 は OpenAI text-embedding-3-small 等を想定した一般的な値（暫定）。
+ * 既定値 1536 は暫定。利用する埋め込みモデル（Gemini 等）に合わせて ES_VECTOR_DIMS で上書きする。
  */
 export const VECTOR_DIMS: number = (() => {
   const raw = process.env.ES_VECTOR_DIMS;
