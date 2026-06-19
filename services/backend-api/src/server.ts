@@ -4,7 +4,6 @@ import {
   pingElasticsearch,
   ensureIndex,
   indexDocument,
-  updateDocument,
   deleteDocument,
   keywordSearch,
   vectorSearch,
@@ -12,6 +11,19 @@ import {
   type ElasticsearchClient,
   type SpotDocument,
 } from "@tabipla/search-core";
+import {
+  createDatabase,
+  upsertSpot,
+  getSpotById,
+  deleteSpot,
+  type Database,
+} from "@tabipla/db";
+import {
+  toSpotDocument,
+  toNewSpotRow,
+  mergeSpotRow,
+  type SpotPatch,
+} from "./mapper.js";
 import {
   ensureIndexSchema,
   createSpotSchema,
@@ -26,12 +38,15 @@ import {
  * backend-api は検索ロジックを持たず、必ず search-core を経由して Elasticsearch を扱う。
  * （ES クライアントの生成も search-core の createElasticsearchClient に委譲する）
  *
+ * データの正本は PostgreSQL（@tabipla/db）。書き込み系（/spots）は必ず PG に対して行い、
+ * Elasticsearch へは search-core 経由で write-through 反映する（ES は検索用の写し）。
+ *
  * 入力検証は Fastify 組み込みの JSON Schema（src/schemas.ts）で行う。
  * スキーマ違反は onRequest 後の検証段階で 400 として弾かれ、エラーハンドラが整形する。
  */
 
 type SpotBody = SpotDocument;
-type UpdateSpotBody = Partial<Omit<SpotDocument, "id">>;
+type UpdateSpotBody = SpotPatch;
 type EnsureIndexBody = { index?: string } | null;
 type VectorSearchBody = {
   embedding: number[];
@@ -50,8 +65,10 @@ type HybridSearchBody = {
 };
 
 export type BuildServerOptions = {
-  /** 既存クライアントを注入する場合に指定（テスト用途など）。 */
+  /** 既存の Elasticsearch クライアントを注入する場合に指定（テスト用途など）。 */
   client?: ElasticsearchClient;
+  /** 既存の DB 接続を注入する場合に指定（テスト用途など）。 */
+  db?: Database;
 };
 
 /**
@@ -74,6 +91,15 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   });
   const client = options.client ?? createElasticsearchClient();
 
+  // 正本 DB（PostgreSQL）。注入が無ければ自前で生成し、その場合は終了時にクローズする。
+  const db = options.db ?? createDatabase();
+  const ownsDb = options.db === undefined;
+  if (ownsDb) {
+    app.addHook("onClose", async () => {
+      await db.$client.end();
+    });
+  }
+
   // ---- ヘルスチェック ------------------------------------------------------
   app.get("/health", async () => {
     const alive = await pingElasticsearch(client);
@@ -91,33 +117,50 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
 
   // ---- スポット登録 (upsert) ----------------------------------------------
   // 必須項目(id/name/description)・型・未知フィールド拒否はスキーマで検証する。
+  // 正本(PG)へ upsert し、その結果を ES へ write-through 反映する。
   app.post<{ Body: SpotBody; Querystring: { refresh?: string } }>(
     "/spots",
     { schema: createSpotSchema },
     async (req) => {
       const refresh = req.query.refresh === "true";
-      return indexDocument(client, req.body, { refresh });
+      const row = await upsertSpot(db, toNewSpotRow(req.body));
+      const document = toSpotDocument(row);
+      await indexDocument(client, document, { refresh });
+      return document;
     },
   );
 
   // ---- スポット更新 --------------------------------------------------------
   // 最低1フィールド(minProperties:1)・id変更不可はスキーマで検証する。
+  // 正本(PG)の既存行に部分更新を適用して upsert し、ES へ write-through 反映する。
   app.put<{
     Params: { id: string };
     Body: UpdateSpotBody;
     Querystring: { refresh?: string };
-  }>("/spots/:id", { schema: updateSpotSchema }, async (req) => {
+  }>("/spots/:id", { schema: updateSpotSchema }, async (req, reply) => {
     const refresh = req.query.refresh === "true";
-    return updateDocument(client, req.params.id, req.body, { refresh });
+    const existing = await getSpotById(db, req.params.id);
+    if (!existing) {
+      return reply
+        .code(404)
+        .send({ error: `スポットが見つかりません: ${req.params.id}` });
+    }
+    const row = await upsertSpot(db, mergeSpotRow(existing, req.body));
+    const document = toSpotDocument(row);
+    await indexDocument(client, document, { refresh });
+    return document;
   });
 
   // ---- スポット削除 --------------------------------------------------------
+  // 正本(PG)から削除し、ES の写しも削除する。
   app.delete<{ Params: { id: string }; Querystring: { refresh?: string } }>(
     "/spots/:id",
     { schema: deleteSpotSchema },
     async (req) => {
       const refresh = req.query.refresh === "true";
-      return deleteDocument(client, req.params.id, { refresh });
+      await deleteSpot(db, req.params.id);
+      const result = await deleteDocument(client, req.params.id, { refresh });
+      return result;
     },
   );
 

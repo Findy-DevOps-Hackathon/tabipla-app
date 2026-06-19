@@ -1,0 +1,37 @@
+/**
+ * backend-api のレスポンスに対応する型。
+ *
+ * search-core の `SpotDocument` / `SearchResult` に対応するが、フロントは
+ * search-core（Node/ES 依存）に直接依存させず、HTTP 境界の型として最小限を再定義する。
+ */
+export type GeoPoint = {
+  lat: number;
+  lon: number;
+};
+
+export type SpotDocument = {
+  id: string;
+  name: string;
+  description: string;
+  category?: string;
+  area?: string;
+  prefecture?: string;
+  address?: string;
+  tags?: string[];
+  location?: GeoPoint;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+/** 検索結果1件（スコア + ドキュメント本体）。 */
+export type SearchResult = {
+  id: string;
+  score: number | null;
+  document: SpotDocument;
+};
+
+/** `GET /search` のレスポンス形。 */
+export type SearchResponse = {
+  count: number;
+  results: SearchResult[];
+};

@@ -1,0 +1,143 @@
+import { asc, eq, gt, sql } from "drizzle-orm";
+import type { Database } from "../client.js";
+import { spots, type NewSpotRow, type SpotRow } from "../schema.js";
+
+/**
+ * spots テーブルに対する基本的なデータアクセスを集約する。
+ *
+ * 検索ロジック（Elasticsearch）は持たず、あくまで PostgreSQL 上の正本データを扱う。
+ * Elasticsearch への反映は reindex（backend-api 側）が search-core 経由で行う。
+ */
+
+/**
+ * スポットを upsert する（同一 id があれば更新）。
+ *
+ * @returns 反映後の行
+ */
+export async function upsertSpot(
+  db: Database,
+  input: NewSpotRow,
+): Promise<SpotRow> {
+  const now = new Date();
+  const [row] = await db
+    .insert(spots)
+    .values({ ...input, updatedAt: now })
+    .onConflictDoUpdate({
+      target: spots.id,
+      set: {
+        name: sql`excluded.name`,
+        description: sql`excluded.description`,
+        category: sql`excluded.category`,
+        area: sql`excluded.area`,
+        prefecture: sql`excluded.prefecture`,
+        address: sql`excluded.address`,
+        tags: sql`excluded.tags`,
+        lat: sql`excluded.lat`,
+        lon: sql`excluded.lon`,
+        updatedAt: now,
+      },
+    })
+    .returning();
+
+  if (!row) {
+    throw new Error("[db] upsertSpot: 行の書き込みに失敗しました。");
+  }
+  return row;
+}
+
+/**
+ * 複数スポットをまとめて upsert する。
+ *
+ * @returns 反映後の行配列
+ */
+export async function upsertSpots(
+  db: Database,
+  inputs: NewSpotRow[],
+): Promise<SpotRow[]> {
+  if (inputs.length === 0) return [];
+  const now = new Date();
+  return db
+    .insert(spots)
+    .values(inputs.map((input) => ({ ...input, updatedAt: now })))
+    .onConflictDoUpdate({
+      target: spots.id,
+      set: {
+        name: sql`excluded.name`,
+        description: sql`excluded.description`,
+        category: sql`excluded.category`,
+        area: sql`excluded.area`,
+        prefecture: sql`excluded.prefecture`,
+        address: sql`excluded.address`,
+        tags: sql`excluded.tags`,
+        lat: sql`excluded.lat`,
+        lon: sql`excluded.lon`,
+        updatedAt: now,
+      },
+    })
+    .returning();
+}
+
+/** id でスポットを1件取得する（無ければ undefined）。 */
+export async function getSpotById(
+  db: Database,
+  id: string,
+): Promise<SpotRow | undefined> {
+  const [row] = await db.select().from(spots).where(eq(spots.id, id)).limit(1);
+  return row;
+}
+
+/** id でスポットを削除する。 */
+export async function deleteSpot(db: Database, id: string): Promise<void> {
+  await db.delete(spots).where(eq(spots.id, id));
+}
+
+/** スポット総件数を返す。 */
+export async function countSpots(db: Database): Promise<number> {
+  const [row] = await db.select({ value: sql<number>`count(*)::int` }).from(spots);
+  return row?.value ?? 0;
+}
+
+/**
+ * id 昇順でスポットをページングしながら取得する（reindex 用のキーセットページング）。
+ *
+ * 大量データでも一定メモリで全件処理できるよう、`afterId` を起点に `batchSize` 件ずつ返す。
+ *
+ * @param afterId このIDより大きいものを取得（先頭は undefined）
+ * @param batchSize 取得件数
+ */
+export async function listSpotsAfter(
+  db: Database,
+  afterId: string | undefined,
+  batchSize: number,
+): Promise<SpotRow[]> {
+  const base = db.select().from(spots);
+  const query =
+    afterId === undefined
+      ? base.orderBy(asc(spots.id)).limit(batchSize)
+      : base.where(gt(spots.id, afterId)).orderBy(asc(spots.id)).limit(batchSize);
+  return query;
+}
+
+/**
+ * 全スポットをバッチ単位で順に処理する（reindex のための非同期イテレータ）。
+ *
+ * @example
+ * for await (const batch of iterateAllSpots(db, 500)) {
+ *   await bulkIndexDocuments(es, batch.map(toSpotDocument));
+ * }
+ */
+export async function* iterateAllSpots(
+  db: Database,
+  batchSize = 500,
+): AsyncGenerator<SpotRow[], void, void> {
+  let afterId: string | undefined = undefined;
+  while (true) {
+    const batch = await listSpotsAfter(db, afterId, batchSize);
+    if (batch.length === 0) return;
+    yield batch;
+    const last = batch[batch.length - 1];
+    if (!last) return;
+    afterId = last.id;
+    if (batch.length < batchSize) return;
+  }
+}

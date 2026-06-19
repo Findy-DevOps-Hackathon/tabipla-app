@@ -46,6 +46,32 @@ services:
       elasticsearch:
         condition: service_healthy
 
+  # ---------------------------------------------------------------------------
+  # アプリのマスターデータ用 PostgreSQL（ローカル開発専用）
+  #   - Drizzle ORM 経由でアクセスする（packages/db 参照）。
+  #   - ここに登録したスポット等を search-core 経由で Elasticsearch へ reindex する。
+  #   - 認証情報はローカル検証用の固定値。本番では使用しないこと。
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: tabipla-dev-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-tabipla}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-tabipla}
+      - POSTGRES_DB=${POSTGRES_DB:-tabipla}
+    # 5433: ホスト側の PostgreSQL（Homebrew 等）が 5432 を使う環境向け
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tabipla} -d ${POSTGRES_DB:-tabipla}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
 volumes:
   es-data:
+    driver: local
+  pg-data:
     driver: local
