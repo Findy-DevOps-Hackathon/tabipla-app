@@ -30,8 +30,13 @@ export type SearchResult = {
   document: SpotDocument;
 };
 
-/** `GET /search` のレスポンス形。 */
+/** `GET /search` / `POST /search/semantic` のレスポンス形。 */
 export type SearchResponse = {
   count: number;
   results: SearchResult[];
+  /** semantic 検索時のみ返る。 */
+  mode?: "vector" | "hybrid";
 };
+
+/** フロントで選べる検索モード。 */
+export type SearchMode = "keyword" | "vector" | "hybrid";

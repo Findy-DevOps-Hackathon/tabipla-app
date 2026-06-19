@@ -1,4 +1,4 @@
-import type { SearchResponse } from "./types.ts";
+import type { SearchMode, SearchResponse } from "./types.ts";
 
 /**
  * backend-api への検索リクエストを担う薄いクライアント。
@@ -10,6 +10,7 @@ const API_BASE = "/api";
 
 export type SearchParams = {
   query: string;
+  mode?: SearchMode;
   size?: number;
   from?: number;
   signal?: AbortSignal;
@@ -20,25 +21,48 @@ type ApiErrorBody = {
   error?: string;
 };
 
+async function parseApiError(res: Response): Promise<never> {
+  const body = (await res.json().catch(() => null)) as ApiErrorBody | null;
+  throw new Error(
+    body?.error ?? `検索に失敗しました（HTTP ${res.status}）。`,
+  );
+}
+
 export async function searchSpots(
   params: SearchParams,
 ): Promise<SearchResponse> {
-  const search = new URLSearchParams();
-  search.set("q", params.query);
-  if (params.size !== undefined) search.set("size", String(params.size));
-  if (params.from !== undefined) search.set("from", String(params.from));
+  const mode = params.mode ?? "keyword";
 
-  const res = await fetch(`${API_BASE}/search?${search.toString()}`, {
-    headers: { accept: "application/json" },
+  if (mode === "keyword") {
+    const search = new URLSearchParams();
+    search.set("q", params.query);
+    if (params.size !== undefined) search.set("size", String(params.size));
+    if (params.from !== undefined) search.set("from", String(params.from));
+
+    const res = await fetch(`${API_BASE}/search?${search.toString()}`, {
+      headers: { accept: "application/json" },
+      signal: params.signal,
+    });
+
+    if (!res.ok) await parseApiError(res);
+    return (await res.json()) as SearchResponse;
+  }
+
+  const semanticMode = mode === "vector" ? "vector" : "hybrid";
+  const res = await fetch(`${API_BASE}/search/semantic`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      query: params.query,
+      mode: semanticMode,
+      size: params.size ?? 30,
+    }),
     signal: params.signal,
   });
 
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as ApiErrorBody | null;
-    throw new Error(
-      body?.error ?? `検索に失敗しました（HTTP ${res.status}）。`,
-    );
-  }
-
+  if (!res.ok) await parseApiError(res);
   return (await res.json()) as SearchResponse;
 }

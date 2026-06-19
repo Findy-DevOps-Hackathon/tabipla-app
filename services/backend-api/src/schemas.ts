@@ -142,3 +142,20 @@ export const hybridSearchSchema = {
     },
   },
 } as const;
+
+/** POST /search/semantic（クエリ文字列から embedding を生成して検索） */
+export const semanticSearchSchema = {
+  body: {
+    type: "object",
+    required: ["query"],
+    additionalProperties: false,
+    properties: {
+      query: { type: "string", minLength: 1 },
+      mode: { type: "string", enum: ["vector", "hybrid"] },
+      size: { type: "integer", minimum: 1, maximum: 1000 },
+      k: { type: "integer", minimum: 1, maximum: 1000 },
+      knnBoost: { type: "number", minimum: 0 },
+      index: { type: "string", minLength: 1 },
+    },
+  },
+} as const;

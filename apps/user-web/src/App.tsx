@@ -1,15 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 import { searchSpots } from "./api.ts";
-import type { SearchResult } from "./types.ts";
+import type { SearchMode, SearchResult } from "./types.ts";
 import { SpotCard } from "./components/SpotCard.tsx";
 
 /** 入力文字列のデバウンス時間（ms）。連続入力中の過剰リクエストを抑える。 */
 const DEBOUNCE_MS = 300;
 
+const SEARCH_MODES: Array<{ value: SearchMode; label: string; hint: string }> =
+  [
+    {
+      value: "keyword",
+      label: "キーワード",
+      hint: "名前・説明文の全文一致",
+    },
+    {
+      value: "vector",
+      label: "ベクトル",
+      hint: "意味が近いスポットを探索",
+    },
+    {
+      value: "hybrid",
+      label: "ハイブリッド",
+      hint: "キーワード + 意味の両方",
+    },
+  ];
+
 type Status = "idle" | "loading" | "success" | "error";
 
 export default function App() {
   const [input, setInput] = useState("");
+  const [mode, setMode] = useState<SearchMode>("hybrid");
   const [status, setStatus] = useState<Status>("idle");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
@@ -35,14 +55,19 @@ export default function App() {
       setStatus("loading");
       setHasSearched(true);
 
-      searchSpots({ query: keyword, size: 30, signal: controller.signal })
+      searchSpots({
+        query: keyword,
+        mode,
+        size: 30,
+        signal: controller.signal,
+      })
         .then((res) => {
           setResults(res.results);
           setStatus("success");
         })
         .catch((error: unknown) => {
           if (error instanceof DOMException && error.name === "AbortError") {
-            return; // 後続リクエストに置き換わっただけなので無視する。
+            return;
           }
           setErrorMessage(
             error instanceof Error ? error.message : "検索に失敗しました。",
@@ -52,7 +77,9 @@ export default function App() {
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [input]);
+  }, [input, mode]);
+
+  const activeMode = SEARCH_MODES.find((item) => item.value === mode);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -70,7 +97,36 @@ export default function App() {
             行きたい場所・キーワードを入力してください（例: 京都、寺、竹林）。
           </p>
 
-          <div className="relative mt-6">
+          <div
+            className="mt-5 flex flex-wrap gap-2"
+            role="radiogroup"
+            aria-label="検索モード"
+          >
+            {SEARCH_MODES.map((item) => {
+              const selected = mode === item.value;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setMode(item.value)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    selected
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+          {activeMode && (
+            <p className="mt-2 text-xs text-slate-400">{activeMode.hint}</p>
+          )}
+
+          <div className="relative mt-5">
             <svg
               className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-slate-400"
               viewBox="0 0 24 24"
@@ -104,6 +160,16 @@ export default function App() {
         {status === "error" && (
           <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {errorMessage}
+            {mode !== "keyword" && (
+              <p className="mt-2 text-xs text-rose-600">
+                ベクトル/ハイブリッド検索を使う前に、
+                <code className="rounded bg-rose-100 px-1">
+                  pnpm -C services/backend-api embed-spots
+                </code>
+                {" "}
+                で embedding を投入してください。
+              </p>
+            )}
           </div>
         )}
 
@@ -117,7 +183,7 @@ export default function App() {
           <>
             <p className="mb-4 text-sm text-slate-500">
               {results.length > 0
-                ? `${results.length} 件のスポットが見つかりました`
+                ? `${results.length} 件のスポットが見つかりました（${activeMode?.label ?? mode}）`
                 : "該当するスポットが見つかりませんでした"}
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

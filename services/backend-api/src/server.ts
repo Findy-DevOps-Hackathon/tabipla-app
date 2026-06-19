@@ -3,7 +3,6 @@ import {
   createElasticsearchClient,
   pingElasticsearch,
   ensureIndex,
-  indexDocument,
   deleteDocument,
   keywordSearch,
   vectorSearch,
@@ -24,6 +23,11 @@ import {
   mergeSpotRow,
   type SpotPatch,
 } from "./mapper.js";
+import { embedText } from "./embedding.js";
+import {
+  upsertSpotInElasticsearch,
+  patchSpotInElasticsearch,
+} from "./esSync.js";
 import {
   ensureIndexSchema,
   createSpotSchema,
@@ -32,6 +36,7 @@ import {
   keywordSearchSchema,
   vectorSearchSchema,
   hybridSearchSchema,
+  semanticSearchSchema,
 } from "./schemas.js";
 
 /**
@@ -58,6 +63,14 @@ type HybridSearchBody = {
   query?: string;
   embedding?: number[];
   filters?: Record<string, unknown>;
+  size?: number;
+  k?: number;
+  knnBoost?: number;
+  index?: string;
+};
+type SemanticSearchBody = {
+  query: string;
+  mode?: "vector" | "hybrid";
   size?: number;
   k?: number;
   knnBoost?: number;
@@ -125,7 +138,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       const refresh = req.query.refresh === "true";
       const row = await upsertSpot(db, toNewSpotRow(req.body));
       const document = toSpotDocument(row);
-      await indexDocument(client, document, { refresh });
+      await upsertSpotInElasticsearch(client, document, { refresh });
       return document;
     },
   );
@@ -147,7 +160,8 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     }
     const row = await upsertSpot(db, mergeSpotRow(existing, req.body));
     const document = toSpotDocument(row);
-    await indexDocument(client, document, { refresh });
+    const { id, ...partial } = document;
+    await patchSpotInElasticsearch(client, id, partial, { refresh });
     return document;
   });
 
@@ -217,6 +231,36 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         index: req.body.index,
       });
       return { count: results.length, results };
+    },
+  );
+
+  // ---- セマンティック検索（クエリ文字列 → embedding 生成 → vector/hybrid） ----
+  app.post<{ Body: SemanticSearchBody }>(
+    "/search/semantic",
+    { schema: semanticSearchSchema },
+    async (req) => {
+      const mode = req.body.mode ?? "hybrid";
+      const size = req.body.size ?? 30;
+      const embedding = await embedText(req.body.query);
+
+      if (mode === "vector") {
+        const results = await vectorSearch(client, {
+          embedding,
+          k: req.body.k ?? size,
+          index: req.body.index,
+        });
+        return { mode, count: results.length, results };
+      }
+
+      const results = await hybridSearch(client, {
+        query: req.body.query,
+        embedding,
+        size,
+        k: req.body.k ?? size,
+        knnBoost: req.body.knnBoost,
+        index: req.body.index,
+      });
+      return { mode, count: results.length, results };
     },
   );
 
