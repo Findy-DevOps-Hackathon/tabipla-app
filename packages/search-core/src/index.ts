@@ -35,6 +35,7 @@ export {
 export type { IndexingOptions } from "./indexing/indexDocument.js";
 export { updateDocument } from "./indexing/updateDocument.js";
 export { deleteDocument } from "./indexing/deleteDocument.js";
+export { indexSpot, deleteSpot } from "./indexing/spotIndexing.js";
 
 // Search
 export { keywordSearch } from "./search/keywordSearch.js";
@@ -43,3 +44,9 @@ export { vectorSearch } from "./search/vectorSearch.js";
 export type { VectorSearchParams } from "./search/vectorSearch.js";
 export { hybridSearch } from "./search/hybridSearch.js";
 export type { HybridSearchParams } from "./search/hybridSearch.js";
+export { searchCandidateSpots } from "./search/searchCandidateSpots.js";
+export type { SearchCandidateSpotsParams } from "./search/searchCandidateSpots.js";
+export {
+  buildCandidateSpotFilters,
+  type CandidateSpotFilterParams,
+} from "./search/buildSpotFilters.js";

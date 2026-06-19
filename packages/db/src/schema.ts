@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   doublePrecision,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -44,6 +45,8 @@ export const spots = pgTable(
     lat: doublePrecision("lat"),
     /** 経度。 */
     lon: doublePrecision("lon"),
+    /** 参考価格（円）。 */
+    price: integer("price"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

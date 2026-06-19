@@ -34,6 +34,7 @@ const spotOptionalProps = {
     maxItems: 50,
   },
   location: geoPointSchema,
+  price: { type: "integer", minimum: 0 },
   embedding: { type: "array", items: { type: "number" } },
   createdAt: { type: "string", format: "date-time" },
   updatedAt: { type: "string", format: "date-time" },
@@ -152,6 +153,37 @@ export const semanticSearchSchema = {
     properties: {
       query: { type: "string", minLength: 1 },
       mode: { type: "string", enum: ["vector", "hybrid"] },
+      size: { type: "integer", minimum: 1, maximum: 1000 },
+      k: { type: "integer", minimum: 1, maximum: 1000 },
+      knnBoost: { type: "number", minimum: 0 },
+      index: { type: "string", minLength: 1 },
+    },
+  },
+} as const;
+
+/** POST /search/candidates（A3: kNN × geo × price/category） */
+export const searchCandidateSpotsSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    minProperties: 1,
+    properties: {
+      query: { type: "string" },
+      embedding: { type: "array", items: { type: "number" }, minItems: 1 },
+      category: {
+        anyOf: [
+          { type: "string", minLength: 1 },
+          {
+            type: "array",
+            items: { type: "string", minLength: 1 },
+            minItems: 1,
+          },
+        ],
+      },
+      priceMin: { type: "integer", minimum: 0 },
+      priceMax: { type: "integer", minimum: 0 },
+      near: geoPointSchema,
+      radiusKm: { type: "number", exclusiveMinimum: 0 },
       size: { type: "integer", minimum: 1, maximum: 1000 },
       k: { type: "integer", minimum: 1, maximum: 1000 },
       knnBoost: { type: "number", minimum: 0 },

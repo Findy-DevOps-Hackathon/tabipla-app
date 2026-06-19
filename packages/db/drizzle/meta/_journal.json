@@ -8,6 +8,13 @@
       "when": 1781771436989,
       "tag": "0000_dazzling_mantis",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781886653590,
+      "tag": "0001_groovy_shriek",
+      "breakpoints": true
     }
   ]
 }

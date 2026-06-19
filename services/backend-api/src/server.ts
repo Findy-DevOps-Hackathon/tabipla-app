@@ -3,10 +3,11 @@ import {
   createElasticsearchClient,
   pingElasticsearch,
   ensureIndex,
-  deleteDocument,
+  deleteSpot as deleteSpotInElasticsearch,
   keywordSearch,
   vectorSearch,
   hybridSearch,
+  searchCandidateSpots,
   type ElasticsearchClient,
   type SpotDocument,
 } from "@tabipla/search-core";
@@ -37,6 +38,7 @@ import {
   vectorSearchSchema,
   hybridSearchSchema,
   semanticSearchSchema,
+  searchCandidateSpotsSchema,
 } from "./schemas.js";
 
 /**
@@ -71,6 +73,19 @@ type HybridSearchBody = {
 type SemanticSearchBody = {
   query: string;
   mode?: "vector" | "hybrid";
+  size?: number;
+  k?: number;
+  knnBoost?: number;
+  index?: string;
+};
+type SearchCandidateSpotsBody = {
+  query?: string;
+  embedding?: number[];
+  category?: string | string[];
+  priceMin?: number;
+  priceMax?: number;
+  near?: { lat: number; lon: number };
+  radiusKm?: number;
   size?: number;
   k?: number;
   knnBoost?: number;
@@ -173,7 +188,9 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     async (req) => {
       const refresh = req.query.refresh === "true";
       await deleteSpot(db, req.params.id);
-      const result = await deleteDocument(client, req.params.id, { refresh });
+      const result = await deleteSpotInElasticsearch(client, req.params.id, {
+        refresh,
+      });
       return result;
     },
   );
@@ -263,6 +280,16 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         index: req.body.index,
       });
       return { mode, count: results.length, results };
+    },
+  );
+
+  // ---- 候補スポット検索（A3: kNN × geo_distance × price/category） ----
+  app.post<{ Body: SearchCandidateSpotsBody }>(
+    "/search/candidates",
+    { schema: searchCandidateSpotsSchema },
+    async (req) => {
+      const results = await searchCandidateSpots(client, req.body);
+      return { count: results.length, results };
     },
   );
 

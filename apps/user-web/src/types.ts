@@ -19,6 +19,7 @@ export type SpotDocument = {
   address?: string;
   tags?: string[];
   location?: GeoPoint;
+  price?: number;
   createdAt?: string;
   updatedAt?: string;
 };
