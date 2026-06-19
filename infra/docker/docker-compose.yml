@@ -1,0 +1,77 @@
+# =============================================================================
+# ローカル開発用 Elasticsearch / Kibana
+# =============================================================================
+# 注意:
+#   - これは「ローカル開発専用」の構成です。本番環境では使用しないこと。
+#   - セキュリティ(認証/TLS)はローカル検証を容易にするため無効化しています。
+#   - 本番用の認証・TLS・クラスタ設計はこのファイルでは確定しません。
+# =============================================================================
+
+services:
+  elasticsearch:
+    # 8.x 系を想定。バージョンは環境変数 ES_VERSION で上書き可能。
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION:-8.15.0}
+    container_name: tabipla-dev-elasticsearch
+    environment:
+      # 単一ノードのローカル開発構成
+      - discovery.type=single-node
+      # ローカル開発のためセキュリティを無効化(本番では絶対に無効化しない)
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      # JVM ヒープサイズ(ローカル向けに控えめ)
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\"' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  kibana:
+    # Elasticsearch と同系統の 8.x 系
+    image: docker.elastic.co/kibana/kibana:${ES_VERSION:-8.15.0}
+    container_name: tabipla-dev-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # アプリのマスターデータ用 PostgreSQL（ローカル開発専用）
+  #   - Drizzle ORM 経由でアクセスする（packages/db 参照）。
+  #   - ここに登録したスポット等を search-core 経由で Elasticsearch へ reindex する。
+  #   - 認証情報はローカル検証用の固定値。本番では使用しないこと。
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: tabipla-dev-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-tabipla}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-tabipla}
+      - POSTGRES_DB=${POSTGRES_DB:-tabipla}
+    # 5433: ホスト側の PostgreSQL（Homebrew 等）が 5432 を使う環境向け
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tabipla} -d ${POSTGRES_DB:-tabipla}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  es-data:
+    driver: local
+  pg-data:
+    driver: local
