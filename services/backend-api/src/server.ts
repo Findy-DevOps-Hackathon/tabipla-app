@@ -1,4 +1,13 @@
-import { createDatabase, type Database, deleteSpot, getSpotById, upsertSpot } from "@tabipla/db";
+import {
+  countSpots,
+  createDatabase,
+  type Database,
+  deleteSpot,
+  getCouponsBySpotId,
+  getSpotById,
+  getUnchikuFactsBySpotId,
+  upsertSpot,
+} from "@tabipla/db";
 import { getTravelTimes, type TravelTimesParams } from "@tabipla/maps-core";
 import {
   createElasticsearchClient,
@@ -20,8 +29,12 @@ import {
   createSpotSchema,
   deleteSpotSchema,
   ensureIndexSchema,
+  getSpotByIdSchema,
+  getSpotCouponsSchema,
   hybridSearchSchema,
   keywordSearchSchema,
+  postRecommendationsSchema,
+  postSpotStorySchema,
   searchCandidateSpotsSchema,
   semanticSearchSchema,
   travelTimesSchema,
@@ -312,6 +325,160 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       reply.code(statusCode >= 400 && statusCode < 600 ? statusCode : 500).send({
         error: error.message ?? "Internal Server Error",
       });
+    },
+  );
+
+  // ---- v1 Reference & Mock APIs (B5 / B7) ---------------------------------
+  app.get("/v1/meta/preference-tags", async (req, reply) => {
+    return {
+      tags: [
+        { id: "sakagura", label: "酒蔵" },
+        { id: "jinja", label: "神社" },
+        { id: "cafe", label: "カフェ" },
+        { id: "shizen", label: "自然" },
+        { id: "isan", label: "遺産" },
+      ],
+    };
+  });
+
+  app.get<{ Params: { id: string } }>(
+    "/v1/spots/:id",
+    { schema: getSpotByIdSchema },
+    async (req, reply) => {
+      const dbSpot = await getSpotById(db, req.params.id);
+      if (!dbSpot) {
+        return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
+      }
+
+      const dbCoupons = await getCouponsBySpotId(db, req.params.id);
+      const coupons = dbCoupons.map((c) => ({
+        id: c.id,
+        spotId: c.spotId,
+        title: c.title,
+        description: c.description ?? undefined,
+        discount: c.discount,
+        conditions: c.conditions ?? undefined,
+        validUntil: c.validUntil ?? undefined,
+      }));
+
+      const spot = {
+        id: dbSpot.id,
+        name: dbSpot.name,
+        category: dbSpot.category ?? "",
+        location: { lat: dbSpot.lat ?? 0, lng: dbSpot.lon ?? 0 },
+        address: dbSpot.address ?? "",
+        priceYen: dbSpot.price ?? 0,
+        estimatedStayMinutes: 60,
+        tags: dbSpot.tags ?? [],
+      };
+
+      return { spot, coupons };
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/v1/spots/:id/coupons",
+    { schema: getSpotCouponsSchema },
+    async (req, reply) => {
+      const dbSpot = await getSpotById(db, req.params.id);
+      if (!dbSpot) {
+        return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
+      }
+
+      const dbCoupons = await getCouponsBySpotId(db, req.params.id);
+      const coupons = dbCoupons.map((c) => ({
+        id: c.id,
+        spotId: c.spotId,
+        title: c.title,
+        description: c.description ?? undefined,
+        discount: c.discount,
+        conditions: c.conditions ?? undefined,
+        validUntil: c.validUntil ?? undefined,
+      }));
+
+      return { coupons };
+    },
+  );
+
+  app.get("/healthz", async (req, reply) => {
+    let esAlive = false;
+    try {
+      esAlive = await pingElasticsearch(client);
+    } catch (e) {
+      req.log.error(e);
+    }
+
+    let dbAlive = false;
+    try {
+      // シンプルな動作確認クエリとしてカウントを実行
+      const count = await countSpots(db);
+      dbAlive = typeof count === "number";
+    } catch (e) {
+      req.log.error(e);
+    }
+
+    if (!esAlive || !dbAlive) {
+      return reply.code(500).send({ status: "error", db: dbAlive, elasticsearch: esAlive });
+    }
+    return { status: "ok", db: dbAlive, elasticsearch: esAlive };
+  });
+
+  app.post<{ Body: { transportMode: string } }>(
+    "/v1/recommendations",
+    { schema: postRecommendationsSchema },
+    async (req) => {
+      const body = req.body;
+      const mockSpotId = "00000000-0000-0000-0000-000000000001";
+      return {
+        recommendations: [
+          {
+            spot: {
+              id: mockSpotId,
+              name: "小諸城址懐古園",
+              category: "isan",
+              location: { lat: 36.3277, lng: 138.4144 },
+              address: "長野県小諸市丁311",
+              priceYen: 500,
+              estimatedStayMinutes: 90,
+              tags: ["isan", "shizen"],
+            },
+            travel: {
+              mode: body.transportMode,
+              travelMinutes: 15,
+              distanceMeters: 5000,
+            },
+            fitsInTime: true,
+            reason:
+              "歴史ある城址公園で、静かな自然を楽しみたいというご希望にぴったりです。現在地から15分ほどで到着し、空き時間内で十分に楽しめます。",
+            matchScore: 0.92,
+          },
+        ],
+        agentMessage: "ご希望に合わせて、歴史と自然を感じられるスポットを見つけました。",
+      };
+    },
+  );
+
+  app.post<{ Params: { spotId: string }; Body: any }>(
+    "/v1/spots/:spotId/story",
+    { schema: postSpotStorySchema },
+    async (req) => {
+      const spotId = req.params.spotId;
+      return {
+        spotId,
+        story:
+          "小諸城址懐古園は、実は「穴城（あなじろ）」と呼ばれる全国でも珍しい城郭なんです。普通お城って高いところにありますよね？でもここは城下町よりも低い位置に造られているんです。",
+        sourceFacts: [
+          {
+            label: "構造",
+            text: "城郭が城下町よりも低い場所に位置する「穴城（あなじろ）」",
+          },
+          {
+            label: "歴史",
+            text: "明治時代に本多静六の設計で近代的な公園として整備された",
+          },
+        ],
+        talkingPoints: ["全国でも珍しい「穴城」という構造", "島崎藤村の「千曲川旅情の歌」の舞台"],
+      };
     },
   );
 

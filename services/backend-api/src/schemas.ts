@@ -217,3 +217,79 @@ export const searchCandidateSpotsSchema = {
     },
   },
 } as const;
+
+/** GET /v1/spots/:id */
+export const getSpotByIdSchema = {
+  params: idParams,
+} as const;
+
+/** GET /v1/spots/:id/coupons */
+export const getSpotCouponsSchema = {
+  params: idParams,
+} as const;
+
+/** 緯度経度 (lng キー版、contracts 定義準拠) */
+const locationLngSchema = {
+  type: "object",
+  required: ["lat", "lng"],
+  additionalProperties: false,
+  properties: {
+    lat: { type: "number", minimum: -90, maximum: 90 },
+    lng: { type: "number", minimum: -180, maximum: 180 },
+  },
+} as const;
+
+/** POST /v1/recommendations */
+export const postRecommendationsSchema = {
+  body: {
+    type: "object",
+    required: ["location", "availableMinutes", "transportMode", "preferences"],
+    additionalProperties: false,
+    properties: {
+      location: locationLngSchema,
+      availableMinutes: { type: "integer", minimum: 0 },
+      budgetYen: { type: "integer", minimum: 0 },
+      transportMode: { type: "string", enum: ["walk", "car", "transit"] },
+      preferences: {
+        type: "object",
+        required: ["tags"],
+        additionalProperties: false,
+        properties: {
+          tags: { type: "array", items: { type: "string" } },
+          freeText: { type: "string" },
+        },
+      },
+      excludeSpotIds: { type: "array", items: { type: "string" } },
+      limit: { type: "integer", minimum: 1 },
+    },
+  },
+} as const;
+
+const spotIdParams = {
+  type: "object",
+  required: ["spotId"],
+  additionalProperties: false,
+  properties: { spotId: { type: "string", minLength: 1 } },
+} as const;
+
+/** POST /v1/spots/:spotId/story */
+export const postSpotStorySchema = {
+  params: spotIdParams,
+  body: {
+    type: "object",
+    required: ["preferences"],
+    additionalProperties: false,
+    properties: {
+      preferences: {
+        type: "object",
+        required: ["tags"],
+        additionalProperties: false,
+        properties: {
+          tags: { type: "array", items: { type: "string" } },
+          freeText: { type: "string" },
+        },
+      },
+      tone: { type: "string" },
+    },
+  },
+} as const;
