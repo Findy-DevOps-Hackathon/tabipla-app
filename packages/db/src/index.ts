@@ -9,6 +9,11 @@
 export type { CreateDatabaseOptions, Database } from "./client.js";
 // クライアント
 export { createDatabase } from "./client.js";
+// リポジトリ（coupons）
+export {
+  getCouponsBySpotId,
+  upsertCoupon,
+} from "./repository/coupons.js";
 // リポジトリ（spots）
 export {
   countSpots,
@@ -19,6 +24,19 @@ export {
   upsertSpot,
   upsertSpots,
 } from "./repository/spots.js";
-export type { NewSpotRow, SpotRow } from "./schema.js";
-// スキーマ / 型
-export { spots } from "./schema.js";
+// リポジトリ（unchiku）
+export {
+  getUnchikuFactsBySpotId,
+  upsertUnchikuFact,
+} from "./repository/unchiku.js";
+export type {
+  CouponRow,
+  MunicipalityRow,
+  NewCouponRow,
+  NewMunicipalityRow,
+  NewSpotRow,
+  NewUnchikuFactRow,
+  SpotRow,
+  UnchikuFactRow,
+} from "./schema.js";
+export { coupons, municipalities, spots, unchikuFacts } from "./schema.js";

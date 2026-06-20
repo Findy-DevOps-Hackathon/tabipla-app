@@ -15,6 +15,13 @@
       "when": 1781886653590,
       "tag": "0001_groovy_shriek",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781907244396,
+      "tag": "0002_silky_rick_jones",
+      "breakpoints": true
     }
   ]
 }

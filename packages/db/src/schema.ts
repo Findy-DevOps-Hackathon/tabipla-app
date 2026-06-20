@@ -1,5 +1,30 @@
 import { randomUUID } from "node:crypto";
-import { doublePrecision, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  date,
+  doublePrecision,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
+
+/**
+ * municipalities テーブル（自治体データ）。
+ */
+export const municipalities = pgTable("municipalities", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  name: text("name").notNull(),
+  apiKeyHash: text("api_key_hash"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** SELECT 時の行型。 */
+export type MunicipalityRow = typeof municipalities.$inferSelect;
+/** INSERT 時の入力型。 */
+export type NewMunicipalityRow = typeof municipalities.$inferInsert;
 
 /**
  * spots テーブル（観光スポットのマスターデータ）。
@@ -20,6 +45,8 @@ export const spots = pgTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => randomUUID()),
+    /** 自治体IDへの参照。 */
+    municipalityId: text("municipality_id").references(() => municipalities.id),
     /** スポット名（全文検索の主対象）。 */
     name: text("name").notNull(),
     /** 説明・本文。 */
@@ -54,3 +81,41 @@ export const spots = pgTable(
 export type SpotRow = typeof spots.$inferSelect;
 /** INSERT 時の入力型。 */
 export type NewSpotRow = typeof spots.$inferInsert;
+
+/**
+ * unchiku_facts テーブル（蘊蓄ネタ）。
+ */
+export const unchikuFacts = pgTable("unchiku_facts", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  spotId: text("spot_id").references(() => spots.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  text: text("text").notNull(),
+  source: text("source"),
+});
+
+/** SELECT 時の行型。 */
+export type UnchikuFactRow = typeof unchikuFacts.$inferSelect;
+/** INSERT 時の入力型。 */
+export type NewUnchikuFactRow = typeof unchikuFacts.$inferInsert;
+
+/**
+ * coupons テーブル（クーポン・特典）。
+ */
+export const coupons = pgTable("coupons", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  spotId: text("spot_id").references(() => spots.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  discount: text("discount").notNull(),
+  conditions: text("conditions"),
+  validUntil: date("valid_until"),
+});
+
+/** SELECT 時の行型。 */
+export type CouponRow = typeof coupons.$inferSelect;
+/** INSERT 時の入力型。 */
+export type NewCouponRow = typeof coupons.$inferInsert;
