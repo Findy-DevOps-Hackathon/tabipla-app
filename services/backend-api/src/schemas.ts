@@ -161,6 +161,32 @@ export const semanticSearchSchema = {
   },
 } as const;
 
+/** POST /travel-times（A4: 手段別移動時間マトリクス） */
+export const travelTimesSchema = {
+  body: {
+    type: "object",
+    required: ["origin", "destinations"],
+    additionalProperties: false,
+    properties: {
+      origin: geoPointSchema,
+      destinations: {
+        type: "array",
+        items: geoPointSchema,
+        minItems: 1,
+        maxItems: 25,
+      },
+      modes: {
+        type: "array",
+        items: { type: "string", enum: ["DRIVE", "WALK", "TRANSIT", "BICYCLE"] },
+        minItems: 1,
+        maxItems: 4,
+      },
+      departureTime: { type: "string" },
+      maxDestinations: { type: "integer", minimum: 1, maximum: 25 },
+    },
+  },
+} as const;
+
 /** POST /search/candidates（A3: kNN × geo × price/category） */
 export const searchCandidateSpotsSchema = {
   body: {

@@ -1,4 +1,5 @@
 import { createDatabase, type Database, deleteSpot, getSpotById, upsertSpot } from "@tabipla/db";
+import { getTravelTimes, type TravelTimesParams } from "@tabipla/maps-core";
 import {
   createElasticsearchClient,
   deleteSpot as deleteSpotInElasticsearch,
@@ -23,6 +24,7 @@ import {
   keywordSearchSchema,
   searchCandidateSpotsSchema,
   semanticSearchSchema,
+  travelTimesSchema,
   updateSpotSchema,
   vectorSearchSchema,
 } from "./schemas.js";
@@ -270,6 +272,15 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     async (req) => {
       const results = await searchCandidateSpots(client, req.body);
       return { count: results.length, results };
+    },
+  );
+
+  // ---- 移動時間マトリクス（A4: getTravelTimes） ----
+  app.post<{ Body: TravelTimesParams }>(
+    "/travel-times",
+    { schema: travelTimesSchema },
+    async (req) => {
+      return getTravelTimes(req.body);
     },
   );
 

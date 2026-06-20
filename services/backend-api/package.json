@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@tabipla/db": "workspace:*",
+    "@tabipla/maps-core": "workspace:*",
     "@tabipla/search-core": "workspace:*",
     "fastify": "^5.0.0"
   },
