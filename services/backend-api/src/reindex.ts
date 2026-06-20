@@ -1,9 +1,5 @@
 import { createDatabase, iterateAllSpots } from "@tabipla/db";
-import {
-  bulkIndexDocuments,
-  createElasticsearchClient,
-  ensureIndex,
-} from "@tabipla/search-core";
+import { bulkIndexDocuments, createElasticsearchClient, ensureIndex } from "@tabipla/search-core";
 import { toSpotDocument } from "./mapper.js";
 
 /**
@@ -29,9 +25,7 @@ function resolveBatchSize(): number {
   if (!raw) return DEFAULT_BATCH_SIZE;
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(
-      `REINDEX_BATCH_SIZE には正の整数を指定してください。受け取った値: "${raw}"`,
-    );
+    throw new Error(`REINDEX_BATCH_SIZE には正の整数を指定してください。受け取った値: "${raw}"`);
   }
   return parsed;
 }
@@ -46,9 +40,7 @@ async function main(): Promise<void> {
 
   try {
     const { index, created } = await ensureIndex(es);
-    console.log(
-      `[reindex] index "${index}" を使用します（${created ? "新規作成" : "既存"}）。`,
-    );
+    console.log(`[reindex] index "${index}" を使用します（${created ? "新規作成" : "既存"}）。`);
 
     for await (const batch of iterateAllSpots(db, batchSize)) {
       const documents = batch.map(toSpotDocument);
@@ -56,9 +48,7 @@ async function main(): Promise<void> {
       total += result.count;
       if (result.errors) {
         hadErrors = true;
-        console.warn(
-          `[reindex] バッチ投入で一部エラーがありました（${result.count} 件中）。`,
-        );
+        console.warn(`[reindex] バッチ投入で一部エラーがありました（${result.count} 件中）。`);
       }
       console.log(`[reindex] ${total} 件まで投入しました。`);
     }

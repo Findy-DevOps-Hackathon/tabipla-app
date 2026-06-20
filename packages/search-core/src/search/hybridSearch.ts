@@ -1,11 +1,11 @@
 import type { estypes } from "@elastic/elasticsearch";
 import type { ElasticsearchClient } from "../client/elasticsearch.client.js";
 import { DEFAULT_INDEX_NAME } from "../mappings/spot.mapping.js";
-import type { SpotDocument, SearchResult } from "../types/spot.js";
+import type { SearchResult, SpotDocument } from "../types/spot.js";
 import {
+  buildFilters,
   DEFAULT_SEARCH_FIELDS,
   DEFAULT_SIZE,
-  buildFilters,
   keywordSearch,
   toSearchResult,
 } from "./keywordSearch.js";
@@ -58,7 +58,7 @@ export async function hybridSearch<T extends SpotDocument = SpotDocument>(
   client: ElasticsearchClient,
   params: HybridSearchParams,
 ): Promise<SearchResult<T>[]> {
-  const hasQuery = Boolean(params.query && params.query.trim());
+  const hasQuery = Boolean(params.query?.trim());
   const hasEmbedding = Boolean(params.embedding && params.embedding.length > 0);
 
   if (!hasQuery && !hasEmbedding) {

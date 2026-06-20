@@ -1,6 +1,6 @@
 import { asc, eq, gt, sql } from "drizzle-orm";
 import type { Database } from "../client.js";
-import { spots, type NewSpotRow, type SpotRow } from "../schema.js";
+import { type NewSpotRow, type SpotRow, spots } from "../schema.js";
 
 /**
  * spots テーブルに対する基本的なデータアクセスを集約する。
@@ -14,10 +14,7 @@ import { spots, type NewSpotRow, type SpotRow } from "../schema.js";
  *
  * @returns 反映後の行
  */
-export async function upsertSpot(
-  db: Database,
-  input: NewSpotRow,
-): Promise<SpotRow> {
+export async function upsertSpot(db: Database, input: NewSpotRow): Promise<SpotRow> {
   const now = new Date();
   const [row] = await db
     .insert(spots)
@@ -50,10 +47,7 @@ export async function upsertSpot(
  *
  * @returns 反映後の行配列
  */
-export async function upsertSpots(
-  db: Database,
-  inputs: NewSpotRow[],
-): Promise<SpotRow[]> {
+export async function upsertSpots(db: Database, inputs: NewSpotRow[]): Promise<SpotRow[]> {
   if (inputs.length === 0) return [];
   const now = new Date();
   return db
@@ -78,10 +72,7 @@ export async function upsertSpots(
 }
 
 /** id でスポットを1件取得する（無ければ undefined）。 */
-export async function getSpotById(
-  db: Database,
-  id: string,
-): Promise<SpotRow | undefined> {
+export async function getSpotById(db: Database, id: string): Promise<SpotRow | undefined> {
   const [row] = await db.select().from(spots).where(eq(spots.id, id)).limit(1);
   return row;
 }
@@ -130,7 +121,7 @@ export async function* iterateAllSpots(
   db: Database,
   batchSize = 500,
 ): AsyncGenerator<SpotRow[], void, void> {
-  let afterId: string | undefined = undefined;
+  let afterId: string | undefined;
   while (true) {
     const batch = await listSpotsAfter(db, afterId, batchSize);
     if (batch.length === 0) return;

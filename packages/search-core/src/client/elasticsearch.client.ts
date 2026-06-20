@@ -43,9 +43,7 @@ let cachedDefaultClient: Client | undefined;
  *
  * @param options 生成オプション（省略時は環境変数 → 既定値で解決）
  */
-export function createElasticsearchClient(
-  options: CreateClientOptions = {},
-): ElasticsearchClient {
+export function createElasticsearchClient(options: CreateClientOptions = {}): ElasticsearchClient {
   const node = options.node ?? process.env.ES_NODE ?? DEFAULT_NODE;
   const apiKey = options.apiKey ?? process.env.ES_API_KEY;
   const username = options.username ?? process.env.ES_USERNAME;

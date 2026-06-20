@@ -1,18 +1,13 @@
 import type { estypes } from "@elastic/elasticsearch";
 import type { ElasticsearchClient } from "../client/elasticsearch.client.js";
 import { DEFAULT_INDEX_NAME } from "../mappings/spot.mapping.js";
-import type { SpotDocument, SearchResult } from "../types/spot.js";
+import type { SearchResult, SpotDocument } from "../types/spot.js";
 
 /**
  * キーワード検索のデフォルト対象フィールド。
  * name を強めに重み付けし、説明・エリア・タグも対象にする。
  */
-export const DEFAULT_SEARCH_FIELDS = [
-  "name^3",
-  "description",
-  "area",
-  "tags",
-] as const;
+export const DEFAULT_SEARCH_FIELDS = ["name^3", "description", "area", "tags"] as const;
 
 /** 1ページあたりのデフォルト取得件数。 */
 export const DEFAULT_SIZE = 10;
@@ -38,9 +33,7 @@ export type KeywordSearchParams = {
 /**
  * filters オブジェクトを Elasticsearch の filter 句配列に変換する。
  */
-export function buildFilters(
-  filters?: Record<string, unknown>,
-): estypes.QueryDslQueryContainer[] {
+export function buildFilters(filters?: Record<string, unknown>): estypes.QueryDslQueryContainer[] {
   if (!filters) return [];
   return Object.entries(filters).map(([field, value]) => {
     if (Array.isArray(value)) {
@@ -53,9 +46,7 @@ export function buildFilters(
 /**
  * 検索ヒットを SearchResult 型へ変換する共通ヘルパー。
  */
-export function toSearchResult<T extends SpotDocument>(
-  hit: estypes.SearchHit<T>,
-): SearchResult<T> {
+export function toSearchResult<T extends SpotDocument>(hit: estypes.SearchHit<T>): SearchResult<T> {
   return {
     id: hit._id ?? (hit._source?.id as string),
     score: hit._score ?? null,

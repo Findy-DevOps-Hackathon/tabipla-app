@@ -1,12 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  doublePrecision,
-  index,
-  integer,
-  pgTable,
-  text,
-  timestamp,
-} from "drizzle-orm/pg-core";
+import { doublePrecision, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 /**
  * spots テーブル（観光スポットのマスターデータ）。
@@ -47,12 +40,8 @@ export const spots = pgTable(
     lon: doublePrecision("lon"),
     /** 参考価格（円）。 */
     price: integer("price"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     categoryIdx: index("spots_category_idx").on(table.category),

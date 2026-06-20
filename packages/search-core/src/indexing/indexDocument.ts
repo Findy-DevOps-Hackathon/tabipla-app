@@ -66,15 +66,10 @@ export async function bulkIndexDocuments(
 
   const missingId = documents.find((doc) => !doc.id);
   if (missingId) {
-    throw new Error(
-      "[search-core] bulkIndexDocuments: すべてのドキュメントに id が必要です。",
-    );
+    throw new Error("[search-core] bulkIndexDocuments: すべてのドキュメントに id が必要です。");
   }
 
-  const operations = documents.flatMap((doc) => [
-    { index: { _index: index, _id: doc.id } },
-    doc,
-  ]);
+  const operations = documents.flatMap((doc) => [{ index: { _index: index, _id: doc.id } }, doc]);
 
   const response = await client.bulk({
     operations,

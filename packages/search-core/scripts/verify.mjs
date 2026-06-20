@@ -8,11 +8,11 @@
 
 import {
   createElasticsearchClient,
-  pingElasticsearch,
+  deleteDocument,
   ensureIndex,
   indexDocument,
   keywordSearch,
-  deleteDocument,
+  pingElasticsearch,
 } from "../dist/index.js";
 
 const INDEX = process.env.ES_INDEX ?? "verify-spots";

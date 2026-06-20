@@ -1,16 +1,9 @@
 import type { estypes } from "@elastic/elasticsearch";
 import type { ElasticsearchClient } from "../client/elasticsearch.client.js";
 import { DEFAULT_INDEX_NAME, VECTOR_DIMS } from "../mappings/spot.mapping.js";
-import type { SpotDocument, SearchResult } from "../types/spot.js";
-import {
-  buildCandidateSpotFilters,
-  type CandidateSpotFilterParams,
-} from "./buildSpotFilters.js";
-import {
-  DEFAULT_SEARCH_FIELDS,
-  DEFAULT_SIZE,
-  toSearchResult,
-} from "./keywordSearch.js";
+import type { SearchResult, SpotDocument } from "../types/spot.js";
+import { buildCandidateSpotFilters, type CandidateSpotFilterParams } from "./buildSpotFilters.js";
+import { DEFAULT_SEARCH_FIELDS, DEFAULT_SIZE, toSearchResult } from "./keywordSearch.js";
 
 export type SearchCandidateSpotsParams = CandidateSpotFilterParams & {
   /** 検索キーワード。 */
@@ -60,13 +53,11 @@ function assertValidEmbedding(embedding: number[]): void {
  *   - 両方 → ハイブリッド（キーワード + kNN スコア加算）+ フィルタ
  *   - どちらも未指定 → フィルタのみ（match_all + filter）
  */
-export async function searchCandidateSpots<
-  T extends SpotDocument = SpotDocument,
->(
+export async function searchCandidateSpots<T extends SpotDocument = SpotDocument>(
   client: ElasticsearchClient,
   params: SearchCandidateSpotsParams,
 ): Promise<SearchResult<T>[]> {
-  const hasQuery = Boolean(params.query && params.query.trim());
+  const hasQuery = Boolean(params.query?.trim());
   const hasEmbedding = Boolean(params.embedding && params.embedding.length > 0);
 
   if (!hasQuery && !hasEmbedding && !hasStructuredFilters(params)) {
@@ -80,7 +71,7 @@ export async function searchCandidateSpots<
   const filter = buildCandidateSpotFilters(params);
 
   if (hasQuery && !hasEmbedding) {
-    const trimmed = params.query!.trim();
+    const trimmed = params.query?.trim();
     const mustQuery: estypes.QueryDslQueryContainer = trimmed
       ? {
           multi_match: {

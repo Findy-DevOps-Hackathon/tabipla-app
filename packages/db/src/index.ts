@@ -6,21 +6,19 @@
  * Elasticsearch への反映は利用側（backend-api の reindex）が search-core 経由で行う。
  */
 
+export type { CreateDatabaseOptions, Database } from "./client.js";
 // クライアント
 export { createDatabase } from "./client.js";
-export type { Database, CreateDatabaseOptions } from "./client.js";
-
-// スキーマ / 型
-export { spots } from "./schema.js";
-export type { SpotRow, NewSpotRow } from "./schema.js";
-
 // リポジトリ（spots）
 export {
+  countSpots,
+  deleteSpot,
+  getSpotById,
+  iterateAllSpots,
+  listSpotsAfter,
   upsertSpot,
   upsertSpots,
-  getSpotById,
-  deleteSpot,
-  countSpots,
-  listSpotsAfter,
-  iterateAllSpots,
 } from "./repository/spots.js";
+export type { NewSpotRow, SpotRow } from "./schema.js";
+// スキーマ / 型
+export { spots } from "./schema.js";

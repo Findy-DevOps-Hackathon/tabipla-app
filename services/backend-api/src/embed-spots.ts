@@ -1,9 +1,5 @@
 import { createDatabase, iterateAllSpots } from "@tabipla/db";
-import {
-  bulkIndexDocuments,
-  createElasticsearchClient,
-  ensureIndex,
-} from "@tabipla/search-core";
+import { bulkIndexDocuments, createElasticsearchClient, ensureIndex } from "@tabipla/search-core";
 import { buildSpotEmbedText, embedText, resolveEmbeddingProvider } from "./embedding.js";
 import { toSpotDocument } from "./mapper.js";
 
@@ -29,9 +25,7 @@ function resolveBatchSize(): number {
   if (!raw) return DEFAULT_BATCH_SIZE;
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(
-      `EMBED_BATCH_SIZE には正の整数を指定してください。受け取った値: "${raw}"`,
-    );
+    throw new Error(`EMBED_BATCH_SIZE には正の整数を指定してください。受け取った値: "${raw}"`);
   }
   return parsed;
 }
@@ -72,9 +66,7 @@ async function main(): Promise<void> {
       total += result.count;
       if (result.errors) {
         hadErrors = true;
-        console.warn(
-          `[embed-spots] バッチ投入で一部エラーがありました（${result.count} 件中）。`,
-        );
+        console.warn(`[embed-spots] バッチ投入で一部エラーがありました（${result.count} 件中）。`);
       }
       console.log(`[embed-spots] ${total} 件まで embedding 付きで投入しました。`);
     }

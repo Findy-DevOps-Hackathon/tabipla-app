@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { VECTOR_DIMS, type SpotDocument } from "@tabipla/search-core";
+import { type SpotDocument, VECTOR_DIMS } from "@tabipla/search-core";
 
 export type EmbeddingProvider = "gemini" | "hash";
 
@@ -7,8 +7,7 @@ export type EmbeddingProvider = "gemini" | "hash";
 export type EmbedTaskType = "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT";
 
 const DEFAULT_GEMINI_MODEL = "gemini-embedding-001";
-const GEMINI_API_BASE =
-  "https://generativelanguage.googleapis.com/v1beta/models";
+const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /**
  * 埋め込み生成のプロバイダを解決する。
@@ -28,10 +27,9 @@ export function resolveEmbeddingProvider(): EmbeddingProvider {
 }
 
 /** スポットドキュメントから埋め込み用テキストを組み立てる。 */
-export function buildSpotEmbedText(doc: Pick<
-  SpotDocument,
-  "name" | "description" | "category" | "area" | "prefecture" | "tags"
->): string {
+export function buildSpotEmbedText(
+  doc: Pick<SpotDocument, "name" | "description" | "category" | "area" | "prefecture" | "tags">,
+): string {
   const parts = [
     doc.name,
     doc.description,
@@ -49,10 +47,7 @@ export type EmbedTextOptions = {
 };
 
 /** テキストから埋め込みベクトルを生成する（次元数は VECTOR_DIMS と一致）。 */
-export async function embedText(
-  text: string,
-  options: EmbedTextOptions = {},
-): Promise<number[]> {
+export async function embedText(text: string, options: EmbedTextOptions = {}): Promise<number[]> {
   const trimmed = text.trim();
   if (!trimmed) {
     throw new Error("[backend-api] embedText: 空文字列は埋め込みできません。");
@@ -81,15 +76,10 @@ type GeminiEmbedResponse = {
  * - outputDimensionality: VECTOR_DIMS（ES mapping と一致させる）
  * - 3072 未満の次元では L2 正規化を行う（gemini-embedding-001 の推奨）
  */
-async function geminiEmbed(
-  text: string,
-  taskType: EmbedTaskType,
-): Promise<number[]> {
+async function geminiEmbed(text: string, taskType: EmbedTaskType): Promise<number[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "[backend-api] GEMINI_API_KEY が設定されていません。",
-    );
+    throw new Error("[backend-api] GEMINI_API_KEY が設定されていません。");
   }
 
   const model = resolveGeminiModel();
@@ -110,9 +100,7 @@ async function geminiEmbed(
 
   if (!res.ok) {
     const message = json.error?.message ?? res.statusText;
-    throw new Error(
-      `[backend-api] Gemini Embeddings API エラー (${res.status}): ${message}`,
-    );
+    throw new Error(`[backend-api] Gemini Embeddings API エラー (${res.status}): ${message}`);
   }
 
   const values = json.embedding?.values;
@@ -148,9 +136,7 @@ function hashEmbed(text: string): number[] {
   const vec = new Float64Array(VECTOR_DIMS);
 
   for (let seed = 0; seed < 12; seed++) {
-    const digest = createHash("sha256")
-      .update(`${seed}:${text}`)
-      .digest();
+    const digest = createHash("sha256").update(`${seed}:${text}`).digest();
     for (let j = 0; j < 4; j++) {
       const dim = digest.readUInt32BE(j * 4) % VECTOR_DIMS;
       const byte = digest[j] ?? 0;

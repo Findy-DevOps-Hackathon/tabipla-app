@@ -1,44 +1,30 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import { createDatabase, type Database, deleteSpot, getSpotById, upsertSpot } from "@tabipla/db";
 import {
   createElasticsearchClient,
-  pingElasticsearch,
-  ensureIndex,
   deleteSpot as deleteSpotInElasticsearch,
-  keywordSearch,
-  vectorSearch,
-  hybridSearch,
-  searchCandidateSpots,
   type ElasticsearchClient,
+  ensureIndex,
+  hybridSearch,
+  keywordSearch,
+  pingElasticsearch,
   type SpotDocument,
+  searchCandidateSpots,
+  vectorSearch,
 } from "@tabipla/search-core";
-import {
-  createDatabase,
-  upsertSpot,
-  getSpotById,
-  deleteSpot,
-  type Database,
-} from "@tabipla/db";
-import {
-  toSpotDocument,
-  toNewSpotRow,
-  mergeSpotRow,
-  type SpotPatch,
-} from "./mapper.js";
+import Fastify, { type FastifyInstance } from "fastify";
 import { embedText } from "./embedding.js";
+import { patchSpotInElasticsearch, upsertSpotInElasticsearch } from "./esSync.js";
+import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./mapper.js";
 import {
-  upsertSpotInElasticsearch,
-  patchSpotInElasticsearch,
-} from "./esSync.js";
-import {
-  ensureIndexSchema,
   createSpotSchema,
-  updateSpotSchema,
   deleteSpotSchema,
-  keywordSearchSchema,
-  vectorSearchSchema,
+  ensureIndexSchema,
   hybridSearchSchema,
-  semanticSearchSchema,
+  keywordSearchSchema,
   searchCandidateSpotsSchema,
+  semanticSearchSchema,
+  updateSpotSchema,
+  vectorSearchSchema,
 } from "./schemas.js";
 
 /**
@@ -135,13 +121,9 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   });
 
   // ---- index 作成 ----------------------------------------------------------
-  app.post<{ Body: EnsureIndexBody }>(
-    "/indices",
-    { schema: ensureIndexSchema },
-    async (req) => {
-      return ensureIndex(client, req.body?.index);
-    },
-  );
+  app.post<{ Body: EnsureIndexBody }>("/indices", { schema: ensureIndexSchema }, async (req) => {
+    return ensureIndex(client, req.body?.index);
+  });
 
   // ---- スポット登録 (upsert) ----------------------------------------------
   // 必須項目(id/name/description)・型・未知フィールド拒否はスキーマで検証する。
@@ -169,9 +151,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     const refresh = req.query.refresh === "true";
     const existing = await getSpotById(db, req.params.id);
     if (!existing) {
-      return reply
-        .code(404)
-        .send({ error: `スポットが見つかりません: ${req.params.id}` });
+      return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
     }
     const row = await upsertSpot(db, mergeSpotRow(existing, req.body));
     const document = toSpotDocument(row);
@@ -317,8 +297,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         });
       }
 
-      const statusCode =
-        typeof error.statusCode === "number" ? error.statusCode : 500;
+      const statusCode = typeof error.statusCode === "number" ? error.statusCode : 500;
       reply.code(statusCode >= 400 && statusCode < 600 ? statusCode : 500).send({
         error: error.message ?? "Internal Server Error",
       });

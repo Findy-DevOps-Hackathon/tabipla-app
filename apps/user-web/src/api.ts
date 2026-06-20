@@ -23,14 +23,10 @@ type ApiErrorBody = {
 
 async function parseApiError(res: Response): Promise<never> {
   const body = (await res.json().catch(() => null)) as ApiErrorBody | null;
-  throw new Error(
-    body?.error ?? `検索に失敗しました（HTTP ${res.status}）。`,
-  );
+  throw new Error(body?.error ?? `検索に失敗しました（HTTP ${res.status}）。`);
 }
 
-export async function searchSpots(
-  params: SearchParams,
-): Promise<SearchResponse> {
+export async function searchSpots(params: SearchParams): Promise<SearchResponse> {
   const mode = params.mode ?? "keyword";
 
   if (mode === "keyword") {
