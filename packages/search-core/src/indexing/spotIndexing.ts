@@ -1,11 +1,7 @@
 import type { ElasticsearchClient } from "../client/elasticsearch.client.js";
 import type { SpotDocument } from "../types/spot.js";
-import {
-  bulkIndexDocuments,
-  indexDocument,
-  type IndexingOptions,
-} from "./indexDocument.js";
 import { deleteDocument } from "./deleteDocument.js";
+import { bulkIndexDocuments, type IndexingOptions, indexDocument } from "./indexDocument.js";
 
 /**
  * スポットを Elasticsearch に索引する（A3 契約 I/F）。

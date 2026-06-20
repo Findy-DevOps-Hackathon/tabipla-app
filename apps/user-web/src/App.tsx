@@ -1,29 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { searchSpots } from "./api.ts";
-import type { SearchMode, SearchResult } from "./types.ts";
 import { SpotCard } from "./components/SpotCard.tsx";
+import type { SearchMode, SearchResult } from "./types.ts";
 
 /** 入力文字列のデバウンス時間（ms）。連続入力中の過剰リクエストを抑える。 */
 const DEBOUNCE_MS = 300;
 
-const SEARCH_MODES: Array<{ value: SearchMode; label: string; hint: string }> =
-  [
-    {
-      value: "keyword",
-      label: "キーワード",
-      hint: "名前・説明文の全文一致",
-    },
-    {
-      value: "vector",
-      label: "ベクトル",
-      hint: "意味が近いスポットを探索",
-    },
-    {
-      value: "hybrid",
-      label: "ハイブリッド",
-      hint: "キーワード + 意味の両方",
-    },
-  ];
+const SEARCH_MODES: Array<{ value: SearchMode; label: string; hint: string }> = [
+  {
+    value: "keyword",
+    label: "キーワード",
+    hint: "名前・説明文の全文一致",
+  },
+  {
+    value: "vector",
+    label: "ベクトル",
+    hint: "意味が近いスポットを探索",
+  },
+  {
+    value: "hybrid",
+    label: "ハイブリッド",
+    hint: "キーワード + 意味の両方",
+  },
+];
 
 type Status = "idle" | "loading" | "success" | "error";
 
@@ -69,9 +68,7 @@ export default function App() {
           if (error instanceof DOMException && error.name === "AbortError") {
             return;
           }
-          setErrorMessage(
-            error instanceof Error ? error.message : "検索に失敗しました。",
-          );
+          setErrorMessage(error instanceof Error ? error.message : "検索に失敗しました。");
           setStatus("error");
         });
     }, DEBOUNCE_MS);
@@ -86,25 +83,18 @@ export default function App() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-5xl px-6 py-10">
           <div className="flex items-baseline gap-2">
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">
-              tabipla
-            </h1>
-            <span className="text-sm font-medium text-slate-400">
-              スポットを探す
-            </span>
+            <h1 className="text-3xl font-black tracking-tight text-slate-900">tabipla</h1>
+            <span className="text-sm font-medium text-slate-400">スポットを探す</span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
             行きたい場所・キーワードを入力してください（例: 京都、寺、竹林）。
           </p>
 
-          <div
-            className="mt-5 flex flex-wrap gap-2"
-            role="radiogroup"
-            aria-label="検索モード"
-          >
+          <div className="mt-5 flex flex-wrap gap-2" role="radiogroup" aria-label="検索モード">
             {SEARCH_MODES.map((item) => {
               const selected = mode === item.value;
               return (
+                // biome-ignore lint/a11y/useSemanticElements: スタイル付きのモード切替 UI
                 <button
                   key={item.value}
                   type="button"
@@ -122,9 +112,7 @@ export default function App() {
               );
             })}
           </div>
-          {activeMode && (
-            <p className="mt-2 text-xs text-slate-400">{activeMode.hint}</p>
-          )}
+          {activeMode && <p className="mt-2 text-xs text-slate-400">{activeMode.hint}</p>}
 
           <div className="relative mt-5">
             <svg
@@ -145,7 +133,6 @@ export default function App() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="キーワードで検索"
-              autoFocus
               className="w-full rounded-2xl border border-slate-300 bg-white py-3.5 pl-12 pr-4 text-base shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
             />
           </div>
@@ -165,8 +152,7 @@ export default function App() {
                 ベクトル/ハイブリッド検索を使う前に、
                 <code className="rounded bg-rose-100 px-1">
                   pnpm -C services/backend-api embed-spots
-                </code>
-                {" "}
+                </code>{" "}
                 で embedding を投入してください。
               </p>
             )}

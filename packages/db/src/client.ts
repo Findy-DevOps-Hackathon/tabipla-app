@@ -26,8 +26,7 @@ export type CreateDatabaseOptions = {
  * @throws 接続文字列が解決できない場合
  */
 export function createDatabase(options: CreateDatabaseOptions = {}): Database {
-  const connectionString =
-    options.connectionString ?? process.env.DATABASE_URL;
+  const connectionString = options.connectionString ?? process.env.DATABASE_URL;
 
   if (!connectionString) {
     throw new Error(

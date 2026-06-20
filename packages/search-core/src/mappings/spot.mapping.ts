@@ -18,9 +18,7 @@ export const VECTOR_DIMS: number = (() => {
   if (!raw) return 1536;
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(
-      `ES_VECTOR_DIMS には正の整数を指定してください。受け取った値: "${raw}"`,
-    );
+    throw new Error(`ES_VECTOR_DIMS には正の整数を指定してください。受け取った値: "${raw}"`);
   }
   return parsed;
 })();

@@ -15,8 +15,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 export function SpotCard({ result }: SpotCardProps) {
   const { document: spot, score } = result;
   const categoryColor =
-    (spot.category && CATEGORY_COLORS[spot.category]) ??
-    "bg-slate-100 text-slate-600";
+    (spot.category && CATEGORY_COLORS[spot.category]) ?? "bg-slate-100 text-slate-600";
 
   const place = [spot.prefecture, spot.area].filter(Boolean).join(" / ");
 
@@ -24,9 +23,7 @@ export function SpotCard({ result }: SpotCardProps) {
     <article className="group flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
       <div className="mb-2 flex items-center gap-2">
         {spot.category && (
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${categoryColor}`}
-          >
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${categoryColor}`}>
             {spot.category}
           </span>
         )}

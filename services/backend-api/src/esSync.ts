@@ -1,10 +1,10 @@
 import {
-  indexSpot,
-  updateDocument,
   DEFAULT_INDEX_NAME,
   type ElasticsearchClient,
-  type SpotDocument,
   type IndexingOptions,
+  indexSpot,
+  type SpotDocument,
+  updateDocument,
 } from "@tabipla/search-core";
 
 type SyncOptions = IndexingOptions;
@@ -32,11 +32,7 @@ export async function upsertSpotInElasticsearch(
     const existing = await client.get({ index, id: document.id });
     const src = existing._source as SpotDocument | undefined;
     if (src?.embedding?.length) {
-      return indexSpot(
-        client,
-        { ...document, embedding: src.embedding },
-        options,
-      );
+      return indexSpot(client, { ...document, embedding: src.embedding }, options);
     }
   } catch (error) {
     if (!isNotFoundError(error)) throw error;

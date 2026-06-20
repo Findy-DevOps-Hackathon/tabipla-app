@@ -24,9 +24,7 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    url:
-      process.env.DATABASE_URL ??
-      "postgresql://tabipla:tabipla@localhost:5432/tabipla",
+    url: process.env.DATABASE_URL ?? "postgresql://tabipla:tabipla@localhost:5432/tabipla",
   },
   verbose: true,
   strict: true,

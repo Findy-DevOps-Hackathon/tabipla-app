@@ -21,9 +21,7 @@ export type SpotPatch = Partial<Omit<SpotDocument, "id">>;
  */
 export function toSpotDocument(row: SpotRow): SpotDocument {
   const location =
-    row.lat !== null && row.lon !== null
-      ? { lat: row.lat, lon: row.lon }
-      : undefined;
+    row.lat !== null && row.lon !== null ? { lat: row.lat, lon: row.lon } : undefined;
 
   return {
     id: row.id,

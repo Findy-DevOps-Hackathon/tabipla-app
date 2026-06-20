@@ -1,7 +1,7 @@
 import type { estypes } from "@elastic/elasticsearch";
 import type { ElasticsearchClient } from "../client/elasticsearch.client.js";
 import { DEFAULT_INDEX_NAME, VECTOR_DIMS } from "../mappings/spot.mapping.js";
-import type { SpotDocument, SearchResult } from "../types/spot.js";
+import type { SearchResult, SpotDocument } from "../types/spot.js";
 import { buildFilters, toSearchResult } from "./keywordSearch.js";
 
 /** kNN 検索で取得する近傍数のデフォルト値。 */

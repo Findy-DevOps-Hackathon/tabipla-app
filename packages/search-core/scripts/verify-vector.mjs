@@ -8,13 +8,13 @@
 // 実行: node scripts/verify-vector.mjs
 
 import {
-  createElasticsearchClient,
-  pingElasticsearch,
-  ensureIndex,
   bulkIndexDocuments,
-  vectorSearch,
+  createElasticsearchClient,
+  ensureIndex,
   hybridSearch,
+  pingElasticsearch,
   VECTOR_DIMS,
+  vectorSearch,
 } from "../dist/index.js";
 
 const INDEX = process.env.ES_INDEX ?? "verify-vector-spots";
@@ -47,7 +47,12 @@ async function main() {
   step("2. bulk index (embedding付き 3件)");
   const docs = [
     { id: "vec-a", name: "スポットA", description: "海と山に関する内容", embedding: makeVec(0) },
-    { id: "vec-b", name: "スポットB", description: "都市と建築に関する内容", embedding: makeVec(1) },
+    {
+      id: "vec-b",
+      name: "スポットB",
+      description: "都市と建築に関する内容",
+      embedding: makeVec(1),
+    },
     { id: "vec-c", name: "スポットC", description: "食と文化に関する内容", embedding: makeVec(2) },
   ];
   console.log(await bulkIndexDocuments(client, docs, { index: INDEX, refresh: true }));
@@ -55,7 +60,9 @@ async function main() {
   step("3. vectorSearch (vec-a 方向のクエリ → vec-a が1位の想定)");
   const queryVec = makeVec(0, 0.9);
   const vres = await vectorSearch(client, { embedding: queryVec, k: 3, index: INDEX });
-  vres.forEach((r, i) => console.log(`  ${i + 1}. id=${r.id} score=${r.score?.toFixed(4)}`));
+  for (const [i, r] of vres.entries()) {
+    console.log(`  ${i + 1}. id=${r.id} score=${r.score?.toFixed(4)}`);
+  }
   if (vres[0]?.id !== "vec-a") {
     throw new Error(`vectorSearch 1位が vec-a ではありません: ${vres[0]?.id}`);
   }
@@ -63,7 +70,10 @@ async function main() {
 
   step("4. hybridSearch (query のみ → キーワード検索に委譲)");
   const hq = await hybridSearch(client, { query: "建築", index: INDEX });
-  console.log("hits:", hq.map((r) => r.id));
+  console.log(
+    "hits:",
+    hq.map((r) => r.id),
+  );
 
   step("5. hybridSearch (embedding のみ → ベクトル検索に委譲)");
   const he = await hybridSearch(client, { embedding: makeVec(2, 0.9), index: INDEX, k: 3 });
@@ -77,7 +87,9 @@ async function main() {
     size: 3,
     knnBoost: 2,
   });
-  hb.forEach((r, i) => console.log(`  ${i + 1}. id=${r.id} score=${r.score?.toFixed(4)}`));
+  for (const [i, r] of hb.entries()) {
+    console.log(`  ${i + 1}. id=${r.id} score=${r.score?.toFixed(4)}`);
+  }
 
   step("7. error path: 次元不一致の embedding は例外になる");
   try {
