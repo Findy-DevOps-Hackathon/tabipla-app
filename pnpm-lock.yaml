@@ -74,6 +74,15 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
+  packages/maps-core:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.21
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
   packages/search-core:
     dependencies:
       '@elastic/elasticsearch':
@@ -89,6 +98,9 @@ importers:
       '@tabipla/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@tabipla/maps-core':
+        specifier: workspace:*
+        version: link:../../packages/maps-core
       '@tabipla/search-core':
         specifier: workspace:*
         version: link:../../packages/search-core
