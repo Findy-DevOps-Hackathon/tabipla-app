@@ -19,8 +19,8 @@ export type SpotDocument = {
   name: string;
   /** 説明・本文（旧 content）。キーワード検索対象。 */
   description: string;
-  /** カテゴリ（例: 観光 / グルメ / 宿泊 / 自然）。 */
-  category?: string;
+  /** カテゴリ（最大3件。例: 観光 / グルメ / 宿泊 / 自然）。 */
+  category?: string | string[];
   /** エリア・地域名（例: 京都市）。 */
   area?: string;
   /** 都道府県。 */

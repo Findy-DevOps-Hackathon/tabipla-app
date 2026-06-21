@@ -24,7 +24,16 @@ const geoPointSchema = {
 const spotOptionalProps = {
   name: { type: "string", minLength: 1, maxLength: 512 },
   description: { type: "string", minLength: 1 },
-  category: { type: "string", maxLength: 128 },
+  category: {
+    oneOf: [
+      { type: "string", maxLength: 128 },
+      {
+        type: "array",
+        items: { type: "string", minLength: 1, maxLength: 128 },
+        maxItems: 3,
+      },
+    ],
+  },
   area: { type: "string", maxLength: 256 },
   prefecture: { type: "string", maxLength: 64 },
   address: { type: "string", maxLength: 512 },
@@ -94,6 +103,82 @@ export const updateSpotSchema = {
 /** DELETE /spots/:id */
 export const deleteSpotSchema = {
   params: idParams,
+  querystring: refreshQuerystring,
+} as const;
+
+/** GET /spots/:id */
+export const getSpotSchema = {
+  params: idParams,
+} as const;
+
+/** GET /geocode（住所 → 緯度経度） */
+export const geocodeSchema = {
+  querystring: {
+    type: "object",
+    required: ["q"],
+    additionalProperties: false,
+    properties: {
+      q: { type: "string", minLength: 1, maxLength: 512 },
+    },
+  },
+} as const;
+
+/** GET /places/lookup（スポット名 → 住所・座標など） */
+export const placeLookupSchema = {
+  querystring: {
+    type: "object",
+    required: ["name"],
+    additionalProperties: false,
+    properties: {
+      name: { type: "string", minLength: 1, maxLength: 512 },
+      prefecture: { type: "string", maxLength: 64 },
+      municipality: { type: "string", maxLength: 256 },
+    },
+  },
+} as const;
+
+/** GET /spots（管理画面向け一覧） */
+export const listSpotsSchema = {
+  querystring: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      q: { type: "string" },
+      category: { type: "string", maxLength: 128 },
+      prefecture: { type: "string", maxLength: 64 },
+      offset: { type: "integer", minimum: 0 },
+      limit: { type: "integer", minimum: 1, maximum: 1000 },
+      sort: { type: "string", enum: ["updatedAt", "name"] },
+      order: { type: "string", enum: ["asc", "desc"] },
+    },
+  },
+} as const;
+
+const spotBodyProps = {
+  id: { type: "string", minLength: 1, maxLength: 512 },
+  ...spotOptionalProps,
+} as const;
+
+/** POST /spots/bulk（一括 upsert） */
+export const bulkSpotsSchema = {
+  body: {
+    type: "object",
+    required: ["spots"],
+    additionalProperties: false,
+    properties: {
+      spots: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["id", "name", "description"],
+          additionalProperties: false,
+          properties: spotBodyProps,
+        },
+        minItems: 1,
+        maxItems: 500,
+      },
+    },
+  },
   querystring: refreshQuerystring,
 } as const;
 
@@ -214,6 +299,19 @@ export const searchCandidateSpotsSchema = {
       k: { type: "integer", minimum: 1, maximum: 1000 },
       knnBoost: { type: "number", minimum: 0 },
       index: { type: "string", minLength: 1 },
+    },
+  },
+} as const;
+
+/** POST /auth/login（管理画面） */
+export const loginSchema = {
+  body: {
+    type: "object",
+    required: ["email", "password"],
+    additionalProperties: false,
+    properties: {
+      email: { type: "string", format: "email", maxLength: 256 },
+      password: { type: "string", minLength: 1, maxLength: 128 },
     },
   },
 } as const;

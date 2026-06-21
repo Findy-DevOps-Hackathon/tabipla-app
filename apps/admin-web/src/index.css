@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+button:not(:disabled),
+a,
+select,
+input[type="checkbox"],
+input[type="radio"],
+input[type="file"],
+label:has(input[type="file"]) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}

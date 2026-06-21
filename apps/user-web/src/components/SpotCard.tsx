@@ -14,19 +14,28 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export function SpotCard({ result }: SpotCardProps) {
   const { document: spot, score } = result;
-  const categoryColor =
-    (spot.category && CATEGORY_COLORS[spot.category]) ?? "bg-slate-100 text-slate-600";
+  const categories = spot.category
+    ? Array.isArray(spot.category)
+      ? spot.category
+      : [spot.category]
+    : [];
 
   const place = [spot.prefecture, spot.area].filter(Boolean).join(" / ");
 
   return (
     <article className="group flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
-      <div className="mb-2 flex items-center gap-2">
-        {spot.category && (
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${categoryColor}`}>
-            {spot.category}
-          </span>
-        )}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {categories.map((cat) => {
+          const categoryColor = CATEGORY_COLORS[cat] ?? "bg-slate-100 text-slate-600";
+          return (
+            <span
+              key={cat}
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${categoryColor}`}
+            >
+              {cat}
+            </span>
+          );
+        })}
         {place && <span className="text-xs text-slate-500">{place}</span>}
       </div>
 

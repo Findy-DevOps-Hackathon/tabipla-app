@@ -15,10 +15,14 @@ export {
   deleteSpot,
   getSpotById,
   iterateAllSpots,
+  listSpots,
   listSpotsAfter,
   upsertSpot,
   upsertSpots,
 } from "./repository/spots.js";
-export type { NewSpotRow, SpotRow } from "./schema.js";
+export type { ListSpotsOptions } from "./repository/spots.js";
+export { getAdminUserByEmail, upsertAdminUser } from "./repository/adminUsers.js";
+export { hashPassword, verifyPassword } from "./password.js";
+export type { NewSpotRow, SpotRow, AdminUserRow, NewAdminUserRow } from "./schema.js";
 // スキーマ / 型
-export { spots } from "./schema.js";
+export { spots, adminUsers } from "./schema.js";

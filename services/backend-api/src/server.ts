@@ -1,4 +1,14 @@
-import { createDatabase, type Database, deleteSpot, getSpotById, upsertSpot } from "@tabipla/db";
+import {
+  createDatabase,
+  type Database,
+  deleteSpot,
+  getAdminUserByEmail,
+  getSpotById,
+  listSpots,
+  upsertSpot,
+  upsertSpots,
+  verifyPassword,
+} from "@tabipla/db";
 import { getTravelTimes, type TravelTimesParams } from "@tabipla/maps-core";
 import {
   createElasticsearchClient,
@@ -13,15 +23,24 @@ import {
   vectorSearch,
 } from "@tabipla/search-core";
 import Fastify, { type FastifyInstance } from "fastify";
+import { extractBearerToken, isAdminApiPath, issueAdminToken, verifyAdminToken } from "./auth.js";
 import { embedText } from "./embedding.js";
 import { patchSpotInElasticsearch, upsertSpotInElasticsearch } from "./esSync.js";
+import { geocodeAddressQuery } from "./geocode.js";
 import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./mapper.js";
+import { lookupPlaceByName } from "./places.js";
 import {
+  bulkSpotsSchema,
   createSpotSchema,
   deleteSpotSchema,
   ensureIndexSchema,
+  geocodeSchema,
+  getSpotSchema,
   hybridSearchSchema,
   keywordSearchSchema,
+  listSpotsSchema,
+  loginSchema,
+  placeLookupSchema,
   searchCandidateSpotsSchema,
   semanticSearchSchema,
   travelTimesSchema,
@@ -116,16 +135,127 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     });
   }
 
+  app.addHook("onRequest", async (req, reply) => {
+    if (!isAdminApiPath(req.url)) return;
+
+    const token = extractBearerToken(req.headers.authorization);
+    if (!token || !verifyAdminToken(token)) {
+      return reply.code(401).send({ error: "認証が必要です" });
+    }
+  });
+
   // ---- ヘルスチェック ------------------------------------------------------
   app.get("/health", async () => {
     const alive = await pingElasticsearch(client);
     return { ok: true, elasticsearch: alive };
   });
 
+  // ---- 管理画面ログイン ----------------------------------------------------
+  app.post<{ Body: { email: string; password: string } }>(
+    "/auth/login",
+    { schema: loginSchema },
+    async (req, reply) => {
+      const email = req.body.email.trim().toLowerCase();
+      const user = await getAdminUserByEmail(db, email);
+      if (!user || !(await verifyPassword(req.body.password, user.passwordHash))) {
+        return reply.code(401).send({ error: "メールアドレスまたはパスワードが正しくありません" });
+      }
+
+      const token = issueAdminToken({
+        id: user.id,
+        email: user.email,
+        municipalityName: user.municipalityName ?? undefined,
+      });
+
+      return {
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          municipalityName: user.municipalityName ?? undefined,
+        },
+      };
+    },
+  );
+
   // ---- index 作成 ----------------------------------------------------------
   app.post<{ Body: EnsureIndexBody }>("/indices", { schema: ensureIndexSchema }, async (req) => {
     return ensureIndex(client, req.body?.index);
   });
+
+  // ---- ジオコーディング（管理画面） ----------------------------------------
+  app.get<{ Querystring: { q: string } }>(
+    "/geocode",
+    { schema: geocodeSchema },
+    async (req, reply) => {
+      const location = await geocodeAddressQuery(req.query.q);
+      if (!location) {
+        return reply.code(404).send({ error: "住所から座標を取得できませんでした" });
+      }
+      return location;
+    },
+  );
+
+  // ---- スポット名検索（管理画面フォーム自動入力） --------------------------
+  app.get<{
+    Querystring: { name: string; prefecture?: string; municipality?: string };
+  }>("/places/lookup", { schema: placeLookupSchema }, async (req, reply) => {
+    const prefecture = req.query.prefecture ?? "長野県";
+    const municipality = req.query.municipality ?? "小諸市";
+    const name = req.query.name.trim();
+
+    const result = await lookupPlaceByName(name, { prefecture, municipality });
+    if (result) return result;
+
+    // 外部 API で見つからない場合のみ、登録済みスポット（同一都道府県・名称一致）を参照
+    const { rows } = await listSpots(db, { q: name, prefecture, limit: 20 });
+    const dbMatch = rows.find((row) => row.name === name);
+    if (dbMatch && dbMatch.lat != null && dbMatch.lon != null) {
+      return {
+        name: dbMatch.name,
+        address: dbMatch.address ?? undefined,
+        lat: dbMatch.lat,
+        lon: dbMatch.lon,
+        category: dbMatch.category ?? undefined,
+        description: dbMatch.description,
+      };
+    }
+
+    return reply.code(404).send({ error: "スポット名から情報を取得できませんでした" });
+  });
+
+  // ---- スポット一覧（管理画面） --------------------------------------------
+  app.get<{
+    Querystring: {
+      q?: string;
+      category?: string;
+      prefecture?: string;
+      offset?: number;
+      limit?: number;
+      sort?: "updatedAt" | "name";
+      order?: "asc" | "desc";
+    };
+  }>("/spots", { schema: listSpotsSchema }, async (req) => {
+    const { rows, total } = await listSpots(db, req.query);
+    return {
+      total,
+      count: rows.length,
+      spots: rows.map(toSpotDocument),
+    };
+  });
+
+  // ---- スポット1件取得 ------------------------------------------------------
+  app.get<{ Params: { id: string } }>(
+    "/spots/:id",
+    { schema: getSpotSchema },
+    async (req, reply) => {
+      const existing = await getSpotById(db, req.params.id);
+      if (!existing) {
+        return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
+      }
+      return toSpotDocument(existing);
+    },
+  );
 
   // ---- スポット登録 (upsert) ----------------------------------------------
   // 必須項目(id/name/description)・型・未知フィールド拒否はスキーマで検証する。
@@ -161,6 +291,25 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     await patchSpotInElasticsearch(client, id, partial, { refresh });
     return document;
   });
+
+  // ---- スポット一括登録 (bulk upsert) --------------------------------------
+  app.post<{ Body: { spots: SpotBody[] }; Querystring: { refresh?: string } }>(
+    "/spots/bulk",
+    { schema: bulkSpotsSchema },
+    async (req) => {
+      const refresh = req.query.refresh === "true";
+      const rows = await upsertSpots(db, req.body.spots.map(toNewSpotRow));
+      const documents = rows.map(toSpotDocument);
+      for (const document of documents) {
+        await upsertSpotInElasticsearch(client, document, { refresh: false });
+      }
+      const lastDocument = documents.at(-1);
+      if (refresh && lastDocument) {
+        await upsertSpotInElasticsearch(client, lastDocument, { refresh: true });
+      }
+      return { count: documents.length, spots: documents };
+    },
+  );
 
   // ---- スポット削除 --------------------------------------------------------
   // 正本(PG)から削除し、ES の写しも削除する。

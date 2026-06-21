@@ -1,0 +1,238 @@
+import { Loader2, Upload } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { bulkImportSpots } from "../api.ts";
+import { AdminShell } from "../components/layout/AdminShell.tsx";
+import { Button } from "../components/ui/Button.tsx";
+import { Toast } from "../components/ui/Modal.tsx";
+import { parseCsvLine, stripBom } from "../lib/csv.ts";
+import { CSV_HEADER } from "../lib/format.ts";
+import { extractAreaFromAddress } from "../lib/address.ts";
+import { parseCategories } from "../lib/categories.ts";
+import { getFixedPrefecture } from "../master/index.ts";
+import type { Spot } from "../types.ts";
+
+type Step = 1 | 2 | 3;
+
+type ParsedRow = Omit<Spot, "id"> & { error?: string; line: number };
+
+function parseCsv(text: string): ParsedRow[] {
+  const lines = stripBom(text).trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const header = lines[0]?.trim();
+  if (header !== CSV_HEADER) {
+    throw new Error("CSV ヘッダーが不正です。テンプレートをダウンロードしてください。");
+  }
+
+  return lines.slice(1).map((line, index) => {
+    if (!line.trim()) {
+      return { line: index + 2, name: "", description: "", error: "空行です" };
+    }
+    const cols = parseCsvLine(line);
+    const [name, description, category, _area, prefecture, address, lat, lon, price] = cols;
+    const row: ParsedRow = {
+      line: index + 2,
+      name: name?.trim() ?? "",
+      description: description?.trim() ?? "",
+    };
+    if (!row.name || !row.description) {
+      row.error = "name / description は必須です";
+      return row;
+    }
+    if (category?.trim()) row.category = parseCategories(category);
+    const fixedPrefecture = getFixedPrefecture();
+    if (prefecture?.trim() && prefecture.trim() !== fixedPrefecture) {
+      row.error = `都道府県は ${fixedPrefecture} のみ取り込み可能です`;
+      return row;
+    }
+    row.prefecture = fixedPrefecture;
+    if (address?.trim()) {
+      row.address = address.trim();
+      row.area = extractAreaFromAddress(row.address, fixedPrefecture);
+    }
+    if (lat?.trim() && lon?.trim()) {
+      row.location = { lat: Number(lat), lon: Number(lon) };
+    }
+    if (price?.trim()) row.price = Number(price);
+    return row;
+  });
+}
+
+export default function BulkImportPage() {
+  const navigate = useNavigate();
+  const [step, setStep] = useState<Step>(1);
+  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [result, setResult] = useState<{ ok: number; ng: number } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  const validRows = rows.filter((r) => !r.error);
+  const errorRows = rows.filter((r) => r.error);
+
+  const handleFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const parsed = parseCsv(text);
+      setRows(parsed);
+      setStep(2);
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "ファイルの読み込みに失敗しました");
+    }
+  };
+
+  const handleImport = async () => {
+    setImporting(true);
+    try {
+      const res = await bulkImportSpots(
+        validRows.map(({ line: _line, error: _error, ...spot }) => ({
+          ...spot,
+          id: crypto.randomUUID(),
+        })),
+      );
+      setResult({ ok: res.count, ng: errorRows.length });
+      setStep(3);
+    } catch {
+      setToast("取り込みに失敗しました");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const prefecture = getFixedPrefecture();
+    const sample = `${CSV_HEADER}\n"懐古園","小諸城址の公園。紅葉の名所。","観光;歴史","小諸市","${prefecture}","長野県小諸市中央1丁目","36.325","138.425","0"\n`;
+    const blob = new Blob([sample], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "spots-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <AdminShell title="スポット管理">
+      <div className="mx-auto max-w-[960px] p-8">
+        <p className="mb-6 text-sm text-[#64748b]">スポット管理 / 一括取り込み</p>
+
+        <div className="mb-8 flex gap-4">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="flex items-center gap-2">
+              <span
+                className={`flex size-8 items-center justify-center rounded-full text-sm font-bold ${
+                  importing && n === 3
+                    ? "bg-[#2563eb] text-white"
+                    : step >= n
+                      ? "bg-[#2563eb] text-white"
+                      : "bg-[#e2e8f0] text-[#64748b]"
+                } ${importing && n === 3 ? "animate-pulse" : ""}`}
+              >
+                {importing && n === 3 ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  n
+                )}
+              </span>
+              <span className="text-sm text-[#475569]">
+                {n === 1 ? "ファイル選択" : n === 2 ? "プレビュー" : importing ? "取り込み中" : "結果"}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {step === 1 && (
+          <div className="rounded-xl border border-[#e2e8f0] bg-white p-8">
+            <label className="flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed border-[#cbd5e1] bg-[#f8fafc] px-6 py-16 transition hover:border-[#2563eb]">
+              <Upload className="mb-4 size-10 text-[#94a3b8]" />
+              <p className="font-medium text-[#0f172a]">
+                ファイルをドラッグ＆ドロップ、またはクリックして選択
+              </p>
+              <p className="mt-2 text-sm text-[#64748b]">UTF-8 CSV（必須列: name, description）</p>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleFile(file);
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={downloadTemplate}
+              className="mt-4 cursor-pointer text-sm font-medium text-[#2563eb] hover:underline"
+            >
+              CSV テンプレートをダウンロード
+            </button>
+          </div>
+        )}
+
+        {importing && (
+          <div className="rounded-xl border border-[#e2e8f0] bg-white px-6 py-20 text-center">
+            <Loader2 className="mx-auto size-10 animate-spin text-[#2563eb]" aria-hidden />
+            <p className="mt-4 text-lg font-bold text-[#0f172a]">取り込み中…</p>
+            <p className="mt-2 text-sm text-[#64748b]">
+              {validRows.length} 件のスポットを登録しています。しばらくお待ちください。
+            </p>
+          </div>
+        )}
+
+        {step === 2 && !importing && (
+          <div className="rounded-xl border border-[#e2e8f0] bg-white p-6">
+            <p className="mb-4 text-sm text-[#475569]">
+              取り込み予定 {validRows.length} 件 / エラー {errorRows.length} 件
+            </p>
+            <div className="max-h-96 overflow-auto rounded-lg border border-[#e2e8f0]">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#f8fafc] text-[13px] font-bold text-[#475569]">
+                  <tr>
+                    <th className="px-4 py-2">行</th>
+                    <th className="px-4 py-2">名前</th>
+                    <th className="px-4 py-2">エラー</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr
+                      key={row.line}
+                      className={row.error ? "bg-[#fef2f2]" : "border-t border-[#e2e8f0]"}
+                    >
+                      <td className="px-4 py-2">{row.line}</td>
+                      <td className="px-4 py-2">{row.name}</td>
+                      <td className="px-4 py-2 text-[#dc2626]">{row.error ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setStep(1)}>
+                戻る
+              </Button>
+              <Button
+                disabled={validRows.length === 0 || importing}
+                onClick={() => void handleImport()}
+              >
+                取り込みを実行
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && result && (
+          <div className="rounded-xl border border-[#e2e8f0] bg-white p-8 text-center">
+            <p className="text-lg font-bold text-[#0f172a]">取り込み完了</p>
+            <p className="mt-2 text-sm text-[#475569]">
+              成功 {result.ok} 件 / 失敗 {result.ng} 件
+            </p>
+            <Button className="mt-6" onClick={() => navigate("/spots")}>
+              スポット一覧へ
+            </Button>
+          </div>
+        )}
+      </div>
+      {toast && <Toast message={toast} variant="error" />}
+    </AdminShell>
+  );
+}
