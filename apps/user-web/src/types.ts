@@ -13,7 +13,7 @@ export type SpotDocument = {
   id: string;
   name: string;
   description: string;
-  category?: string;
+  category?: string | string[];
   area?: string;
   prefecture?: string;
   address?: string;

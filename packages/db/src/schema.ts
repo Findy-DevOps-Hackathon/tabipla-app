@@ -24,8 +24,8 @@ export const spots = pgTable(
     name: text("name").notNull(),
     /** 説明・本文。 */
     description: text("description").notNull(),
-    /** カテゴリ（観光 / グルメ / 宿泊 / 自然 等）。 */
-    category: text("category"),
+    /** カテゴリ（最大3件。例: ["観光", "自然"]）。 */
+    category: text("category").array(),
     /** エリア・地域名（例: 京都市）。 */
     area: text("area"),
     /** 都道府県。 */
@@ -54,3 +54,28 @@ export const spots = pgTable(
 export type SpotRow = typeof spots.$inferSelect;
 /** INSERT 時の入力型。 */
 export type NewSpotRow = typeof spots.$inferInsert;
+
+/**
+ * 管理画面ログインユーザー。
+ *
+ * 自治体ごとに1アカウント想定（デモ: 小諸市）。
+ */
+export const adminUsers = pgTable(
+  "admin_users",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    email: text("email").notNull().unique(),
+    passwordHash: text("password_hash").notNull(),
+    municipalityName: text("municipality_name"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    emailIdx: index("admin_users_email_idx").on(table.email),
+  }),
+);
+
+export type AdminUserRow = typeof adminUsers.$inferSelect;
+export type NewAdminUserRow = typeof adminUsers.$inferInsert;

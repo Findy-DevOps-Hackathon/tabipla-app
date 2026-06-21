@@ -1,4 +1,4 @@
-import { asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, arrayContains, desc, eq, gt, ilike, or, sql } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { type NewSpotRow, type SpotRow, spots } from "../schema.js";
 
@@ -31,6 +31,7 @@ export async function upsertSpot(db: Database, input: NewSpotRow): Promise<SpotR
         tags: sql`excluded.tags`,
         lat: sql`excluded.lat`,
         lon: sql`excluded.lon`,
+        price: sql`excluded.price`,
         updatedAt: now,
       },
     })
@@ -65,10 +66,69 @@ export async function upsertSpots(db: Database, inputs: NewSpotRow[]): Promise<S
         tags: sql`excluded.tags`,
         lat: sql`excluded.lat`,
         lon: sql`excluded.lon`,
+        price: sql`excluded.price`,
         updatedAt: now,
       },
     })
     .returning();
+}
+
+/** 管理画面向け一覧クエリのオプション。 */
+export type ListSpotsOptions = {
+  q?: string;
+  category?: string;
+  prefecture?: string;
+  offset?: number;
+  limit?: number;
+  sort?: "updatedAt" | "name";
+  order?: "asc" | "desc";
+};
+
+/**
+ * 管理画面向けにスポット一覧を取得する（PostgreSQL 正本から）。
+ */
+export async function listSpots(
+  db: Database,
+  options: ListSpotsOptions = {},
+): Promise<{ rows: SpotRow[]; total: number }> {
+  const {
+    q,
+    category,
+    prefecture,
+    offset = 0,
+    limit = 20,
+    sort = "updatedAt",
+    order = "desc",
+  } = options;
+
+  const conditions = [];
+  if (category) conditions.push(arrayContains(spots.category, [category]));
+  if (prefecture) conditions.push(eq(spots.prefecture, prefecture));
+  if (q) {
+    const pattern = `%${q}%`;
+    conditions.push(
+      or(
+        ilike(spots.name, pattern),
+        ilike(spots.description, pattern),
+        ilike(spots.address, pattern),
+        ilike(spots.area, pattern),
+      ),
+    );
+  }
+
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const orderBy =
+    sort === "name"
+      ? order === "asc"
+        ? asc(spots.name)
+        : desc(spots.name)
+      : order === "asc"
+        ? asc(spots.updatedAt)
+        : desc(spots.updatedAt);
+
+  const rows = await db.select().from(spots).where(where).orderBy(orderBy).offset(offset).limit(limit);
+  const [countRow] = await db.select({ value: sql<number>`count(*)::int` }).from(spots).where(where);
+  return { rows, total: countRow?.value ?? 0 };
 }
 
 /** id でスポットを1件取得する（無ければ undefined）。 */

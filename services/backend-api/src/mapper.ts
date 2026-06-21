@@ -11,6 +11,20 @@ import type { SpotDocument } from "@tabipla/search-core";
 /** 部分更新（PUT /spots/:id）の本文。id は変更不可。 */
 export type SpotPatch = Partial<Omit<SpotDocument, "id">>;
 
+const MAX_CATEGORIES = 3;
+
+/** API / DB 向けにカテゴリ配列へ正規化する（最大3件、重複除去）。 */
+export function normalizeCategories(
+  value: string | string[] | null | undefined,
+): string[] | null {
+  if (value == null) return null;
+  const arr = (Array.isArray(value) ? value : [value])
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (arr.length === 0) return null;
+  return [...new Set(arr)].slice(0, MAX_CATEGORIES);
+}
+
 /**
  * DB の行（SpotRow）を検索ドキュメント（SpotDocument）へ変換する。
  *
@@ -27,7 +41,7 @@ export function toSpotDocument(row: SpotRow): SpotDocument {
     id: row.id,
     name: row.name,
     description: row.description,
-    ...(row.category !== null ? { category: row.category } : {}),
+    ...(row.category !== null && row.category.length > 0 ? { category: row.category } : {}),
     ...(row.area !== null ? { area: row.area } : {}),
     ...(row.prefecture !== null ? { prefecture: row.prefecture } : {}),
     ...(row.address !== null ? { address: row.address } : {}),
@@ -51,7 +65,7 @@ export function toNewSpotRow(doc: SpotDocument): NewSpotRow {
     id: doc.id,
     name: doc.name,
     description: doc.description,
-    category: doc.category ?? null,
+    category: normalizeCategories(doc.category),
     area: doc.area ?? null,
     prefecture: doc.prefecture ?? null,
     address: doc.address ?? null,
@@ -74,7 +88,10 @@ export function mergeSpotRow(existing: SpotRow, patch: SpotPatch): NewSpotRow {
     id: existing.id,
     name: patch.name ?? existing.name,
     description: patch.description ?? existing.description,
-    category: patch.category ?? existing.category,
+    category:
+      patch.category !== undefined
+        ? normalizeCategories(patch.category)
+        : existing.category,
     area: patch.area ?? existing.area,
     prefecture: patch.prefecture ?? existing.prefecture,
     address: patch.address ?? existing.address,
