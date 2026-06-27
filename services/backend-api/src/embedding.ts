@@ -33,11 +33,7 @@ export function buildSpotEmbedText(
   const parts = [
     doc.name,
     doc.description,
-    ...(doc.category
-      ? Array.isArray(doc.category)
-        ? doc.category
-        : [doc.category]
-      : []),
+    ...(doc.category ? (Array.isArray(doc.category) ? doc.category : [doc.category]) : []),
     doc.area,
     doc.prefecture,
     doc.tags?.join(" "),

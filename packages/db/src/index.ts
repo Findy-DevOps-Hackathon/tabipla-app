@@ -9,6 +9,9 @@
 export type { CreateDatabaseOptions, Database } from "./client.js";
 // クライアント
 export { createDatabase } from "./client.js";
+export { hashPassword, verifyPassword } from "./password.js";
+export { getAdminUserByEmail, upsertAdminUser } from "./repository/adminUsers.js";
+export type { ListSpotsOptions } from "./repository/spots.js";
 // リポジトリ（spots）
 export {
   countSpots,
@@ -20,9 +23,15 @@ export {
   upsertSpot,
   upsertSpots,
 } from "./repository/spots.js";
-export type { ListSpotsOptions } from "./repository/spots.js";
-export { getAdminUserByEmail, upsertAdminUser } from "./repository/adminUsers.js";
-export { hashPassword, verifyPassword } from "./password.js";
-export type { NewSpotRow, SpotRow, AdminUserRow, NewAdminUserRow } from "./schema.js";
+// リポジトリ（会員ユーザー）
+export { createUser, deleteUserById, getUserByEmail } from "./repository/users.js";
+export type {
+  AdminUserRow,
+  NewAdminUserRow,
+  NewSpotRow,
+  NewUserRow,
+  SpotRow,
+  UserRow,
+} from "./schema.js";
 // スキーマ / 型
-export { spots, adminUsers } from "./schema.js";
+export { adminUsers, spots, users } from "./schema.js";

@@ -42,6 +42,8 @@ export { hybridSearch } from "./search/hybridSearch.js";
 export type { KeywordSearchParams } from "./search/keywordSearch.js";
 // Search
 export { keywordSearch } from "./search/keywordSearch.js";
+export type { RrfOptions } from "./search/rrf.js";
+export { DEFAULT_RRF_RANK_CONSTANT, reciprocalRankFusion } from "./search/rrf.js";
 export type { SearchCandidateSpotsParams } from "./search/searchCandidateSpots.js";
 export { searchCandidateSpots } from "./search/searchCandidateSpots.js";
 export type { VectorSearchParams } from "./search/vectorSearch.js";

@@ -350,7 +350,7 @@ export default function SpotFormPage() {
                 onChange={(v) => setField("description", v)}
                 error={errors.description}
                 placeholder="例: 小諸城址の公園。紅葉の名所として知られ、春には桜、秋には紅葉が楽しめます。"
-                hint="AI 蘊蓄生成の元データになります。正確な情報を入力してください。"
+                hint="蘊蓄生成の元データになります。正確な情報を入力してください。"
               />
             </div>
             <fieldset className="lg:col-span-2">

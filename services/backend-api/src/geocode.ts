@@ -3,9 +3,7 @@ import { geocodeViaGoogle, getGoogleMapsApiKey, searchNominatim } from "./geoPro
 /**
  * 住所文字列をジオコーディングする（Google Geocoding → Nominatim）。
  */
-export async function geocodeAddressQuery(
-  q: string,
-): Promise<{ lat: number; lon: number } | null> {
+export async function geocodeAddressQuery(q: string): Promise<{ lat: number; lon: number } | null> {
   const trimmed = q.trim();
   if (!trimmed) return null;
 
