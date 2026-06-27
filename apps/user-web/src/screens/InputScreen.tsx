@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRightIcon,
   ChevronLeftIcon,
@@ -7,8 +7,7 @@ import {
   XCircleIcon,
 } from "../components/icons.tsx";
 import { searchPlaces } from "../data/places.ts";
-import { DESTINATION_SUGGESTIONS } from "../data/spots.ts";
-import { detectCurrentLocation, GeolocationError } from "../lib/geolocation.ts";
+import { coordsToLocation, requestCurrentCoordinates } from "../lib/geolocation.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 
 type InputScreenProps = {
@@ -23,42 +22,54 @@ type InputScreenProps = {
 /** フロー 2: 目的地（市区町村・都道府県）を入力する画面（frame-2-input）。 */
 export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputScreenProps) {
   const [value, setValue] = useState("");
-  const [locating, setLocating] = useState(afterDiagnosis);
+  const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const location = value.trim();
   const canSearch = location.length > 0 && !locating;
   const placeMatches = location.length > 0 ? searchPlaces(location) : [];
-  const showSuggestions = !afterDiagnosis || (!locating && !(locationError && value.length === 0));
+  const showSuggestions = !locating;
 
+  const handleUseCurrentLocation = useCallback(() => {
+    // iOS Safari は「タップのハンドラ内で setState より先に同期的に geolocation を呼ぶ」
+    // ことを要求するため、ここでは何より先に requestCurrentCoordinates を呼ぶ。
+    let erroredSync = false;
+    requestCurrentCoordinates(
+      (coords) => {
+        void coordsToLocation(coords)
+          .then((current) => {
+            setValue(current.label);
+          })
+          .catch(() => {
+            setLocationError("現在地を取得できませんでした。");
+          })
+          .finally(() => {
+            setLocating(false);
+          });
+      },
+      (error) => {
+        erroredSync = true;
+        setLocating(false);
+        setLocationError(error.message);
+      },
+    );
+
+    // 同期的にエラーで終わった場合（非対応/HTTPS でない等）は、その表示を上書きしない。
+    if (!erroredSync) {
+      setLocationError(null);
+      setLocating(true);
+    }
+  }, []);
+
+  // 「目的地を選ぶ」画面（好み診断後）に来たら、ボタン操作を待たずに
+  // 最初から現在地取得（＝許可ダイアログ）を自動で出す。StrictMode の二重実行や
+  // 再レンダリングで何度も発火しないよう、ref で初回の一度だけに限定する。
+  const autoRequestedRef = useRef(false);
   useEffect(() => {
     if (!afterDiagnosis) return;
-
-    let cancelled = false;
-    setLocating(true);
-    setLocationError(null);
-
-    detectCurrentLocation()
-      .then((current) => {
-        // 取得できたら入力欄に自動で反映するだけにとどめ、分析開始はユーザーの操作に任せる。
-        if (!cancelled) setValue(current.label);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          const fallback =
-            error instanceof GeolocationError && error.reason === "denied"
-              ? "位置情報が許可されませんでした。"
-              : "現在地を取得できませんでした。";
-          setLocationError(fallback);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLocating(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [afterDiagnosis]);
+    if (autoRequestedRef.current) return;
+    autoRequestedRef.current = true;
+    handleUseCurrentLocation();
+  }, [afterDiagnosis, handleUseCurrentLocation]);
 
   return (
     <div className="flex flex-1 flex-col justify-between">
@@ -87,9 +98,7 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
               {afterDiagnosis
                 ? locating
                   ? "現在地を取得しています。許可されると目的地に自動入力します"
-                  : locationError
-                    ? "市区町村または都道府県名を入力してください"
-                    : "好み診断が完了しました。探したい地域を選んでください"
+                  : "好み診断が完了しました。現在地を使うか、探したい地域を選んでください"
                 : "市区町村または都道府県名を入力してください"}
             </p>
           </div>
@@ -122,6 +131,18 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
               )}
             </div>
 
+            {afterDiagnosis && (
+              <button
+                type="button"
+                onClick={handleUseCurrentLocation}
+                disabled={locating}
+                className="flex h-[44px] items-center justify-center gap-2 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] text-[14px] font-medium text-[#475569] transition active:bg-[#f1f5f9] disabled:opacity-60"
+              >
+                <MapPinIcon className="size-4 shrink-0 text-(--brand)" />
+                {locating ? "現在地を取得中…" : "現在地を使う"}
+              </button>
+            )}
+
             {showSuggestions && location.length > 0 && (
               <ul className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_2px_4px_rgba(15,23,42,0.03)]">
                 {placeMatches.length === 0 ? (
@@ -152,39 +173,6 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
                     );
                   })
                 )}
-              </ul>
-            )}
-
-            {showSuggestions && location.length === 0 && (
-              <ul className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_2px_4px_rgba(15,23,42,0.03)]">
-                {DESTINATION_SUGGESTIONS.map((item) => {
-                  const suggestion = item.title.replace(/（.*?）$/, "");
-                  const showPinned = item.pinned && !(afterDiagnosis && locationError);
-
-                  return (
-                    <li key={item.title}>
-                      <button
-                        type="button"
-                        onClick={() => setValue(suggestion)}
-                        className="flex w-full flex-col items-start gap-0.5 border-b border-[#f8fafc] bg-white px-4 py-3 text-left transition active:bg-[#f1f5f9]"
-                      >
-                        <span
-                          className={`flex items-center gap-1 text-[14px] ${
-                            showPinned ? "font-bold text-[#0f172a]" : "text-[#475569]"
-                          }`}
-                        >
-                          {showPinned && (
-                            <MapPinIcon className="size-3.5 shrink-0 text-[#0f172a]" />
-                          )}
-                          {item.title}
-                        </span>
-                        {item.subtitle && (
-                          <span className="text-[11px] text-[#64748b]">{item.subtitle}</span>
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
               </ul>
             )}
           </div>
