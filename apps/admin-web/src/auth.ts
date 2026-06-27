@@ -22,4 +22,4 @@ export function logout(): void {
   localStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
-export const DEMO_USER_EMAIL = "taro.yamada@test.com";
+export const DEMO_USER_EMAIL = "admin@example.com";

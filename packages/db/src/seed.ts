@@ -13,7 +13,7 @@ import type { NewSpotRow } from "./schema.js";
  * デモ自治体: 長野県小諸市（管理画面マスタと一致）
  *
  * 管理ユーザー:
- *   email: taro.yamada@test.com
+ *   email: admin@example.com
  *   password: ADMIN_SEED_PASSWORD 環境変数（未設定時 test-admin-password）
  */
 const sampleSpots: NewSpotRow[] = [
@@ -64,7 +64,7 @@ async function main(): Promise<void> {
     const passwordHash = await hashPassword(seedPassword);
     await upsertAdminUser(db, {
       id: "admin-komoro",
-      email: "taro.yamada@test.com",
+      email: "admin@example.com",
       passwordHash,
       municipalityName: "小諸市",
     });
@@ -73,7 +73,7 @@ async function main(): Promise<void> {
     console.log(
       `[db] seed 完了: 管理ユーザー 1 件、スポット ${rows.length} 件を upsert しました。`,
     );
-    console.log("[db] ログイン: taro.yamada@test.com /", seedPassword);
+    console.log("[db] ログイン: admin@example.com /", seedPassword);
   } finally {
     await db.$client.end();
   }
