@@ -1,4 +1,4 @@
-import { and, asc, arrayContains, desc, eq, gt, ilike, or, sql } from "drizzle-orm";
+import { and, arrayContains, asc, desc, eq, gt, ilike, or, sql } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { type NewSpotRow, type SpotRow, spots } from "../schema.js";
 
@@ -126,8 +126,17 @@ export async function listSpots(
         ? asc(spots.updatedAt)
         : desc(spots.updatedAt);
 
-  const rows = await db.select().from(spots).where(where).orderBy(orderBy).offset(offset).limit(limit);
-  const [countRow] = await db.select({ value: sql<number>`count(*)::int` }).from(spots).where(where);
+  const rows = await db
+    .select()
+    .from(spots)
+    .where(where)
+    .orderBy(orderBy)
+    .offset(offset)
+    .limit(limit);
+  const [countRow] = await db
+    .select({ value: sql<number>`count(*)::int` })
+    .from(spots)
+    .where(where);
   return { rows, total: countRow?.value ?? 0 };
 }
 

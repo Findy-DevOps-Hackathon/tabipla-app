@@ -8,11 +8,7 @@ export async function getAdminUserByEmail(
   email: string,
 ): Promise<AdminUserRow | undefined> {
   const normalized = email.trim().toLowerCase();
-  const [row] = await db
-    .select()
-    .from(adminUsers)
-    .where(eq(adminUsers.email, normalized))
-    .limit(1);
+  const [row] = await db.select().from(adminUsers).where(eq(adminUsers.email, normalized)).limit(1);
   return row;
 }
 

@@ -1,9 +1,13 @@
 import {
   createDatabase,
+  createUser,
   type Database,
   deleteSpot,
+  deleteUserById,
   getAdminUserByEmail,
   getSpotById,
+  getUserByEmail,
+  hashPassword,
   listSpots,
   upsertSpot,
   upsertSpots,
@@ -45,8 +49,12 @@ import {
   semanticSearchSchema,
   travelTimesSchema,
   updateSpotSchema,
+  userDeleteSchema,
+  userLoginSchema,
+  userRegisterSchema,
   vectorSearchSchema,
 } from "./schemas.js";
+import { issueUserToken } from "./userAuth.js";
 
 /**
  * backend-api は検索ロジックを持たず、必ず search-core を経由して Elasticsearch を扱う。
@@ -175,6 +183,66 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
           municipalityName: user.municipalityName ?? undefined,
         },
       };
+    },
+  );
+
+  // ---- 会員登録（user-web） ------------------------------------------------
+  app.post<{ Body: { name: string; email: string; password: string } }>(
+    "/users/register",
+    { schema: userRegisterSchema },
+    async (req, reply) => {
+      const name = req.body.name.trim();
+      const email = req.body.email.trim().toLowerCase();
+
+      const existing = await getUserByEmail(db, email);
+      if (existing) {
+        return reply.code(409).send({ error: "このメールアドレスは既に登録されています" });
+      }
+
+      const passwordHash = await hashPassword(req.body.password);
+      const user = await createUser(db, { name, email, passwordHash });
+      const token = issueUserToken({ id: user.id, name: user.name, email: user.email });
+
+      return reply.code(201).send({
+        token,
+        user: { id: user.id, name: user.name, email: user.email },
+      });
+    },
+  );
+
+  // ---- 会員ログイン（user-web） --------------------------------------------
+  app.post<{ Body: { email: string; password: string } }>(
+    "/users/login",
+    { schema: userLoginSchema },
+    async (req, reply) => {
+      const email = req.body.email.trim().toLowerCase();
+      const user = await getUserByEmail(db, email);
+      if (!user || !(await verifyPassword(req.body.password, user.passwordHash))) {
+        return reply.code(401).send({ error: "メールアドレスまたはパスワードが正しくありません" });
+      }
+
+      const token = issueUserToken({ id: user.id, name: user.name, email: user.email });
+      return {
+        token,
+        user: { id: user.id, name: user.name, email: user.email },
+      };
+    },
+  );
+
+  // ---- 会員退会（user-web） ------------------------------------------------
+  // メール・パスワードで本人確認のうえアカウントを削除する。
+  app.post<{ Body: { email: string; password: string } }>(
+    "/users/delete",
+    { schema: userDeleteSchema },
+    async (req, reply) => {
+      const email = req.body.email.trim().toLowerCase();
+      const user = await getUserByEmail(db, email);
+      if (!user || !(await verifyPassword(req.body.password, user.passwordHash))) {
+        return reply.code(401).send({ error: "メールアドレスまたはパスワードが正しくありません" });
+      }
+
+      await deleteUserById(db, user.id);
+      return reply.code(200).send({ ok: true });
     },
   );
 

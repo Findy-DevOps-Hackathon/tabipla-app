@@ -1,15 +1,15 @@
-import type { estypes } from "@elastic/elasticsearch";
 import type { ElasticsearchClient } from "../client/elasticsearch.client.js";
 import { DEFAULT_INDEX_NAME } from "../mappings/spot.mapping.js";
 import type { SearchResult, SpotDocument } from "../types/spot.js";
-import {
-  buildFilters,
-  DEFAULT_SEARCH_FIELDS,
-  DEFAULT_SIZE,
-  keywordSearch,
-  toSearchResult,
-} from "./keywordSearch.js";
-import { DEFAULT_K, vectorSearch } from "./vectorSearch.js";
+import { DEFAULT_SIZE, keywordSearch } from "./keywordSearch.js";
+import { DEFAULT_RRF_RANK_CONSTANT, reciprocalRankFusion } from "./rrf.js";
+import { vectorSearch } from "./vectorSearch.js";
+
+/**
+ * RRF 融合時に各サブ検索（キーワード / ベクトル）から取得する候補件数の下限。
+ * 融合の質を保つため、最終 size より広めの window を取る。
+ */
+export const DEFAULT_RRF_WINDOW_SIZE = 50;
 
 export type HybridSearchParams = {
   /** 検索キーワード。未指定（空）の場合はベクトル検索のみになる。 */
@@ -29,8 +29,19 @@ export type HybridSearchParams = {
   /** ベクトルフィールド名。省略時は "embedding"。 */
   vectorField?: string;
   /**
-   * kNN スコアに掛ける重み（boost）。省略時は 1。
-   * キーワードスコアとベクトルスコアのバランス調整に使う。
+   * RRF の順位定数 k。省略時は DEFAULT_RRF_RANK_CONSTANT(=60)。
+   * 小さいほど上位順位を強調する。
+   */
+  rrfRankConstant?: number;
+  /**
+   * RRF 融合時に各サブ検索から取得する候補件数（window）。
+   * 省略時は max(size, k, DEFAULT_RRF_WINDOW_SIZE)。
+   */
+  rrfWindowSize?: number;
+  /**
+   * @deprecated 加算方式時代の kNN スコア重み。RRF（順位ベース融合）では順位のみを
+   * 用いるため無視される。順位の重み調整は将来 reciprocalRankFusion 側で対応する。
+   * 既存 API（backend-api）の互換のために型としては受け付ける。
    */
   knnBoost?: number;
 };
@@ -41,14 +52,19 @@ export type HybridSearchParams = {
  * 挙動:
  *   - query のみ指定 → キーワード検索（keywordSearch）に委譲。
  *   - embedding のみ指定 → ベクトル検索（vectorSearch）に委譲。
- *   - 両方指定 → 1回の検索リクエストで `query`(bool) と `knn` を併用する。
+ *   - 両方指定 → キーワード検索とベクトル検索を別々に実行し、
+ *     RRF（Reciprocal Rank Fusion / 順位ベース融合）でスコアを統合する。
  *   - どちらも未指定 → エラー。
  *
- * スコア統合方法:
- *   両方指定時は Elasticsearch の既定挙動に従い、
- *   「キーワードクエリのスコア」と「kNN のスコア(× knnBoost)」を加算した合計スコアで
- *   ランキングする。複雑な再ランキング（RRF 等）は初期実装では行わない。
- *   将来 RRF や重み学習へ差し替えられるよう、本関数をスコア統合の単一窓口とする。
+ * スコア統合方法（両方指定時）:
+ *   キーワードの BM25 スコアと kNN の cosine スコアはスケールが異なり、単純加算では
+ *   どちらか一方に偏りやすい。そこで本実装では各サブ検索の「順位」だけを用いる
+ *   RRF を採用する。各ドキュメントのスコアは
+ *     score = Σ 1 / (rrfRankConstant + rank)
+ *   で計算し、降順にランキングする。融合ロジックは reciprocalRankFusion に集約し、
+ *   将来の重み付き RRF などへ差し替えやすくしている。
+ *
+ *   返り値の `score` は RRF スコアであり、元の BM25 / cosine スコアではない。
  *
  * @param client Elasticsearch クライアント
  * @param params 検索パラメータ
@@ -92,33 +108,29 @@ export async function hybridSearch<T extends SpotDocument = SpotDocument>(
     });
   }
 
-  // 両方指定: query + knn を 1 リクエストで併用しスコアを加算する。
-  const fields = (params.fields ?? DEFAULT_SEARCH_FIELDS) as string[];
-  const filter = buildFilters(params.filters);
-  const k = params.k ?? size ?? DEFAULT_K;
+  // 両方指定: キーワード検索とベクトル検索を別々に実行し、RRF で順位融合する。
+  const k = params.k ?? size;
+  const windowSize = params.rrfWindowSize ?? Math.max(size, k, DEFAULT_RRF_WINDOW_SIZE);
 
-  const query: estypes.QueryDslQueryContainer = {
-    bool: {
-      must: [{ multi_match: { query: params.query as string, fields } }],
-      filter,
-    },
-  };
+  const [keywordResults, vectorResults] = await Promise.all([
+    keywordSearch<T>(client, {
+      query: params.query as string,
+      filters: params.filters,
+      size: windowSize,
+      index,
+      fields: params.fields,
+    }),
+    vectorSearch<T>(client, {
+      embedding: params.embedding as number[],
+      k: windowSize,
+      filters: params.filters,
+      index,
+      field: params.vectorField,
+    }),
+  ]);
 
-  const knn: estypes.KnnSearch = {
-    field: params.vectorField ?? "embedding",
-    query_vector: params.embedding as number[],
-    k,
-    num_candidates: k * 10,
-    boost: params.knnBoost ?? 1,
-    ...(filter.length > 0 ? { filter } : {}),
-  };
-
-  const response = await client.search<T>({
-    index,
+  return reciprocalRankFusion<T>([keywordResults, vectorResults], {
+    rankConstant: params.rrfRankConstant ?? DEFAULT_RRF_RANK_CONSTANT,
     size,
-    query,
-    knn,
   });
-
-  return response.hits.hits.map((hit) => toSearchResult<T>(hit));
 }

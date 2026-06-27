@@ -14,6 +14,7 @@ const apiTarget = process.env.VITE_API_PROXY_TARGET ?? "http://localhost:3001";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    host: true,
     port: 5173,
     proxy: {
       "/api": {

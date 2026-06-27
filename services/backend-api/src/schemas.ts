@@ -315,3 +315,32 @@ export const loginSchema = {
     },
   },
 } as const;
+
+/** 会員ログイン（user-web）。 */
+export const userLoginSchema = loginSchema;
+
+/** 会員退会（user-web）。メール・パスワードで本人確認してから削除する。 */
+export const userDeleteSchema = loginSchema;
+
+/** 会員登録（user-web）。
+ *  - name: 前後空白を除いて1文字以上（空白のみは pattern で弾く）、50文字以内
+ *  - email: メール形式、256文字以内
+ *  - password: 8〜128文字、英字と数字を両方含む
+ */
+export const userRegisterSchema = {
+  body: {
+    type: "object",
+    required: ["name", "email", "password"],
+    additionalProperties: false,
+    properties: {
+      name: { type: "string", minLength: 1, maxLength: 50, pattern: "\\S" },
+      email: { type: "string", format: "email", maxLength: 256 },
+      password: {
+        type: "string",
+        minLength: 8,
+        maxLength: 128,
+        pattern: "^(?=.*[A-Za-z])(?=.*\\d).+$",
+      },
+    },
+  },
+} as const;

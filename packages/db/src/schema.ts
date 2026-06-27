@@ -79,3 +79,28 @@ export const adminUsers = pgTable(
 
 export type AdminUserRow = typeof adminUsers.$inferSelect;
 export type NewAdminUserRow = typeof adminUsers.$inferInsert;
+
+/**
+ * 旅行者（user-web）の会員アカウント。
+ *
+ * クーポン利用や「行った履歴」の保存に使う。パスワードは scrypt でハッシュ化して保持する。
+ */
+export const users = pgTable(
+  "users",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    name: text("name").notNull(),
+    email: text("email").notNull().unique(),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    emailIdx: index("users_email_idx").on(table.email),
+  }),
+);
+
+export type UserRow = typeof users.$inferSelect;
+export type NewUserRow = typeof users.$inferInsert;

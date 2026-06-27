@@ -27,7 +27,9 @@ async function parseApiError(res: Response): Promise<never> {
 }
 
 export async function searchSpots(params: SearchParams): Promise<SearchResponse> {
-  const mode = params.mode ?? "keyword";
+  // 既定はキーワード + Embedding のハイブリッド検索。
+  // 「探す」では表記ゆれや言い換えにも強くしたいため keyword 単独ではなく hybrid を既定にする。
+  const mode = params.mode ?? "hybrid";
 
   if (mode === "keyword") {
     const search = new URLSearchParams();

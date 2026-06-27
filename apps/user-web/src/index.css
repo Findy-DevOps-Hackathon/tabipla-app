@@ -2,10 +2,127 @@
 
 :root {
   color-scheme: light;
+
+  /**
+   * tabipla ブランドのデザイントークン（トンマナの「正」）。
+   * 色のハードコード散在を防ぐため、ブランド・AI 演出・ページ背景はここで一元管理し、
+   * 各画面は任意値ユーティリティ（例: from-[var(--brand-from)] / text-[var(--ai-fg)] /
+   * bg-[var(--page)]）で参照する。成功（emerald）・危険（rose）は Tailwind 標準色を使う。
+   */
+  /* ブランド/主アクション（グラデーション） */
+  --brand-from: #23ac73;
+  --brand-to: #0aa19b;
+  /* ブランド単色（アイコンなどフラット用途） */
+  --brand: #0d9488;
+  /* AI 演出（おすすめ理由・分析中）。teal-100/700 系で自然・宿泊バッジと色を分ける */
+  --ai-fg: #0f766e;
+  --ai-bg: #ccfbf1;
+  /* 会員限定（プレミアム）アクセント。だれでもクーポン（--brand）と対で使う。
+     宿泊カテゴリバッジ（#6d28d9）とは別シェードにして役割を区別する */
+  --member: #7c3aed;
+  /* ページ背景（全画面で統一） */
+  --page: #f8fafc;
 }
 
 body {
   margin: 0;
   font-family:
-    system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    "Noto Sans JP", system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/** スワイプカード初回表示時の左右揺れ（操作ヒント）。 */
+@keyframes swipe-hint-wiggle {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  28% {
+    transform: translateX(7px) rotate(1.5deg);
+  }
+  57% {
+    transform: translateX(-7px) rotate(-1.5deg);
+  }
+  85% {
+    transform: translateX(3px) rotate(0.6deg);
+  }
+}
+
+.animate-swipe-hint {
+  animation: swipe-hint-wiggle 0.85s ease-in-out;
+}
+
+/** ホーム背景の格子（グリッド）を下方向へ無限スクロールさせる。
+    背景サイズ 28px と同じ量だけ動かすことで継ぎ目なくループする。 */
+@keyframes grid-drift {
+  0% {
+    background-position:
+      0 0,
+      0 0;
+  }
+  100% {
+    background-position:
+      0 28px,
+      0 28px;
+  }
+}
+
+.animate-grid-drift {
+  animation: grid-drift 2.4s linear infinite;
+}
+
+/** ホームのおすすめカードのふわふわ揺れ（上下＋わずかな傾き）。 */
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-0.6deg);
+  }
+  50% {
+    transform: translateY(-9px) rotate(0.6deg);
+  }
+}
+
+.animate-float-soft {
+  animation: float-soft 4s ease-in-out infinite;
+}
+
+/** カード入れ替え時、新しいカードを右から傾きながら滑り込ませる。 */
+@keyframes card-enter {
+  0% {
+    opacity: 0.2;
+    transform: translateX(115%) rotate(8deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+}
+
+/** カード入れ替え時、前のカードを左へ傾きながら送り出す。 */
+@keyframes card-leave {
+  0% {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-115%) rotate(-8deg);
+  }
+}
+
+.animate-card-enter {
+  animation: card-enter 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.animate-card-leave {
+  animation: card-leave 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-grid-drift,
+  .animate-float-soft,
+  .animate-card-enter,
+  .animate-card-leave {
+    animation: none;
+  }
 }

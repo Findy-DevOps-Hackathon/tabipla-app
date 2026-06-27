@@ -53,10 +53,17 @@ pnpm -C apps/user-web preview
 
 ## 画面・機能
 
-- 検索ボックス（入力を 300ms デバウンスし、`GET /api/search?q=` を呼び出し）
-- 結果一覧（カテゴリバッジ・エリア・説明・タグ・スコアを表示）
-- ローディング / エラー / 0 件 / 初期状態の表示分岐
-- 連続入力時は `AbortController` で古いリクエストをキャンセルし、最新結果のみ採用
+スワイプ型のレコメンド体験（モバイルファースト 390×844）。Figma デザイン
+（`docs/figma-user-design-brief.md` / Findy DevOps ファイル）に準拠した 5 ステップのフロー。
+未ログイン時は会員登録/ログイン画面（`AuthScreen`）を入口に表示する。
+
+0. **会員登録 / ログイン**（`AuthScreen`）— 新規登録（お名前・メール・パスワード）またはログイン
+1. **ようこそ**（`WelcomeScreen`）— 挨拶・ログアウト、「現在地を使う」/「目的地を入力する」を選ぶ
+2. **目的地入力**（`InputScreen`）— 市区町村・都道府県を入力、サジェスト表示
+3. **スワイプ**（`SwipeScreen`）— スポットカードを左右スワイプ（好き / 興味なし）。
+   ドラッグ量に応じて LIKE / NOPE オーバーレイを表示し、ボタン操作にも対応
+4. **分析中**（`ProcessingScreen`）— スワイプ結果から好みを擬似分析
+5. **おすすめ一覧**（`RecommendationsScreen`）— おすすめ理由・相性スコア付きカード
 
 ---
 
@@ -64,15 +71,26 @@ pnpm -C apps/user-web preview
 
 | ファイル | 役割 |
 |---|---|
-| `src/api.ts` | backend-api への検索クライアント（HTTP 境界） |
-| `src/types.ts` | API レスポンスの型（search-core の型に対応する最小再定義） |
-| `src/App.tsx` | 検索状態管理と画面全体 |
-| `src/components/SpotCard.tsx` | スポット 1 件の表示カード |
+| `src/App.tsx` | 認証ゲート + フロー全体のステップ状態機械 |
+| `src/auth.ts` | 会員登録・ログイン・セッション（localStorage、フロント完結のデモ実装） |
+| `src/components/PhoneShell.tsx` | 端末フレーム・ステータスバー・ホームインジケータ |
+| `src/components/icons.tsx` | インライン SVG アイコン群 |
+| `src/screens/*.tsx` | 各ステップの画面 |
+| `src/data/spots.ts` | 小諸市のデモスポット・サジェスト・おすすめデータと型 |
+| `src/lib/category.ts` | カテゴリバッジの配色 |
+| `src/api.ts` / `src/types.ts` | backend-api 検索クライアントと型（将来のスポット候補取得用に保持） |
+| `public/spots/*.png` | カード画像（Figma から取得したデモ写真） |
 
 ---
 
 ## 注意 / 未実装範囲
 
-- **ベクトル / ハイブリッド検索 UI** は未実装（現状はキーワード検索のみ）。
-- **カテゴリ・エリアでの絞り込み UI** は未実装（backend-api の GET `/search` は filters 非対応のため、必要なら API 拡張とあわせて対応）。
-- **認証** は未実装（対象外）。
+- **スワイプ候補・おすすめは現状デモデータ**（`src/data/spots.ts`）。backend-api には
+  スワイプ/レコメンド用エンドポイントが未実装のため、将来 `src/api.ts` 経由で
+  目的地に応じたスポット候補を取得して差し替える想定。
+- **現在地取得（Geolocation）** はブラウザの Geolocation API で実取得し、OpenStreetMap
+  Nominatim の逆ジオコーディングでエリア名（市区町村など）へ変換する（`src/lib/geolocation.ts`）。
+  許可拒否・取得失敗時は `WelcomeScreen` にエラーを表示する。
+- **会員登録/ログインはフロント完結のデモ**（`src/auth.ts`）。アカウント・パスワードは
+  localStorage にのみ保存され、サーバーには送らない。backend-api は現状 admin（自治体職員）
+  専用の認証のみ持つため、本実装は将来 user 向け会員 API に差し替える想定。

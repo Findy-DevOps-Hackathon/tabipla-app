@@ -1,4 +1,9 @@
-import { geocodeViaGoogle, getGoogleMapsApiKey, searchNominatim, type NominatimHit } from "./geoProviders.js";
+import {
+  geocodeViaGoogle,
+  getGoogleMapsApiKey,
+  type NominatimHit,
+  searchNominatim,
+} from "./geoProviders.js";
 
 /** スポット名検索の結果（管理画面フォーム自動入力用） */
 export type PlaceLookupResult = {
@@ -86,10 +91,7 @@ async function lookupViaPlacesApiNew(
   };
 }
 
-async function lookupViaFindPlace(
-  query: string,
-  key: string,
-): Promise<PlaceLookupResult | null> {
+async function lookupViaFindPlace(query: string, key: string): Promise<PlaceLookupResult | null> {
   const url = new URL("https://maps.googleapis.com/maps/api/place/findplacefromtext/json");
   url.searchParams.set("input", query);
   url.searchParams.set("inputtype", "textquery");
@@ -127,10 +129,7 @@ async function lookupViaFindPlace(
   };
 }
 
-async function lookupViaGeocoding(
-  query: string,
-  key: string,
-): Promise<PlaceLookupResult | null> {
+async function lookupViaGeocoding(query: string, key: string): Promise<PlaceLookupResult | null> {
   const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
   url.searchParams.set("address", query);
   url.searchParams.set("language", "ja");

@@ -14,13 +14,9 @@ export type SpotPatch = Partial<Omit<SpotDocument, "id">>;
 const MAX_CATEGORIES = 3;
 
 /** API / DB 向けにカテゴリ配列へ正規化する（最大3件、重複除去）。 */
-export function normalizeCategories(
-  value: string | string[] | null | undefined,
-): string[] | null {
+export function normalizeCategories(value: string | string[] | null | undefined): string[] | null {
   if (value == null) return null;
-  const arr = (Array.isArray(value) ? value : [value])
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const arr = (Array.isArray(value) ? value : [value]).map((s) => s.trim()).filter(Boolean);
   if (arr.length === 0) return null;
   return [...new Set(arr)].slice(0, MAX_CATEGORIES);
 }
@@ -89,9 +85,7 @@ export function mergeSpotRow(existing: SpotRow, patch: SpotPatch): NewSpotRow {
     name: patch.name ?? existing.name,
     description: patch.description ?? existing.description,
     category:
-      patch.category !== undefined
-        ? normalizeCategories(patch.category)
-        : existing.category,
+      patch.category !== undefined ? normalizeCategories(patch.category) : existing.category,
     area: patch.area ?? existing.area,
     prefecture: patch.prefecture ?? existing.prefecture,
     address: patch.address ?? existing.address,
