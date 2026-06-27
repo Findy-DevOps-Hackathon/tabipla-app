@@ -2,3 +2,6 @@ dist
 node_modules
 *.local
 .env
+
+# Firebase Hosting のローカルデプロイキャッシュ（再生成される / 共有不要）
+.firebase/
