@@ -51,6 +51,58 @@ pnpm -C apps/user-web preview
 
 ---
 
+## デプロイ（Firebase Hosting / GCP）
+
+静的 SPA を **Firebase Hosting**（GCP）で配信します。設定は `apps/user-web/firebase.json`
+（`public: dist`／SPA 用 `rewrites`／静的アセットのキャッシュ）に定義済みです。
+
+### 前提
+
+- `firebase-tools` は `devDependency` として導入済み（`pnpm exec firebase` で実行可能）。
+- Google アカウントと Firebase プロジェクトが必要。
+
+### 手順
+
+```bash
+cd apps/user-web
+
+# 1. Google アカウントでログイン（ブラウザが開く対話コマンド）
+pnpm exec firebase login
+
+# 2. デプロイ先プロジェクトを指定（どちらか）
+#    既存プロジェクトを選ぶ:
+pnpm exec firebase use --add
+#    新規作成する（プロジェクト ID は世界で一意）:
+pnpm exec firebase projects:create <your-project-id>
+pnpm exec firebase use <your-project-id>
+
+# 3. ビルド + デプロイ（`pnpm build` も自動実行される）
+pnpm run deploy
+```
+
+成功すると `Hosting URL: https://<project-id>.web.app` が表示され、そこで公開されます。
+
+> `pnpm run deploy` は `package.json` の `deploy`（= `pnpm build && firebase deploy --only hosting`）です。
+> `run` を省いた `pnpm deploy` は pnpm の組み込みコマンドと衝突するため、必ず `pnpm run deploy` を使う。
+
+---
+
+## デプロイ時の注意事項
+
+- **検索 API（`/api/*`）は本番では未接続**。`/api` のプロキシは開発サーバ（`vite.config.ts`）
+  限定のため、Firebase Hosting 単体では `backend-api` に到達できず**検索機能は動きません**。
+  画面遷移・スワイプ等のデモ動作は問題なく確認できます。
+- **本番で実検索を繋ぐ場合**は、`backend-api` を別 URL（例: Cloud Run）へデプロイし、
+  `firebase.json` の `rewrites` に `/api/**` → そのバックエンドへの転送（`run` 連携 or リバースプロキシ）
+  を追加する。`src/api.ts` の `API_BASE` 切り替えでも対応可能。
+- **会員登録/ログインはフロント完結のデモ**（`src/auth.ts`、localStorage 保存）。本番公開時は
+  認証情報がサーバーに送られない点に留意（将来 user 向け会員 API へ差し替え予定）。
+- **`dist/` はビルド成果物**なのでコミット不要（`pnpm deploy` が毎回再生成）。
+- **インフラ管理（Terraform 等）は不要**。フロント静的配信のみで状態管理対象がほぼないため、
+  `firebase deploy` で完結する。backend 一式を GCP に本格構築する段階で IaC を検討する。
+
+---
+
 ## 画面・機能
 
 スワイプ型のレコメンド体験（モバイルファースト 390×844）。Figma デザイン
