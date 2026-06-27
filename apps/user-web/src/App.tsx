@@ -54,6 +54,42 @@ function readStoredStep(): Step {
 }
 
 /**
+ * ブラウザ履歴と連動させるための「画面状態」のスナップショット。
+ * step だけでなくモーダル（詳細・クーポン・認証）の開閉も含め、
+ * ブラウザの戻る操作で直前の見た目に正確に復元できるようにする。
+ */
+type ViewSnapshot = {
+  step: Step;
+  refining: boolean;
+  swipeDeck: typeof SWIPE_SPOTS;
+  runId: number;
+  returnFromHistory: Step;
+  detailRec: Recommendation | null;
+  detailVisited: boolean;
+  activeCoupon: Recommendation | null;
+  authPrompt: { reason?: string } | null;
+  pendingCoupon: Recommendation | null;
+  pendingVisit: VisitableSpot | null;
+};
+
+/**
+ * 「画面（ステップ）＋開いているモーダル」を表す識別キー。
+ * このキーが変わったときだけブラウザ履歴に新しいエントリを積む
+ *（＝「行った」のトグルなど見た目に出ない状態変化では履歴を増やさない）。
+ */
+function viewKey(s: ViewSnapshot): string {
+  return [
+    s.step,
+    s.detailRec?.id ?? "",
+    s.activeCoupon?.id ?? "",
+    s.authPrompt ? "auth" : "",
+  ].join("|");
+}
+
+/** history.state 内に画面スナップショットを格納するためのキー。 */
+const HISTORY_STATE_KEY = "tabiplaNav";
+
+/**
  * tabipla ユーザー向け Web のメインフロー。
  *
  * ようこそ → 好み診断（最大5回スワイプ）→ 目的地選択 → 分析中 → おすすめ一覧、という
@@ -99,6 +135,142 @@ export default function App() {
   stepRef.current = step;
   const shellRef = useRef<HTMLDivElement>(null);
   const footerVisible = useHideFooterOnScroll(step);
+
+  // --- ブラウザ「戻る」連動 -------------------------------------------------
+  // ルーターを使わず step の状態機械で画面を切り替えているため、そのままでは
+  // ブラウザの戻る操作が効かない。現在の画面状態を逐次ブラウザ履歴へ積み、
+  // popstate（戻る/進む）で対応するスナップショットへ復元する。
+
+  // 現在の画面状態を常に最新で参照するためのスナップショット。
+  // 復元情報はメモリのスタックではなく history.state 自体に保存するため、
+  // HMR や StrictMode の再マウントでスタックが失われても戻る操作が壊れない。
+  const navSnapshot: ViewSnapshot = {
+    step,
+    refining,
+    swipeDeck,
+    runId,
+    returnFromHistory,
+    detailRec,
+    detailVisited,
+    activeCoupon,
+    authPrompt,
+    pendingCoupon,
+    pendingVisit,
+  };
+  const navSnapshotRef = useRef(navSnapshot);
+  navSnapshotRef.current = navSnapshot;
+
+  // 現在位置の通し番号と直近の画面キー。popstate 中の再 push を防ぐフラグも持つ。
+  const navIndexRef = useRef(0);
+  const navKeyRef = useRef<string>("");
+  const isPopRef = useRef(false);
+  // 次の画面状態変化を「新しい履歴の push」ではなく「現在エントリの置き換え」にするフラグ。
+  // 認証画面はログインで消費される一時ステップのため、ログイン成功後の遷移で認証エントリを
+  // 残さない（残すと、クーポン利用後の「戻る」で再びログイン画面に戻ってしまう）。
+  const replaceNextRef = useRef(false);
+
+  // スナップショットを React state へ反映する（戻る/進むの復元時に使用）。
+  const applySnapshot = useCallback((s: ViewSnapshot) => {
+    setStep(s.step);
+    setRefining(s.refining);
+    setSwipeDeck(s.swipeDeck);
+    setRunId(s.runId);
+    setReturnFromHistory(s.returnFromHistory);
+    setDetailRec(s.detailRec);
+    setDetailVisited(s.detailVisited);
+    setActiveCoupon(s.activeCoupon);
+    setAuthPrompt(s.authPrompt);
+    setPendingCoupon(s.pendingCoupon);
+    setPendingVisit(s.pendingVisit);
+  }, []);
+
+  // 初期化と popstate 購読（マウント時に一度だけ）。
+  useEffect(() => {
+    const initial = navSnapshotRef.current;
+    navIndexRef.current = 0;
+    navKeyRef.current = viewKey(initial);
+    // 現在の履歴エントリに初期スナップショットを保存する。
+    window.history.replaceState({ [HISTORY_STATE_KEY]: { idx: 0, snapshot: initial } }, "");
+
+    const onPopState = (event: PopStateEvent) => {
+      const data = event.state?.[HISTORY_STATE_KEY] as
+        | { idx: number; snapshot: ViewSnapshot }
+        | undefined;
+      if (data?.snapshot) {
+        isPopRef.current = true;
+        navIndexRef.current = data.idx;
+        navKeyRef.current = viewKey(data.snapshot);
+        applySnapshot(data.snapshot);
+        return;
+      }
+      // 当アプリ管理外／古いビルドの履歴エントリ（スナップショットなし）に戻った場合でも
+      // 固まらないよう、開いているオーバーレイは最低限閉じる（自己修復）。
+      const current = navSnapshotRef.current;
+      if (current.detailRec || current.activeCoupon || current.authPrompt) {
+        isPopRef.current = true;
+        setDetailRec(null);
+        setActiveCoupon(null);
+        setAuthPrompt(null);
+        setPendingCoupon(null);
+        setPendingVisit(null);
+      }
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+    // applySnapshot は安定（依存なしの useCallback）なので一度だけ実行する。
+  }, [applySnapshot]);
+
+  // 画面状態が変わるたびに、新しい画面なら履歴へ push、同じ画面なら現在エントリを更新する。
+  // 本体では最新値を navSnapshotRef 経由で読むため（stale closure 回避）、依存配列の各 state は
+  // 「この効果を再実行させるためのトリガー」として意図的に列挙している。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 画面状態の変化を検知する再実行トリガー。
+  useEffect(() => {
+    // popstate 由来の状態反映では新たに履歴を積まない。
+    if (isPopRef.current) {
+      isPopRef.current = false;
+      return;
+    }
+    const snapshot = navSnapshotRef.current;
+    const key = viewKey(snapshot);
+    // 認証成功後など、現在エントリ（例: 認証画面）を新しい画面で置き換えたい場合。
+    // idx は据え置きのまま履歴を上書きし、戻り先に一時ステップを残さない。
+    if (replaceNextRef.current) {
+      replaceNextRef.current = false;
+      navKeyRef.current = key;
+      window.history.replaceState(
+        { [HISTORY_STATE_KEY]: { idx: navIndexRef.current, snapshot } },
+        "",
+      );
+      return;
+    }
+    if (key === navKeyRef.current) {
+      // 同じ画面のままの軽微な状態変化（「行った」トグル等）。
+      // 戻ったときに最新の中身を復元できるよう、現在の履歴エントリを上書きする。
+      window.history.replaceState(
+        { [HISTORY_STATE_KEY]: { idx: navIndexRef.current, snapshot } },
+        "",
+      );
+      return;
+    }
+    const nextIndex = navIndexRef.current + 1;
+    navIndexRef.current = nextIndex;
+    navKeyRef.current = key;
+    window.history.pushState({ [HISTORY_STATE_KEY]: { idx: nextIndex, snapshot } }, "");
+  }, [
+    step,
+    refining,
+    swipeDeck,
+    runId,
+    returnFromHistory,
+    detailRec,
+    detailVisited,
+    activeCoupon,
+    authPrompt,
+    pendingCoupon,
+    pendingVisit,
+  ]);
+  // -------------------------------------------------------------------------
 
   // 画面（ステップ）切り替え時はウィンドウのスクロール位置を先頭へ戻す。
   // スクロールはドキュメント側で行うため、前画面のスクロール量が残らないようにする。
@@ -199,7 +371,7 @@ export default function App() {
     [user, visitorId, requireAuthForVisit],
   );
 
-  // ログイン/ログアウト時は好み診断をリセットする（前ユーザーの結果を引き継がない）。
+  // ログアウト時は好み診断をリセットする（前ユーザーの結果を次の利用者に引き継がない）。
   const resetDiagnosisState = useCallback(() => {
     resetDiagnosis();
     setDiagnosisComplete(false);
@@ -208,9 +380,13 @@ export default function App() {
 
   const handleAuthenticated = useCallback(
     (account: UserAccount) => {
+      // ログインで認証画面は役目を終える。続く画面遷移は履歴を push せず、認証エントリを
+      // 置き換える（こうしないとクーポン利用後の「戻る」で再びログイン画面に戻ってしまう）。
+      replaceNextRef.current = true;
       setUser(account);
       setAuthPrompt(null);
-      resetDiagnosisState();
+      // ログイン時は好み診断の結果を保持する（未ログインのまま診断した内容を、そのまま
+      // 会員アカウントに引き継ぐ）。リセットはログアウト時のみ行う。
       if (pendingCoupon) {
         setActiveCoupon(pendingCoupon);
         setPendingCoupon(null);
@@ -220,7 +396,7 @@ export default function App() {
         setPendingVisit(null);
       }
     },
-    [pendingCoupon, pendingVisit, resetDiagnosisState],
+    [pendingCoupon, pendingVisit],
   );
 
   // ログアウト。セッションを破棄してホームへ戻す（履歴は会員機能のため）。
@@ -231,10 +407,22 @@ export default function App() {
     setStep("welcome");
   }, [resetDiagnosisState]);
 
-  const closeAuthPrompt = useCallback(() => {
+  // アプリ内の「戻る/閉じる」操作はブラウザ履歴を 1 つ戻す（実際の画面復元は
+  // popstate ハンドラが行う）。これによりブラウザの戻るボタンと挙動が一致し、
+  // 「戻る」のたびに前進方向の履歴を積んでしまう二重化（＝戻ると飛ばされる原因）を防ぐ。
+  const goBack = useCallback((fallback: Step) => {
+    if (navIndexRef.current > 0) {
+      window.history.back();
+      return;
+    }
+    // 履歴の起点（リロードで深い画面に直接入った等）では戻り先がないため、
+    // 明示的なフォールバック画面へ遷移し、開いているオーバーレイは閉じる。
+    setDetailRec(null);
+    setActiveCoupon(null);
     setAuthPrompt(null);
     setPendingCoupon(null);
     setPendingVisit(null);
+    setStep(fallback);
   }, []);
 
   const openHistory = useCallback(() => {
@@ -271,6 +459,7 @@ export default function App() {
       {step === "welcome" && (
         <WelcomeScreen
           onStartDiagnosis={beginSwipe}
+          onExplore={() => setStep("recommendations")}
           onViewHistory={openHistory}
           onOpenSpot={openSpotDetail}
         />
@@ -281,7 +470,8 @@ export default function App() {
           userId={visitorId}
           isLoggedIn={Boolean(user)}
           onRequireAuth={() => setAuthPrompt({})}
-          onBack={() => setStep(returnFromHistory)}
+          onOpenSpot={openSpotDetail}
+          onBack={() => goBack(returnFromHistory)}
           onLogout={handleLogout}
         />
       )}
@@ -289,7 +479,7 @@ export default function App() {
       {step === "input" && (
         <InputScreen
           afterDiagnosis
-          onBack={() => setStep("welcome")}
+          onBack={() => goBack("welcome")}
           onSearch={selectDestination}
         />
       )}
@@ -300,7 +490,7 @@ export default function App() {
           spots={swipeDeck}
           refine={refining}
           onComplete={handleSwipeComplete}
-          onCancel={() => setStep(refining ? "recommendations" : "welcome")}
+          onCancel={() => goBack(refining ? "recommendations" : "welcome")}
         />
       )}
 
@@ -322,11 +512,9 @@ export default function App() {
           diagnosisComplete={diagnosisComplete}
           detailedComplete={detailedComplete}
           userId={visitorId}
-          isLoggedIn={Boolean(user)}
-          onRequireAuthForVisit={requireAuthForVisit}
           onStartDiagnosis={beginSwipe}
           onRestart={refinePreferences}
-          onUseCoupon={handleUseCoupon}
+          onOpenSpot={openSpotDetail}
         />
       )}
 
@@ -349,7 +537,7 @@ export default function App() {
             <AuthScreen
               reason={authPrompt.reason}
               onAuthenticated={handleAuthenticated}
-              onCancel={closeAuthPrompt}
+              onCancel={() => goBack("welcome")}
             />
           </div>
         </div>
@@ -362,7 +550,7 @@ export default function App() {
               recommendation={activeCoupon}
               userName={user?.name ?? null}
               userId={visitorId}
-              onClose={() => setActiveCoupon(null)}
+              onClose={() => goBack("recommendations")}
             />
           </div>
         </div>
@@ -372,7 +560,7 @@ export default function App() {
         <SpotDetailModal
           recommendation={detailRec}
           visited={detailVisited}
-          onClose={() => setDetailRec(null)}
+          onClose={() => goBack("recommendations")}
           onUseCoupon={(rec) => {
             // 認証/クーポンのオーバーレイより詳細が前面に来ないよう、先に詳細を閉じる。
             setDetailRec(null);

@@ -1,9 +1,8 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { CardsIcon, SparklesIcon } from "../components/icons.tsx";
-import { SpotDetailModal } from "../components/SpotDetailModal.tsx";
 import { RECOMMENDATIONS_PAGE_SIZE, type Recommendation } from "../data/spots.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
-import { isVisited, toggleVisited, type VisitableSpot } from "../lib/visited.ts";
+import { isVisited } from "../lib/visited.ts";
 
 type RecommendationsScreenProps = {
   recommendations: Recommendation[];
@@ -13,16 +12,16 @@ type RecommendationsScreenProps = {
   detailedComplete: boolean;
   /** 訪問履歴を保存する対象ユーザーの ID。 */
   userId: string;
-  /** ログイン済みか。未ログイン時は「行った」追加で会員登録を促す。 */
-  isLoggedIn: boolean;
-  /** 未ログインで「行った」を押したとき（会員登録を促す）。 */
-  onRequireAuthForVisit: (spot: VisitableSpot) => void;
   /** 「好み診断を開始する」タップ時。 */
   onStartDiagnosis: () => void;
   /** 「好みを再学習する」タップ時。 */
   onRestart: () => void;
-  /** 「クーポンを使う」タップ時（未ログイン時は会員登録を促す）。 */
-  onUseCoupon: (recommendation: Recommendation) => void;
+  /**
+   * カードタップ時にスポット詳細を開く。
+   * 詳細モーダルはブラウザ履歴と連動させるため App 側で一元管理する
+   *（ここで独自に開くと「戻る」で閉じられない）。
+   */
+  onOpenSpot: (recommendation: Recommendation) => void;
 };
 
 /** フロー 5: 厳選したおすすめスポット一覧（ai-recommendations）。 */
@@ -31,24 +30,16 @@ export function RecommendationsScreen({
   diagnosisComplete,
   detailedComplete,
   userId,
-  isLoggedIn,
-  onRequireAuthForVisit,
   onStartDiagnosis,
   onRestart,
-  onUseCoupon,
+  onOpenSpot,
 }: RecommendationsScreenProps) {
-  // 「行った」済みスポット ID の集合（localStorage を初期値に読み込む）。ボタンの状態表示に使う。
-  const [visitedIds, setVisitedIds] = useState<Set<string>>(
-    () => new Set(recommendations.filter((rec) => isVisited(userId, rec.id)).map((rec) => rec.id)),
-  );
   // 一覧から除外する判定は「この画面を開いた時点」のスナップショットで固定する。
-  // こうすることで、表示中に「行った」を押してもカードは消えず（ボタン色だけ変わる）、
+  // こうすることで、表示中に「行った」を押してもカードは消えず、
   // 次にこの画面を読み込み直したときに初めて一覧から外れる。
   const [initiallyVisitedIds] = useState<Set<string>>(
     () => new Set(recommendations.filter((rec) => isVisited(userId, rec.id)).map((rec) => rec.id)),
   );
-  // 詳細表示中のスポット。null なら一覧表示。
-  const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
   // 初回から先頭ページを表示する（以降はスクロールで追加読み込み）。
   const [visibleCount, setVisibleCount] = useState(RECOMMENDATIONS_PAGE_SIZE);
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -77,33 +68,6 @@ export function RecommendationsScreen({
     observer.observe(target);
     return () => observer.disconnect();
   }, [hasMore, visibleRecommendations.length]);
-
-  const handleToggleVisited = (rec: Recommendation) => {
-    const spot: VisitableSpot = {
-      id: rec.id,
-      name: rec.name,
-      prefecture: rec.prefecture,
-      area: rec.area,
-      category: rec.category,
-    };
-
-    // 履歴への追加（未訪問 → 訪問）には会員登録が必要。未ログインなら登録を促す。
-    if (!isLoggedIn && !visitedIds.has(rec.id)) {
-      onRequireAuthForVisit(spot);
-      return;
-    }
-
-    const nowVisited = toggleVisited(userId, spot);
-    setVisitedIds((prev) => {
-      const next = new Set(prev);
-      if (nowVisited) {
-        next.add(rec.id);
-      } else {
-        next.delete(rec.id);
-      }
-      return next;
-    });
-  };
 
   return (
     <div className="flex flex-1 flex-col bg-(--page)">
@@ -155,7 +119,7 @@ export function RecommendationsScreen({
               <article className="flex shrink-0 flex-col overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
                 <button
                   type="button"
-                  onClick={() => setDetailRec(rec)}
+                  onClick={() => onOpenSpot(rec)}
                   aria-label={`${rec.name} の詳細を見る`}
                   className="flex flex-col text-left transition active:opacity-90"
                 >
@@ -214,20 +178,6 @@ export function RecommendationsScreen({
           </div>
         )}
       </div>
-
-      {detailRec && (
-        <SpotDetailModal
-          recommendation={detailRec}
-          visited={visitedIds.has(detailRec.id)}
-          onClose={() => setDetailRec(null)}
-          onUseCoupon={(rec) => {
-            // 認証/クーポンのオーバーレイより詳細が前面に来ないよう、先に詳細を閉じる。
-            setDetailRec(null);
-            onUseCoupon(rec);
-          }}
-          onToggleVisited={handleToggleVisited}
-        />
-      )}
     </div>
   );
 }

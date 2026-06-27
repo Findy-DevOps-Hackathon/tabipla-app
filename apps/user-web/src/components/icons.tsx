@@ -97,6 +97,17 @@ export function XCircleIcon(props: IconProps) {
   );
 }
 
+export function TrashIcon(props: IconProps) {
+  return (
+    <svg aria-hidden="true" {...baseProps} {...props}>
+      <path d="M3 6h18" />
+      <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
 export function HeartIcon(props: IconProps) {
   return (
     <svg aria-hidden="true" {...baseProps} {...props}>
@@ -176,7 +187,7 @@ export function CloseIcon(props: IconProps) {
 export function CardsIcon(props: IconProps) {
   return (
     <svg aria-hidden="true" {...baseProps} {...props}>
-      <g strokeWidth={0.5}>
+      <g strokeWidth={0}>
         <rect
           x="3"
           y="2"
@@ -185,8 +196,18 @@ export function CardsIcon(props: IconProps) {
           rx="2"
           transform="rotate(-10 8.5 9.5)"
           fill="#fff"
+          opacity={0.7}
         />
-        <rect x="9" y="6" width="11" height="15" rx="2" transform="rotate(12 14.5 13.5)" fill="" />
+        <rect
+          x="9"
+          y="6"
+          width="11"
+          height="15"
+          rx="2"
+          transform="rotate(12 14.5 13.5)"
+          fill="#fff"
+          opacity={0.3}
+        />
       </g>
     </svg>
   );

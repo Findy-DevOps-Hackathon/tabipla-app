@@ -3,7 +3,7 @@ import { couponCodeFor, type Recommendation } from "../data/spots.ts";
 import { isCouponUsed, markCouponUsed } from "../lib/usedCoupons.ts";
 import { useLockBodyScroll } from "../lib/useLockBodyScroll.ts";
 import { markVisited } from "../lib/visited.ts";
-import { CheckIcon, SparklesIcon, TicketIcon } from "./icons.tsx";
+import { CheckIcon } from "./icons.tsx";
 
 type CouponModalProps = {
   recommendation: Recommendation;
@@ -15,14 +15,6 @@ type CouponModalProps = {
   /** クーポン利用が確定し、履歴に追加されたとき。 */
   onUsed?: (recommendation: Recommendation) => void;
 };
-
-/** 有効期限（取得時点から7日後）を YYYY/MM/DD で返す。 */
-function expiryLabel(): string {
-  const date = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(
-    date.getDate(),
-  ).padStart(2, "0")}`;
-}
 
 /** クーポン（会員限定／非会員も利用可）を表示するモーダル。 */
 export function CouponModal({
@@ -71,7 +63,6 @@ export function CouponModal({
           style={{ backgroundColor: accent }}
         >
           <span className="flex items-center gap-1 rounded-full bg-white/20 px-3 py-1 text-[11px] font-bold text-white">
-            {memberOnly ? <SparklesIcon className="size-3" /> : <TicketIcon className="size-3" />}
             {memberOnly ? "会員限定クーポン" : "だれでもクーポン"}
           </span>
           <p className="mt-1 text-[13px] text-white/80">{recommendation.name}</p>
@@ -99,14 +90,11 @@ export function CouponModal({
           </div>
 
           <div className="flex flex-col items-center gap-0.5">
-            {memberOnly && userName ? (
+            {memberOnly && userName && (
               <p className="text-[12px] text-[#475569]">
                 <span className="font-bold text-[#0f172a]">{userName}</span> さん専用
               </p>
-            ) : (
-              <p className="text-[12px] text-[#475569]">どなたでもご利用いただけます</p>
             )}
-            <p className="text-[11px] text-[#94a3b8]">有効期限 {expiryLabel()}</p>
           </div>
 
           {used ? (
@@ -143,9 +131,6 @@ export function CouponModal({
             <>
               <p className="text-center text-[11px] leading-normal text-[#94a3b8]">
                 店舗・施設の受付でこの画面を提示してください。
-                <br />
-                以下のボタンは<span className="font-bold text-[#64748b]">店員さま</span>
-                が押してください。
               </p>
 
               <button
