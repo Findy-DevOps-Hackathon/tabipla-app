@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>クーポン機能 API連携 — Before / After</title>
+<style>
+  :root { --brand: #0d9488; --bg: #f8fafc; --card: #fff; --border: #e2e8f0; --text: #0f172a; --sub: #64748b; --red: #dc2626; --green: #059669; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 24px; border-bottom: 3px solid var(--brand); padding-bottom: 8px; margin-bottom: 8px; }
+  .meta { font-size: 13px; color: var(--sub); margin-bottom: 32px; }
+  h2 { font-size: 18px; margin: 32px 0 12px; padding-left: 12px; border-left: 4px solid var(--brand); }
+  h3 { font-size: 15px; margin: 20px 0 8px; color: var(--sub); }
+  p, li { font-size: 14px; }
+  ul { padding-left: 1.5em; margin: 8px 0; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .card.before { border-left: 4px solid var(--red); }
+  .card.after  { border-left: 4px solid var(--green); }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; color: #fff; border-radius: 4px; padding: 2px 8px; margin-right: 6px; }
+  .badge.before { background: var(--red); }
+  .badge.after  { background: var(--green); }
+  .badge.sql    { background: #2563eb; }
+  .badge.api    { background: #7c3aed; }
+  .badge.ui     { background: var(--brand); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+  th { background: #f1f5f9; font-weight: 700; white-space: nowrap; }
+  code { background: #f1f5f9; padding: 1px 6px; border-radius: 4px; font-size: 13px; font-family: 'Fira Code','Courier New',monospace; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; margin: 12px 0; line-height: 1.5; }
+  .flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0; font-size: 13px; }
+  .flow .step { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-weight: 600; }
+  .flow .arrow { color: var(--brand); font-size: 18px; font-weight: 700; }
+  .summary-table td:first-child { font-weight: 600; white-space: nowrap; width: 160px; }
+  .file-list { font-size: 13px; }
+  .file-list code { font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>クーポン機能 API連携</h1>
+<p class="meta">tabipla-app / Team A (A-2) &mdash; 2026-06-28 作成</p>
+
+<!-- ============================== -->
+<h2>概要</h2>
+<p>管理画面（admin-web）で作成したクーポンが、観光者向けアプリ（user-web）にリアルタイムで表示されるようにした。
+変更前はハードコードされたデモデータだったクーポンを、PostgreSQL のテーブル &rarr; REST API &rarr; React UI の一気通貫で繋いだ。</p>
+
+<!-- ============================== -->
+<h2>Before / After</h2>
+
+<div class="cols">
+  <div class="card before">
+    <p><span class="badge before">BEFORE</span><strong>ハードコード</strong></p>
+    <ul>
+      <li><code>data/spots.ts</code> に全20件のクーポン文言を直書き</li>
+      <li>クーポンコードは spot ID から決定的に生成（デモ用）</li>
+      <li>管理画面で追加・削除しても user-web には反映されない</li>
+      <li>DB テーブルは存在するが user-web とは未接続</li>
+    </ul>
+  </div>
+  <div class="card after">
+    <p><span class="badge after">AFTER</span><strong>DB連携</strong></p>
+    <ul>
+      <li>admin-web でクーポン作成 &rarr; PostgreSQL に保存</li>
+      <li><code>GET /coupons/list</code> API でスポット名付きで取得</li>
+      <li>user-web の SpotDetailModal が API からリアルタイム取得</li>
+      <li>DB にクーポンがないスポットは静的データにフォールバック</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== -->
+<h2>データの流れ</h2>
+
+<h3>管理者（自治体）が作成</h3>
+<div class="flow">
+  <span class="step">admin-web<br>クーポン作成</span>
+  <span class="arrow">&rarr;</span>
+  <span class="step">POST /admin/coupons</span>
+  <span class="arrow">&rarr;</span>
+  <span class="step">PostgreSQL<br>coupons テーブル</span>
+</div>
+
+<h3>観光者が閲覧</h3>
+<div class="flow">
+  <span class="step">user-web<br>スポット詳細を開く</span>
+  <span class="arrow">&rarr;</span>
+  <span class="step">GET /coupons/list</span>
+  <span class="arrow">&rarr;</span>
+  <span class="step">coupons JOIN spots<br>(スポット名でマッチ)</span>
+  <span class="arrow">&rarr;</span>
+  <span class="step">SpotDetailModal<br>に表示</span>
+</div>
+
+<!-- ============================== -->
+<h2>SQL テーブル構造</h2>
+<p><span class="badge sql">SQL</span>coupons テーブル（PostgreSQL）</p>
+<pre>CREATE TABLE IF NOT EXISTS coupons (
+  id            TEXT PRIMARY KEY,       -- UUID
+  spot_id       TEXT NOT NULL           -- 対象スポット（spots.id）
+    REFERENCES spots(id) ON DELETE CASCADE,
+  title         TEXT NOT NULL,          -- 表示名（例: ソフトクリーム8%OFF）
+  description   TEXT,                   -- 利用条件・備考
+  discount_percent INTEGER NOT NULL,    -- 割引率（5〜10想定）
+  created_at    TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at    TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX coupons_spot_id_idx ON coupons(spot_id);</pre>
+
+<p>現在の登録データ:</p>
+<table>
+  <tr><th>スポット</th><th>クーポン名</th><th>割引</th><th>備考</th></tr>
+  <tr><td>高峰高原</td><td>ソフトクリーム8%OFF</td><td>8%</td><td>山頂カフェで利用可</td></tr>
+  <tr><td>懐古園</td><td>お茶1杯サービス</td><td>5%</td><td>平日限定</td></tr>
+  <tr><td>懐古園</td><td>入園料10%OFF</td><td>10%</td><td>1グループ1回</td></tr>
+</table>
+
+<!-- ============================== -->
+<h2>API エンドポイント</h2>
+<table>
+  <tr><th>メソッド</th><th>パス</th><th>認証</th><th>用途</th></tr>
+  <tr><td>GET</td><td><code>/coupons?spotId=</code></td><td>不要</td><td>スポット別クーポン取得</td></tr>
+  <tr><td>GET</td><td><code>/coupons/list</code></td><td>不要</td><td>全クーポン＋スポット名（user-web用）<span class="badge after">NEW</span></td></tr>
+  <tr><td>GET</td><td><code>/admin/coupons</code></td><td>管理者</td><td>全クーポン一覧（管理画面用）</td></tr>
+  <tr><td>POST</td><td><code>/admin/coupons</code></td><td>管理者</td><td>クーポン作成</td></tr>
+  <tr><td>DELETE</td><td><code>/admin/coupons/:id</code></td><td>管理者</td><td>クーポン削除</td></tr>
+</table>
+
+<h3><code>GET /coupons/list</code> レスポンス例</h3>
+<pre>[
+  {
+    "id": "bf3a9d64-...",
+    "spotId": "spot-fushimi-inari",
+    "spotName": "高峰高原",
+    "title": "ソフトクリーム8%OFF",
+    "description": "山頂カフェで利用可",
+    "discountPercent": 8,
+    "createdAt": "2026-06-21T20:23:39.205Z",
+    "updatedAt": "2026-06-21T20:23:39.205Z"
+  }
+]</pre>
+
+<!-- ============================== -->
+<h2>変更ファイル一覧</h2>
+<table class="file-list">
+  <tr><th>層</th><th>ファイル</th><th>変更内容</th></tr>
+  <tr>
+    <td><span class="badge sql">DB</span></td>
+    <td><code>packages/db/src/repository/coupons.ts</code></td>
+    <td><code>listCouponsWithSpotName()</code> 追加 — coupons JOIN spots でスポット名付き全件取得</td>
+  </tr>
+  <tr>
+    <td><span class="badge sql">DB</span></td>
+    <td><code>packages/db/src/index.ts</code></td>
+    <td><code>listCouponsWithSpotName</code> をエクスポートに追加</td>
+  </tr>
+  <tr>
+    <td><span class="badge api">API</span></td>
+    <td><code>services/backend-api/src/server.ts</code></td>
+    <td><code>GET /coupons/list</code> 公開エンドポイント追加</td>
+  </tr>
+  <tr>
+    <td><span class="badge ui">UI</span></td>
+    <td><code>apps/user-web/src/types.ts</code></td>
+    <td><code>CouponWithSpot</code> 型追加</td>
+  </tr>
+  <tr>
+    <td><span class="badge ui">UI</span></td>
+    <td><code>apps/user-web/src/api.ts</code></td>
+    <td><code>getAllCoupons()</code> API関数追加</td>
+  </tr>
+  <tr>
+    <td><span class="badge ui">UI</span></td>
+    <td><code>apps/user-web/src/components/SpotDetailModal.tsx</code></td>
+    <td>APIクーポン取得・表示。スポット名でマッチし、DBクーポンを優先表示</td>
+  </tr>
+  <tr>
+    <td><span class="badge ui">UI</span></td>
+    <td><code>apps/user-web/src/components/CouponModal.tsx</code></td>
+    <td><code>apiCoupon</code> prop 追加。DB クーポン時は title + description を表示</td>
+  </tr>
+  <tr>
+    <td><span class="badge ui">UI</span></td>
+    <td><code>apps/user-web/src/App.tsx</code></td>
+    <td><code>activeCouponApi</code> state 追加。SpotDetailModal &rarr; CouponModal へ API クーポンを中継</td>
+  </tr>
+</table>
+
+<!-- ============================== -->
+<h2>フォールバック設計</h2>
+<div class="card">
+  <p>DB にクーポンが登録されていないスポットでは、従来通り <code>data/spots.ts</code> の静的クーポン（<code>rec.coupon</code>）を表示する。
+  これにより、admin-web からクーポンを追加する前でもデモとして全スポットにクーポンが表示される。</p>
+  <table>
+    <tr><th>条件</th><th>表示されるクーポン</th></tr>
+    <tr><td>DB にクーポンあり</td><td>DB データ（title, description）を優先表示</td></tr>
+    <tr><td>DB にクーポンなし &amp; 静的データあり</td><td>静的データのクーポン文言を表示</td></tr>
+    <tr><td>両方なし</td><td>クーポンセクション非表示</td></tr>
+  </table>
+</div>
+
+<!-- ============================== -->
+<h2>動作確認手順</h2>
+<ol style="font-size:14px; margin:12px 0;">
+  <li>Docker Desktop を起動（PostgreSQL 5433, Elasticsearch 9200）</li>
+  <li><code>backend-api</code> を起動（ポート 3001）</li>
+  <li><code>curl http://localhost:3001/coupons/list</code> で JSON が返ることを確認</li>
+  <li><code>admin-web</code>（ポート 5174）で <code>taro.yamada@test.com / test-admin-password</code> でログイン</li>
+  <li>「クーポン」メニューで新規作成 → DB に保存される</li>
+  <li><code>user-web</code>（ポート 5173）で該当スポットを開く → 作成したクーポンが表示される</li>
+</ol>
+
+</div>
+</body>
+</html>

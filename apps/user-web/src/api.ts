@@ -1,4 +1,4 @@
-import type { SearchMode, SearchResponse } from "./types.ts";
+import type { Coupon, CouponWithSpot, Recommendation, SearchMode, SearchResponse } from "./types.ts";
 
 /**
  * backend-api への検索リクエストを担う薄いクライアント。
@@ -63,4 +63,34 @@ export async function searchSpots(params: SearchParams): Promise<SearchResponse>
 
   if (!res.ok) await parseApiError(res);
   return (await res.json()) as SearchResponse;
+}
+
+export async function getCoupons(spotId: string, signal?: AbortSignal): Promise<Coupon[]> {
+  const res = await fetch(`${API_BASE}/coupons?spotId=${encodeURIComponent(spotId)}`, {
+    headers: { accept: "application/json" },
+    signal,
+  });
+  if (!res.ok) return [];
+  return (await res.json()) as Coupon[];
+}
+
+export async function getAllCoupons(signal?: AbortSignal): Promise<CouponWithSpot[]> {
+  const res = await fetch(`${API_BASE}/coupons/list`, {
+    headers: { accept: "application/json" },
+    signal,
+  });
+  if (!res.ok) return [];
+  return (await res.json()) as CouponWithSpot[];
+}
+
+export async function getRecommendations(
+  spotId: string,
+  signal?: AbortSignal,
+): Promise<Recommendation[]> {
+  const res = await fetch(`${API_BASE}/recommendations?spotId=${encodeURIComponent(spotId)}`, {
+    headers: { accept: "application/json" },
+    signal,
+  });
+  if (!res.ok) return [];
+  return (await res.json()) as Recommendation[];
 }

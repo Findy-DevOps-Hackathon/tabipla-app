@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { isAuthenticated } from "./auth.ts";
 import BulkImportPage from "./pages/BulkImportPage.tsx";
+import CouponsPage from "./pages/CouponsPage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import PlaceholderPage from "./pages/PlaceholderPage.tsx";
+import RecommendationsPage from "./pages/RecommendationsPage.tsx";
 import SpotFormPage from "./pages/SpotFormPage.tsx";
 import SpotListPage from "./pages/SpotListPage.tsx";
 
@@ -68,7 +70,15 @@ export default function App() {
         path="/coupons"
         element={
           <RequireAuth>
-            <PlaceholderPage title="クーポン" />
+            <CouponsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/recommendations"
+        element={
+          <RequireAuth>
+            <RecommendationsPage />
           </RequireAuth>
         }
       />

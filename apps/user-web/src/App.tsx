@@ -4,6 +4,7 @@ import { BottomNav, type NavTab } from "./components/BottomNav.tsx";
 import { CouponModal } from "./components/CouponModal.tsx";
 import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
+import type { CouponWithSpot } from "./types.ts";
 import {
   RECOMMENDATIONS,
   type Recommendation,
@@ -125,6 +126,8 @@ export default function App() {
   const [pendingVisit, setPendingVisit] = useState<VisitableSpot | null>(null);
   // 表示中のクーポン。null なら非表示。
   const [activeCoupon, setActiveCoupon] = useState<Recommendation | null>(null);
+  // APIクーポンデータ（DB連携時）。
+  const [activeCouponApi, setActiveCouponApi] = useState<CouponWithSpot | null>(null);
   // ホームのおすすめカードから開いたスポット詳細。null なら非表示。
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
   // 詳細表示中スポットの「行った」状態（モーダル内のトグル表示用）。
@@ -210,6 +213,7 @@ export default function App() {
         isPopRef.current = true;
         setDetailRec(null);
         setActiveCoupon(null);
+        setActiveCouponApi(null);
         setAuthPrompt(null);
         setPendingCoupon(null);
         setPendingVisit(null);
@@ -324,12 +328,11 @@ export default function App() {
   }, [refining, swipeDeck.length]);
 
   const handleUseCoupon = useCallback(
-    (rec: Recommendation) => {
-      if (user || !rec.memberOnly) {
-        // ログイン済み、または「だれでもクーポン」はそのまま表示。
+    (rec: Recommendation, apiCoupon?: CouponWithSpot) => {
+      setActiveCouponApi(apiCoupon ?? null);
+      if (apiCoupon || user || !rec.memberOnly) {
         setActiveCoupon(rec);
       } else {
-        // 会員限定クーポンを未ログインで使う場合のみ、会員登録/ログインを促す。
         setPendingCoupon(rec);
         setAuthPrompt({ reason: "このクーポンの利用には会員登録が必要です" });
       }
@@ -548,6 +551,7 @@ export default function App() {
           <div className="relative h-screen w-full max-w-[500px]">
             <CouponModal
               recommendation={activeCoupon}
+              apiCoupon={activeCouponApi ?? undefined}
               userName={user?.name ?? null}
               userId={visitorId}
               onClose={() => goBack("recommendations")}
@@ -561,10 +565,9 @@ export default function App() {
           recommendation={detailRec}
           visited={detailVisited}
           onClose={() => goBack("recommendations")}
-          onUseCoupon={(rec) => {
-            // 認証/クーポンのオーバーレイより詳細が前面に来ないよう、先に詳細を閉じる。
+          onUseCoupon={(rec, apiCoupon) => {
             setDetailRec(null);
-            handleUseCoupon(rec);
+            handleUseCoupon(rec, apiCoupon);
           }}
           onToggleVisited={handleDetailToggleVisited}
         />

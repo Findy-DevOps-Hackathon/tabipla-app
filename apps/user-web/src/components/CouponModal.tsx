@@ -2,11 +2,14 @@ import { useState } from "react";
 import { couponCodeFor, type Recommendation } from "../data/spots.ts";
 import { isCouponUsed, markCouponUsed } from "../lib/usedCoupons.ts";
 import { useLockBodyScroll } from "../lib/useLockBodyScroll.ts";
+import type { CouponWithSpot } from "../types.ts";
 import { markVisited } from "../lib/visited.ts";
 import { CheckIcon } from "./icons.tsx";
 
 type CouponModalProps = {
   recommendation: Recommendation;
+  /** DB連携クーポン。存在すればこちらを優先表示。 */
+  apiCoupon?: CouponWithSpot;
   /** ログイン中ユーザーの表示名。未ログイン（非会員）は null。 */
   userName: string | null;
   /** 訪問履歴を保存する対象ユーザーの ID。 */
@@ -19,6 +22,7 @@ type CouponModalProps = {
 /** クーポン（会員限定／非会員も利用可）を表示するモーダル。 */
 export function CouponModal({
   recommendation,
+  apiCoupon,
   userName,
   userId,
   onClose,
@@ -26,9 +30,9 @@ export function CouponModal({
 }: CouponModalProps) {
   useLockBodyScroll();
 
-  const code = couponCodeFor(recommendation.id);
-  const memberOnly = recommendation.memberOnly;
-  // 会員限定は紫（--member）、非会員も使えるクーポンはブランドティール（--brand）で色分けする。
+  const code = couponCodeFor(apiCoupon?.id ?? recommendation.id);
+  const memberOnly = apiCoupon ? false : recommendation.memberOnly;
+  const couponText = apiCoupon ? apiCoupon.title : recommendation.coupon;
   const accent = memberOnly ? "var(--member)" : "var(--brand)";
   // 会員限定クーポンは 1 回限り。過去に利用済みなら最初から「利用済み」表示にする。
   const [alreadyUsed] = useState(() => memberOnly && isCouponUsed(userId, recommendation.id));
@@ -70,8 +74,11 @@ export function CouponModal({
 
         <div className="flex flex-col items-center gap-4 px-5 py-6">
           <p className="text-center text-[18px] font-extrabold leading-[1.4] text-[#0f172a]">
-            {recommendation.coupon}
+            {couponText}
           </p>
+          {apiCoupon?.description && (
+            <p className="text-center text-[12px] text-[#64748b]">{apiCoupon.description}</p>
+          )}
 
           <div className="w-full rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-center">
             <p className="text-[11px] text-[#64748b]">クーポンコード</p>

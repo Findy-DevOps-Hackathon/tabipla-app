@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tabipla — SQL設計仕様書（coupons / recommendations）</title>
+<style>
+  :root {
+    --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0;
+    --text: #1e293b; --muted: #64748b; --accent: #2563eb;
+    --green: #16a34a; --amber: #d97706; --red: #dc2626;
+    --code-bg: #f1f5f9;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; padding: 2rem 1rem; }
+  .container { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; border-bottom: 3px solid var(--accent); padding-bottom: .5rem; margin-bottom: .5rem; }
+  .subtitle { font-size: .85rem; color: var(--muted); margin-bottom: 2rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 .75rem; padding-left: .75rem; border-left: 4px solid var(--accent); }
+  h3 { font-size: 1rem; margin: 1.25rem 0 .5rem; color: var(--accent); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+
+  /* git status */
+  .git-box { display: grid; grid-template-columns: auto 1fr; gap: .25rem 1rem; font-size: .9rem; }
+  .git-box dt { font-weight: 600; white-space: nowrap; }
+  .git-box dd { color: var(--muted); }
+  .badge { display: inline-block; font-size: .7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; vertical-align: middle; }
+  .badge-warn { background: #fef3c7; color: var(--amber); }
+  .badge-ok   { background: #dcfce7; color: var(--green); }
+  .badge-info { background: #dbeafe; color: var(--accent); }
+
+  /* SQL block */
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; overflow-x: auto; font-size: .82rem; line-height: 1.6; font-family: "Cascadia Code", "Fira Code", Consolas, monospace; margin: .75rem 0; }
+  code { font-family: inherit; }
+  .kw  { color: #7c3aed; font-weight: 600; }
+  .str { color: #059669; }
+  .cmt { color: #94a3b8; font-style: italic; }
+
+  /* table spec */
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; margin: .5rem 0; }
+  th, td { padding: .5rem .75rem; border: 1px solid var(--border); text-align: left; }
+  th { background: #f1f5f9; font-weight: 600; white-space: nowrap; }
+  td:nth-child(1) { font-family: Consolas, monospace; white-space: nowrap; }
+  td:nth-child(2) { font-family: Consolas, monospace; white-space: nowrap; font-size: .8rem; }
+
+  .reason { background: #fffbeb; border-left: 3px solid var(--amber); padding: .6rem 1rem; margin: .75rem 0; font-size: .85rem; border-radius: 0 6px 6px 0; }
+  .reason strong { color: var(--amber); }
+
+  /* API table */
+  .api-table td:nth-child(1) { font-weight: 600; }
+  .method { font-size: .75rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; font-family: Consolas, monospace; }
+  .m-get    { background: #dcfce7; color: var(--green); }
+  .m-post   { background: #dbeafe; color: var(--accent); }
+  .m-delete { background: #fee2e2; color: var(--red); }
+
+  .footer { text-align: center; font-size: .75rem; color: var(--muted); margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>SQL設計仕様書 — coupons / recommendations</h1>
+<p class="subtitle">tabipla クーポン＆おすすめ店 テーブル設計 ｜ 池野担当（A-2）</p>
+
+<!-- ───────── Git Status ───────── -->
+<h2>1. Git 最新状況</h2>
+<div class="card">
+  <dl class="git-box">
+    <dt>リモート最新 (origin/main)</dt>
+    <dd><code>1ac3526</code> — 2026-06-21 18:37 <span class="badge badge-info">1週間前</span></dd>
+
+    <dt>ローカルブランチ</dt>
+    <dd><code>feat/coupon</code>（main から分岐）</dd>
+
+    <dt>リモート push 状況</dt>
+    <dd><span class="badge badge-warn">未 push</span> — origin/feat/coupon は存在しない。全変更はローカルのみ</dd>
+
+    <dt>変更ファイル数</dt>
+    <dd>修正 13 ファイル ＋ 新規 6 ファイル（未コミット）</dd>
+
+    <dt>影響パッケージ</dt>
+    <dd>
+      <code>packages/db</code>（schema, repository, migration）<br>
+      <code>services/backend-api</code>（routes, schemas, auth）<br>
+      <code>apps/admin-web</code>（CouponsPage, RecommendationsPage, Sidebar, App）<br>
+      <code>apps/user-web</code>（SpotCard, api, types）
+    </dd>
+  </dl>
+</div>
+
+<!-- ───────── Coupons DDL ───────── -->
+<h2>2. coupons テーブル</h2>
+
+<h3>2-1. CREATE TABLE</h3>
+<div class="card">
+<pre><span class="cmt">-- クーポンテーブル: 自治体が作成、観光者が閲覧・利用</span>
+<span class="kw">CREATE TABLE</span> coupons (
+    id               <span class="kw">TEXT PRIMARY KEY</span>,         <span class="cmt">-- UUID v4（アプリ側で採番）</span>
+    spot_id          <span class="kw">TEXT NOT NULL</span>,              <span class="cmt">-- 対象スポット</span>
+    title            <span class="kw">TEXT NOT NULL</span>,              <span class="cmt">-- 表示名（例: ドリンク10%OFF）</span>
+    description      <span class="kw">TEXT</span>,                       <span class="cmt">-- 利用条件・備考（任意）</span>
+    discount_percent <span class="kw">INTEGER NOT NULL</span>,           <span class="cmt">-- 割引率 %（5〜10 を想定）</span>
+    created_at       <span class="kw">TIMESTAMPTZ NOT NULL DEFAULT NOW()</span>,
+    updated_at       <span class="kw">TIMESTAMPTZ NOT NULL DEFAULT NOW()</span>
+);
+
+<span class="cmt">-- FK: スポット削除時にクーポンも連動削除</span>
+<span class="kw">ALTER TABLE</span> coupons
+  <span class="kw">ADD CONSTRAINT</span> coupons_spot_id_spots_id_fk
+  <span class="kw">FOREIGN KEY</span> (spot_id) <span class="kw">REFERENCES</span> spots(id) <span class="kw">ON DELETE CASCADE</span>;
+
+<span class="cmt">-- INDEX: スポット別クーポン取得の高速化</span>
+<span class="kw">CREATE INDEX</span> coupons_spot_id_idx <span class="kw">ON</span> coupons <span class="kw">USING</span> btree (spot_id);</pre>
+</div>
+
+<h3>2-2. カラム定義と設計理由</h3>
+<div class="card">
+<table>
+  <thead><tr><th>カラム</th><th>型</th><th>制約</th><th>設計理由</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>id</td><td>TEXT</td><td>PK</td>
+      <td>UUID v4 をアプリ側で生成。spotsテーブルと同じ方式で統一。SERIAL を使わないのは、将来的にマルチDB/マイクロサービス環境でも衝突しないため</td>
+    </tr>
+    <tr>
+      <td>spot_id</td><td>TEXT</td><td>NOT NULL, FK → spots(id) CASCADE</td>
+      <td><strong>スポットに1:N で紐づける</strong>。1つのスポットに複数クーポンを発行可能（例: ドリンク割引＋入場割引）。CASCADE は「スポット自体が消えたらクーポンも意味を失う」ため</td>
+    </tr>
+    <tr>
+      <td>title</td><td>TEXT</td><td>NOT NULL</td>
+      <td>カード上で視認する表示名。最大128文字（API側バリデーション）</td>
+    </tr>
+    <tr>
+      <td>description</td><td>TEXT</td><td>NULL許容</td>
+      <td>利用条件や備考。必須にしないのは「5%OFF」だけでも成立するケースがあるため</td>
+    </tr>
+    <tr>
+      <td>discount_percent</td><td>INTEGER</td><td>NOT NULL</td>
+      <td><strong>割引率を%整数で保持</strong>。金額（円）でなく率にした理由 → 店舗ごとに価格帯が異なり、固定額では一律運用できない。5〜10%は下記の根拠による</td>
+    </tr>
+    <tr>
+      <td>created_at</td><td>TIMESTAMPTZ</td><td>NOT NULL DEFAULT NOW()</td>
+      <td>作成日時。タイムゾーン付きで国際化対応</td>
+    </tr>
+    <tr>
+      <td>updated_at</td><td>TIMESTAMPTZ</td><td>NOT NULL DEFAULT NOW()</td>
+      <td>更新日時。現状UPDATEはないが、将来の編集機能に備える</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3>2-3. discount_percent = 5〜10% の根拠</h3>
+<div class="card">
+<div class="reason">
+  <strong>なぜ 5〜10% なのか？</strong> — 常設型・店舗負担型クーポンとして現実的な数字を業界事例から逆算
+</div>
+
+<table>
+  <thead><tr><th>観点</th><th>根拠</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>飲食の原価率</td>
+      <td>一般的な飲食店の原価率は 30〜35%、粗利 65〜70%。10%OFF でも粗利 55〜60% を確保でき、店舗側が持続可能</td>
+    </tr>
+    <tr>
+      <td>物販（お土産）の原価率</td>
+      <td>物販は原価率 40〜60% と幅が広い。原価率が高い商品では 10% が限度、5% が安全圏</td>
+    </tr>
+    <tr>
+      <td>入園料・施設</td>
+      <td>公共施設は団体割引 10% が慣例（例: 国立博物館の団体料金）。5〜10% はこの範囲内</td>
+    </tr>
+    <tr>
+      <td>自治体クーポン事例</td>
+      <td>GoToトラベル地域クーポンや、各自治体の「まちなかクーポン」は 5〜20%。ただし財源補填付き。<strong>自主財源なしの常設型なら 5〜10% が上限</strong></td>
+    </tr>
+    <tr>
+      <td>リピート効果</td>
+      <td>20%以上は「お得感」で1回来訪、5〜10%は「いつでも使える安心感」で再訪を促進。旅プラの設計思想（何度でも使える＝消し込みなし）と整合</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="reason">
+  <strong>API バリデーション:</strong> 現在は <code>minimum: 1, maximum: 100</code>（schemas.ts）。チームで合意後、<code>minimum: 5, maximum: 10</code> に絞ることを推奨
+</div>
+</div>
+
+<h3>2-4. 持たないカラムとその理由</h3>
+<div class="card">
+<table>
+  <thead><tr><th>持たないカラム</th><th>理由</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>use_count（利用回数）</td>
+      <td>「何度でも使える」設計。消し込み管理（使用済みフラグ/回数上限）は運用コストが高く、自治体の小規模運用に不向き</td>
+    </tr>
+    <tr>
+      <td>valid_from / valid_until（有効期間）</td>
+      <td>常設クーポンの想定。期間限定にしたい場合は削除で対応。期間カラムを持つとフロント側に「期限切れ表示」ロジックが必要になり複雑化する</td>
+    </tr>
+    <tr>
+      <td>discount_amount（割引金額）</td>
+      <td>率（%）で統一。店舗ごとに価格帯が異なるため、固定金額は一律運用できない</td>
+    </tr>
+    <tr>
+      <td>municipality_id（自治体ID）</td>
+      <td>現状は小諸市1自治体。spot_id → spots で自治体は暗黙的に特定できる。マルチ自治体化時に spots に municipality_id を追加すれば足りる</td>
+    </tr>
+    <tr>
+      <td>image_url（画像）</td>
+      <td>MVP ではテキスト表示のみ。画像ストレージの設計は別タスク</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+<!-- ───────── Recommendations DDL ───────── -->
+<h2>3. recommendations テーブル</h2>
+
+<h3>3-1. CREATE TABLE</h3>
+<div class="card">
+<pre><span class="cmt">-- おすすめ店テーブル: 自治体がキュレーションしたお食事処/お土産どころ</span>
+<span class="kw">CREATE TABLE</span> recommendations (
+    id         <span class="kw">TEXT PRIMARY KEY</span>,              <span class="cmt">-- UUID v4</span>
+    spot_id    <span class="kw">TEXT NOT NULL</span>,                   <span class="cmt">-- 紐づく観光スポット</span>
+    type       <span class="kw">TEXT NOT NULL</span>,                   <span class="cmt">-- 'お食事処' | 'お土産'</span>
+    name       <span class="kw">TEXT NOT NULL</span>,                   <span class="cmt">-- 店名</span>
+    address    <span class="kw">TEXT</span>,                            <span class="cmt">-- 住所（Place lookup で自動入力）</span>
+    lat        <span class="kw">DOUBLE PRECISION</span>,               <span class="cmt">-- 緯度（Place lookup で自動入力）</span>
+    lon        <span class="kw">DOUBLE PRECISION</span>,               <span class="cmt">-- 経度（Place lookup で自動入力）</span>
+    comment    <span class="kw">TEXT</span>,                            <span class="cmt">-- 自治体のおすすめコメント</span>
+    url        <span class="kw">TEXT</span>,                            <span class="cmt">-- 参考URL（食べログ等）</span>
+    created_at <span class="kw">TIMESTAMPTZ NOT NULL DEFAULT NOW()</span>,
+    updated_at <span class="kw">TIMESTAMPTZ NOT NULL DEFAULT NOW()</span>
+);
+
+<span class="cmt">-- FK: スポット削除時に連動削除</span>
+<span class="kw">ALTER TABLE</span> recommendations
+  <span class="kw">ADD CONSTRAINT</span> recommendations_spot_id_spots_id_fk
+  <span class="kw">FOREIGN KEY</span> (spot_id) <span class="kw">REFERENCES</span> spots(id) <span class="kw">ON DELETE CASCADE</span>;
+
+<span class="cmt">-- INDEX: スポット別おすすめ店取得の高速化</span>
+<span class="kw">CREATE INDEX</span> recommendations_spot_id_idx <span class="kw">ON</span> recommendations <span class="kw">USING</span> btree (spot_id);</pre>
+</div>
+
+<h3>3-2. カラム定義と設計理由</h3>
+<div class="card">
+<table>
+  <thead><tr><th>カラム</th><th>型</th><th>制約</th><th>設計理由</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>id</td><td>TEXT</td><td>PK</td>
+      <td>UUID v4。coupons/spots と同じ方式</td>
+    </tr>
+    <tr>
+      <td>spot_id</td><td>TEXT</td><td>NOT NULL, FK → spots(id) CASCADE</td>
+      <td><strong>「この観光スポット周辺のおすすめ」</strong>として紐づける。1スポットに複数の店を紐付可。CASCADE は coupons と同じ理由</td>
+    </tr>
+    <tr>
+      <td>type</td><td>TEXT</td><td>NOT NULL</td>
+      <td><strong>'お食事処' | 'お土産'</strong> の2値。ENUM型ではなく TEXT にしたのは、PostgreSQL の ENUM は ALTER TYPE が面倒（カラム追加に DDL が要る）で、将来「体験」「宿泊」等を追加するときに柔軟。API側で enum バリデーション</td>
+    </tr>
+    <tr>
+      <td>name</td><td>TEXT</td><td>NOT NULL</td>
+      <td>店名。管理画面の店名検索（Place lookup）で自動入力。最大128文字（API側）</td>
+    </tr>
+    <tr>
+      <td>address</td><td>TEXT</td><td>NULL許容</td>
+      <td>住所。Place lookup で自動入力されるが、手入力の場合は省略可</td>
+    </tr>
+    <tr>
+      <td>lat / lon</td><td>DOUBLE PRECISION</td><td>NULL許容</td>
+      <td>緯度経度。将来の地図表示（ピン打ち）に備える。spots テーブルと同じ型。NULL許容は Place lookup が失敗した場合の手入力に対応</td>
+    </tr>
+    <tr>
+      <td>comment</td><td>TEXT</td><td>NULL許容</td>
+      <td>自治体の一言コメント（例:「小諸名物のくるみそば」）。ユーザー側では tooltip で表示</td>
+    </tr>
+    <tr>
+      <td>url</td><td>TEXT</td><td>NULL許容</td>
+      <td>食べログ/ホットペッパー/公式サイト等のリンク。ユーザー側では店名クリックで外部遷移</td>
+    </tr>
+    <tr>
+      <td>created_at / updated_at</td><td>TIMESTAMPTZ</td><td>NOT NULL DEFAULT NOW()</td>
+      <td>coupons と同じ設計</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3>3-3. type を TEXT にした理由（ENUM vs TEXT）</h3>
+<div class="card">
+<div class="reason">
+  <strong>ENUM を避けた理由:</strong>
+</div>
+<table>
+  <thead><tr><th>観点</th><th>ENUM</th><th>TEXT + API バリデーション（採用）</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>値の追加</td>
+      <td><code>ALTER TYPE ... ADD VALUE</code> が必要。トランザクション内で使えない制約あり</td>
+      <td>API の enum 配列に追加するだけ。DB マイグレーション不要</td>
+    </tr>
+    <tr>
+      <td>整合性</td>
+      <td>DB レベルで保証</td>
+      <td>API 入力時に <code>enum: ["お食事処", "お土産"]</code> で検証。不正値は 400 で弾く</td>
+    </tr>
+    <tr>
+      <td>将来拡張</td>
+      <td>DDL 変更 + マイグレーション</td>
+      <td>コード変更のみ（例: "体験", "宿泊" を追加）</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+<!-- ───────── 共通設計方針 ───────── -->
+<h2>4. 共通設計方針</h2>
+<div class="card">
+<table>
+  <thead><tr><th>方針</th><th>内容</th><th>理由</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>ID 生成</td>
+      <td>UUID v4 を <strong>アプリ側（Node.js crypto.randomUUID）</strong> で採番</td>
+      <td>spots テーブルの既存方式に統一。DB の uuid-ossp 拡張に依存しない</td>
+    </tr>
+    <tr>
+      <td>FK + CASCADE</td>
+      <td>spot_id → spots(id) ON DELETE CASCADE</td>
+      <td>スポットが消えたらクーポン/おすすめ店も意味を失う。孤児レコード防止</td>
+    </tr>
+    <tr>
+      <td>INDEX</td>
+      <td>spot_id に btree INDEX</td>
+      <td>「このスポットの〇〇一覧」が主クエリ。スポット数が増えても <code>WHERE spot_id = ?</code> を高速に保つ</td>
+    </tr>
+    <tr>
+      <td>ES 連携なし</td>
+      <td>クーポン/おすすめ店は <strong>DB のみ</strong>で完結</td>
+      <td>全文検索・ベクトル検索の対象ではない。ES に投入する意味がなく、reindex の複雑さを回避</td>
+    </tr>
+    <tr>
+      <td>タイムゾーン</td>
+      <td>TIMESTAMPTZ（<code>timestamp with time zone</code>）</td>
+      <td>spots / admin_users と統一。JSTだけでなく、UTC変換を安全に行える</td>
+    </tr>
+    <tr>
+      <td>Drizzle ORM</td>
+      <td>schema.ts に pgTable 定義 → 型自動生成</td>
+      <td>TypeScript の型安全。$inferSelect / $inferInsert でリポジトリ層の型を自動導出</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+<!-- ───────── ER 関係 ───────── -->
+<h2>5. テーブル関連図</h2>
+<div class="card" style="text-align:center;">
+<pre style="display:inline-block;text-align:left;font-size:.78rem;">
+┌──────────────────────────────────────────────┐
+│                    spots                     │
+│──────────────────────────────────────────────│
+│ id (PK)  TEXT  UUID v4                       │
+│ name, description, category[], area, ...     │
+│ lat, lon, price, tags[]                      │
+│ created_at, updated_at                       │
+└──────────┬─────────────────────┬─────────────┘
+           │ 1:N                 │ 1:N
+           │ ON DELETE CASCADE   │ ON DELETE CASCADE
+           ▼                    ▼
+┌──────────────────────┐  ┌─────────────────────────┐
+│       coupons        │  │    recommendations       │
+│──────────────────────│  │─────────────────────────│
+│ id (PK)              │  │ id (PK)                  │
+│ spot_id (FK→spots)   │  │ spot_id (FK→spots)       │
+│ title                │  │ type ('お食事処'|'お土産')│
+│ description          │  │ name                     │
+│ discount_percent     │  │ address, lat, lon        │
+│ created_at           │  │ comment, url             │
+│ updated_at           │  │ created_at, updated_at   │
+└──────────────────────┘  └─────────────────────────┘
+   INDEX: spot_id            INDEX: spot_id
+</pre>
+</div>
+
+
+<!-- ───────── API Endpoints ───────── -->
+<h2>6. API エンドポイント一覧</h2>
+<div class="card">
+<h3>coupons</h3>
+<table class="api-table">
+  <thead><tr><th>メソッド</th><th>パス</th><th>認証</th><th>用途</th></tr></thead>
+  <tbody>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/coupons?spotId=...</code></td><td>不要（公開）</td><td>観光者がスポットのクーポン一覧を取得</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/admin/coupons</code></td><td>管理者トークン</td><td>自治体が全クーポンを確認</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/admin/coupons</code></td><td>管理者トークン</td><td>自治体がクーポンを作成</td></tr>
+    <tr><td><span class="method m-delete">DELETE</span></td><td><code>/admin/coupons/:id</code></td><td>管理者トークン</td><td>自治体がクーポンを削除</td></tr>
+  </tbody>
+</table>
+
+<h3>recommendations</h3>
+<table class="api-table">
+  <thead><tr><th>メソッド</th><th>パス</th><th>認証</th><th>用途</th></tr></thead>
+  <tbody>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/recommendations?spotId=...</code></td><td>不要（公開）</td><td>観光者がスポット近隣のおすすめ店を取得</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/admin/recommendations</code></td><td>管理者トークン</td><td>自治体が全おすすめ店を確認</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/admin/recommendations</code></td><td>管理者トークン</td><td>自治体がおすすめ店を登録（店名検索→自動入力）</td></tr>
+    <tr><td><span class="method m-delete">DELETE</span></td><td><code>/admin/recommendations/:id</code></td><td>管理者トークン</td><td>自治体がおすすめ店を削除</td></tr>
+  </tbody>
+</table>
+</div>
+
+
+<!-- ───────── マイグレーション手順 ───────── -->
+<h2>7. マイグレーション適用手順（チーム連携用）</h2>
+<div class="card">
+<div class="reason">
+  <strong>注意:</strong> 現在 drizzle の migration snapshot（meta/）が不整合のため、<code>db:migrate</code> は使えない。以下の直接 SQL で適用する
+</div>
+
+<h3>7-1. ローカル（Docker postgres, port 5433）</h3>
+<pre><span class="cmt">-- Docker コンテナに接続</span>
+docker exec -it tabipla-postgres psql -U postgres -d tabipla
+
+<span class="cmt">-- (1) coupons テーブル作成</span>
+<span class="kw">CREATE TABLE IF NOT EXISTS</span> coupons (
+    id               <span class="kw">TEXT PRIMARY KEY</span>,
+    spot_id          <span class="kw">TEXT NOT NULL</span>,
+    title            <span class="kw">TEXT NOT NULL</span>,
+    description      <span class="kw">TEXT</span>,
+    discount_percent <span class="kw">INTEGER NOT NULL</span>,
+    created_at       <span class="kw">TIMESTAMPTZ NOT NULL DEFAULT NOW()</span>,
+    updated_at       <span class="kw">TIMESTAMPTZ NOT NULL DEFAULT NOW()</span>
+);
+
+<span class="kw">ALTER TABLE</span> coupons
+  <span class="kw">ADD CONSTRAINT</span> coupons_spot_id_spots_id_fk
+  <span class="kw">FOREIGN KEY</span> (spot_id) <span class="kw">REFERENCES</span> spots(id) <span class="kw">ON DELETE CASCADE</span>;
+
+<span class="kw">CREATE INDEX IF NOT EXISTS</span> coupons_spot_id_idx
+  <span class="kw">ON</span> coupons <span class="kw">USING</span> btree (spot_id);
+
+<span class="cmt">-- (2) recommendations テーブル作成</span>
+<span class="kw">CREATE TABLE IF NOT EXISTS</span> recommendations (
+    id         <span class="kw">TEXT PRIMARY KEY</span>,
+    spot_id    <span class="kw">TEXT NOT NULL</span>,
+    type       <span class="kw">TEXT NOT NULL</span>,
+    name       <span class="kw">TEXT NOT NULL</span>,
+    address    <span class="kw">TEXT</span>,
+    lat        <span class="kw">DOUBLE PRECISION</span>,
+    lon        <span class="kw">DOUBLE PRECISION</span>,
+    comment    <span class="kw">TEXT</span>,
+    url        <span class="kw">TEXT</span>,
+    created_at <span class="kw">TIMESTAMPTZ NOT NULL DEFAULT NOW()</span>,
+    updated_at <span class="kw">TIMESTAMPTZ NOT NULL DEFAULT NOW()</span>
+);
+
+<span class="kw">ALTER TABLE</span> recommendations
+  <span class="kw">ADD CONSTRAINT</span> recommendations_spot_id_spots_id_fk
+  <span class="kw">FOREIGN KEY</span> (spot_id) <span class="kw">REFERENCES</span> spots(id) <span class="kw">ON DELETE CASCADE</span>;
+
+<span class="kw">CREATE INDEX IF NOT EXISTS</span> recommendations_spot_id_idx
+  <span class="kw">ON</span> recommendations <span class="kw">USING</span> btree (spot_id);</pre>
+
+<h3>7-2. 適用確認</h3>
+<pre><span class="cmt">-- テーブル一覧で確認</span>
+\dt
+
+<span class="cmt">-- カラム定義の確認</span>
+\d coupons
+\d recommendations</pre>
+</div>
+
+
+<!-- ───────── サンプルデータ ───────── -->
+<h2>8. サンプル INSERT（テスト用）</h2>
+<div class="card">
+<pre><span class="cmt">-- seed のスポットID（小諸3スポット）</span>
+<span class="cmt">-- 懐古園: spot-kiyomizu</span>
+<span class="cmt">-- 高峰高原: spot-fushimi-inari</span>
+<span class="cmt">-- 停車場ガーデン: spot-arashiyama-bamboo</span>
+
+<span class="cmt">-- クーポン例</span>
+<span class="kw">INSERT INTO</span> coupons (id, spot_id, title, description, discount_percent)
+<span class="kw">VALUES</span>
+  (<span class="str">'coupon-01'</span>, <span class="str">'spot-kiyomizu'</span>,
+   <span class="str">'入園料 10%OFF'</span>, <span class="str">'懐古園の入園料が10%割引になります'</span>, 10),
+  (<span class="str">'coupon-02'</span>, <span class="str">'spot-arashiyama-bamboo'</span>,
+   <span class="str">'お食事 5%OFF'</span>, <span class="str">'ガーデン内カフェのお食事が5%割引'</span>, 5);
+
+<span class="cmt">-- おすすめ店例</span>
+<span class="kw">INSERT INTO</span> recommendations (id, spot_id, type, name, address, comment)
+<span class="kw">VALUES</span>
+  (<span class="str">'reco-01'</span>, <span class="str">'spot-kiyomizu'</span>,
+   <span class="str">'お食事処'</span>, <span class="str">'草笛 小諸店'</span>,
+   <span class="str">'長野県小諸市古城1-1-10'</span>, <span class="str">'小諸名物のくるみそば'</span>),
+  (<span class="str">'reco-02'</span>, <span class="str">'spot-kiyomizu'</span>,
+   <span class="str">'お土産'</span>, <span class="str">'丸山珈琲 小諸店'</span>,
+   <span class="str">'長野県小諸市相生町1-2-5'</span>, <span class="str">'自家焙煎コーヒー豆のお土産に'</span>);</pre>
+</div>
+
+
+<!-- ───────── 既存テーブルとの整合 ───────── -->
+<h2>9. 既存テーブルとの整合性</h2>
+<div class="card">
+<table>
+  <thead><tr><th>既存テーブル</th><th>新テーブルとの関係</th><th>影響</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>spots</code></td>
+      <td>coupons.spot_id, recommendations.spot_id の参照先</td>
+      <td>spots の DELETE 時に CASCADE で連動削除。spots の構造変更は不要</td>
+    </tr>
+    <tr>
+      <td><code>admin_users</code></td>
+      <td>直接の参照なし</td>
+      <td>クーポン/おすすめ店の作成者カラムは持たない（1自治体運用のため）。マルチ自治体化時に created_by を追加すれば対応可</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+<div class="footer">
+  tabipla SQL設計仕様書 — 2026-06-28 作成 ｜ ブランチ feat/coupon（未push）<br>
+  coupons + recommendations の 2 テーブル追加
+</div>
+
+</div>
+</body>
+</html>

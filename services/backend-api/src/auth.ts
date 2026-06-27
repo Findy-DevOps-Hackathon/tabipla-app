@@ -75,5 +75,10 @@ export function extractBearerToken(authorization?: string): string | null {
 /** 管理画面 API かどうか（検索 API は除外）。 */
 export function isAdminApiPath(url: string): boolean {
   const path = url.split("?")[0] ?? url;
-  return path === "/geocode" || path.startsWith("/places/") || path.startsWith("/spots");
+  return (
+    path === "/geocode" ||
+    path.startsWith("/places/") ||
+    path.startsWith("/spots") ||
+    path.startsWith("/admin/")
+  );
 }

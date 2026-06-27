@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
+import { getAllCoupons } from "../api.ts";
 import type { Recommendation } from "../data/spots.ts";
 import { categoryBadgeClass } from "../lib/category.ts";
 import { useLockBodyScroll } from "../lib/useLockBodyScroll.ts";
+import type { CouponWithSpot } from "../types.ts";
 import { CheckIcon, ChevronLeftIcon, MapPinIcon, SparklesIcon } from "./icons.tsx";
 
 type SpotDetailModalProps = {
@@ -9,8 +12,8 @@ type SpotDetailModalProps = {
   visited: boolean;
   /** 閉じる（戻る）操作。 */
   onClose: () => void;
-  /** 「クーポンを使う」タップ時。 */
-  onUseCoupon: (recommendation: Recommendation) => void;
+  /** 「クーポンを使う」タップ時。apiCoupon があればAPIデータを渡す。 */
+  onUseCoupon: (recommendation: Recommendation, apiCoupon?: CouponWithSpot) => void;
   /** 「行った」トグル時。 */
   onToggleVisited: (recommendation: Recommendation) => void;
 };
@@ -24,6 +27,19 @@ export function SpotDetailModal({
   onToggleVisited,
 }: SpotDetailModalProps) {
   useLockBodyScroll();
+
+  const [apiCoupons, setApiCoupons] = useState<CouponWithSpot[]>([]);
+  useEffect(() => {
+    const ac = new AbortController();
+    getAllCoupons(ac.signal).then((all) => {
+      setApiCoupons(all.filter((c) => c.spotName === rec.name));
+    });
+    return () => ac.abort();
+  }, [rec.name]);
+
+  const apiCoupon = apiCoupons[0];
+  const couponText = apiCoupon ? apiCoupon.title : rec.coupon;
+  const hasCoupon = couponText != null;
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     `${rec.prefecture}${rec.area} ${rec.name}`,
@@ -114,24 +130,30 @@ export function SpotDetailModal({
               <span className="text-[11px] font-medium text-(--brand)">地図を見る</span>
             </a>
 
-            {rec.coupon && (
+            {hasCoupon && (
               <button
                 type="button"
-                onClick={() => onUseCoupon(rec)}
+                onClick={() => onUseCoupon(rec, apiCoupon)}
                 className="flex flex-col gap-2 rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] p-3.5 text-left transition active:scale-[0.99]"
               >
                 <div className="flex items-center gap-1.5">
                   <span
                     className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
-                    style={{ backgroundColor: rec.memberOnly ? "var(--member)" : "var(--brand)" }}
+                    style={{
+                      backgroundColor:
+                        apiCoupon || !rec.memberOnly ? "var(--brand)" : "var(--member)",
+                    }}
                   >
-                    {rec.memberOnly ? "会員限定クーポン" : "だれでもクーポン"}
+                    {apiCoupon || !rec.memberOnly ? "だれでもクーポン" : "会員限定クーポン"}
                   </span>
-                  {!rec.memberOnly && (
+                  {(apiCoupon || !rec.memberOnly) && (
                     <span className="text-[11px] font-medium text-(--brand)">登録不要で使える</span>
                   )}
                 </div>
-                <p className="text-[14px] font-bold leading-[1.4] text-[#0f172a]">{rec.coupon}</p>
+                <p className="text-[14px] font-bold leading-[1.4] text-[#0f172a]">{couponText}</p>
+                {apiCoupon?.description && (
+                  <span className="text-[12px] text-[#64748b]">{apiCoupon.description}</span>
+                )}
                 <span className="text-[11px] text-[#94a3b8]">タップしてクーポンを開く</span>
               </button>
             )}
@@ -139,11 +161,14 @@ export function SpotDetailModal({
         </div>
 
         <div className="flex gap-2 border-t border-[#e2e8f0] bg-white px-4 pb-6 pt-4">
-          {rec.coupon && (
+          {hasCoupon && (
             <button
               type="button"
-              onClick={() => onUseCoupon(rec)}
-              style={{ backgroundColor: rec.memberOnly ? "var(--member)" : "var(--brand)" }}
+              onClick={() => onUseCoupon(rec, apiCoupon)}
+              style={{
+                backgroundColor:
+                  apiCoupon || !rec.memberOnly ? "var(--brand)" : "var(--member)",
+              }}
               className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full text-[14px] font-bold text-white transition active:scale-[0.99]"
             >
               クーポンを使う
@@ -154,7 +179,7 @@ export function SpotDetailModal({
             onClick={() => onToggleVisited(rec)}
             aria-pressed={visited}
             className={`flex h-11 items-center justify-center gap-1.5 rounded-full px-4 text-[14px] font-bold transition active:scale-[0.99] ${
-              rec.coupon ? "" : "flex-1"
+              hasCoupon ? "" : "flex-1"
             } ${
               visited
                 ? "bg-[#059669] text-white"

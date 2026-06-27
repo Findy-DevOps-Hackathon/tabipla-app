@@ -1,4 +1,12 @@
-import type { BulkImportResponse, Spot, SpotListResponse } from "./types.ts";
+import type {
+  BulkImportResponse,
+  Coupon,
+  CouponInput,
+  Recommendation,
+  RecommendationInput,
+  Spot,
+  SpotListResponse,
+} from "./types.ts";
 import { getAuthToken, logout } from "./auth.ts";
 
 const BASE = "/api";
@@ -133,6 +141,38 @@ export async function lookupPlaceByName(
   } catch {
     return null;
   }
+}
+
+// ---- クーポン管理 API ----
+export async function listCoupons(): Promise<Coupon[]> {
+  return request<Coupon[]>("/admin/coupons");
+}
+
+export async function createCoupon(input: CouponInput): Promise<Coupon> {
+  return request<Coupon>("/admin/coupons", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteCoupon(id: string): Promise<void> {
+  await request(`/admin/coupons/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// ---- おすすめ店管理 API ----
+export async function listRecommendations(): Promise<Recommendation[]> {
+  return request<Recommendation[]>("/admin/recommendations");
+}
+
+export async function createRecommendation(input: RecommendationInput): Promise<Recommendation> {
+  return request<Recommendation>("/admin/recommendations", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteRecommendation(id: string): Promise<void> {
+  await request(`/admin/recommendations/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function geocodeAddress(

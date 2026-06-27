@@ -25,13 +25,34 @@ export {
 } from "./repository/spots.js";
 // リポジトリ（会員ユーザー）
 export { createUser, deleteUserById, getUserByEmail } from "./repository/users.js";
+// リポジトリ（クーポン）
+export {
+  createCoupon,
+  deleteCoupon,
+  getCouponById,
+  listCoupons,
+  listCouponsBySpot,
+  listCouponsWithSpotName,
+} from "./repository/coupons.js";
+// リポジトリ（おすすめ店）
+export {
+  createRecommendation,
+  deleteRecommendation,
+  getRecommendationById,
+  listRecommendations,
+  listRecommendationsBySpot,
+} from "./repository/recommendations.js";
 export type {
   AdminUserRow,
+  CouponRow,
   NewAdminUserRow,
+  NewCouponRow,
+  NewRecommendationRow,
   NewSpotRow,
   NewUserRow,
+  RecommendationRow,
   SpotRow,
   UserRow,
 } from "./schema.js";
 // スキーマ / 型
-export { adminUsers, spots, users } from "./schema.js";
+export { adminUsers, coupons, recommendations, spots, users } from "./schema.js";

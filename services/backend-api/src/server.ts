@@ -1,13 +1,22 @@
 import {
+  createCoupon,
   createDatabase,
+  createRecommendation,
   createUser,
   type Database,
+  deleteCoupon,
+  deleteRecommendation,
   deleteSpot,
   deleteUserById,
   getAdminUserByEmail,
   getSpotById,
   getUserByEmail,
   hashPassword,
+  listCoupons,
+  listCouponsBySpot,
+  listCouponsWithSpotName,
+  listRecommendations,
+  listRecommendationsBySpot,
   listSpots,
   upsertSpot,
   upsertSpots,
@@ -49,6 +58,12 @@ import {
   semanticSearchSchema,
   travelTimesSchema,
   updateSpotSchema,
+  createCouponSchema,
+  createRecommendationSchema,
+  deleteCouponSchema,
+  deleteRecommendationSchema,
+  listCouponsBySpotSchema,
+  listRecommendationsBySpotSchema,
   userDeleteSchema,
   userLoginSchema,
   userRegisterSchema,
@@ -243,6 +258,86 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
 
       await deleteUserById(db, user.id);
       return reply.code(200).send({ ok: true });
+    },
+  );
+
+  // ---- クーポン（公開: スポット別一覧） ------------------------------------
+  app.get<{ Querystring: { spotId: string } }>(
+    "/coupons",
+    { schema: listCouponsBySpotSchema },
+    async (req) => {
+      return listCouponsBySpot(db, req.query.spotId);
+    },
+  );
+
+  // ---- クーポン（公開: 全件＋スポット名付き） --------------------------------
+  app.get("/coupons/list", async () => {
+    return listCouponsWithSpotName(db);
+  });
+
+  // ---- クーポン管理（自治体） ------------------------------------------------
+  app.get("/admin/coupons", async () => {
+    return listCoupons(db);
+  });
+
+  app.post<{
+    Body: { spotId: string; title: string; description?: string; discountPercent: number };
+  }>("/admin/coupons", { schema: createCouponSchema }, async (req, reply) => {
+    const spot = await getSpotById(db, req.body.spotId);
+    if (!spot) {
+      return reply.code(404).send({ error: "指定されたスポットが見つかりません" });
+    }
+    return reply.code(201).send(await createCoupon(db, req.body));
+  });
+
+  app.delete<{ Params: { id: string } }>(
+    "/admin/coupons/:id",
+    { schema: deleteCouponSchema },
+    async (req) => {
+      await deleteCoupon(db, req.params.id);
+      return { ok: true };
+    },
+  );
+
+  // ---- おすすめ店（公開: スポット別一覧） ------------------------------------
+  app.get<{ Querystring: { spotId: string } }>(
+    "/recommendations",
+    { schema: listRecommendationsBySpotSchema },
+    async (req) => {
+      return listRecommendationsBySpot(db, req.query.spotId);
+    },
+  );
+
+  // ---- おすすめ店管理（自治体） ------------------------------------------------
+  app.get("/admin/recommendations", async () => {
+    return listRecommendations(db);
+  });
+
+  app.post<{
+    Body: {
+      spotId: string;
+      type: string;
+      name: string;
+      address?: string;
+      lat?: number;
+      lon?: number;
+      comment?: string;
+      url?: string;
+    };
+  }>("/admin/recommendations", { schema: createRecommendationSchema }, async (req, reply) => {
+    const spot = await getSpotById(db, req.body.spotId);
+    if (!spot) {
+      return reply.code(404).send({ error: "指定されたスポットが見つかりません" });
+    }
+    return reply.code(201).send(await createRecommendation(db, req.body));
+  });
+
+  app.delete<{ Params: { id: string } }>(
+    "/admin/recommendations/:id",
+    { schema: deleteRecommendationSchema },
+    async (req) => {
+      await deleteRecommendation(db, req.params.id);
+      return { ok: true };
     },
   );
 

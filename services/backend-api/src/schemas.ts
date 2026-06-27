@@ -344,3 +344,67 @@ export const userRegisterSchema = {
     },
   },
 } as const;
+
+/** GET /coupons?spotId=...（公開: スポットのクーポン一覧） */
+export const listCouponsBySpotSchema = {
+  querystring: {
+    type: "object",
+    required: ["spotId"],
+    additionalProperties: false,
+    properties: { spotId: { type: "string", minLength: 1 } },
+  },
+} as const;
+
+/** POST /admin/coupons（自治体: クーポン作成） */
+export const createCouponSchema = {
+  body: {
+    type: "object",
+    required: ["spotId", "title", "discountPercent"],
+    additionalProperties: false,
+    properties: {
+      spotId: { type: "string", minLength: 1 },
+      title: { type: "string", minLength: 1, maxLength: 128 },
+      description: { type: "string", maxLength: 512 },
+      discountPercent: { type: "integer", minimum: 1, maximum: 100 },
+    },
+  },
+} as const;
+
+/** DELETE /admin/coupons/:id（自治体: クーポン削除） */
+export const deleteCouponSchema = {
+  params: idParams,
+} as const;
+
+/** GET /recommendations?spotId=...（公開: スポット近隣のおすすめ店一覧） */
+export const listRecommendationsBySpotSchema = {
+  querystring: {
+    type: "object",
+    required: ["spotId"],
+    additionalProperties: false,
+    properties: { spotId: { type: "string", minLength: 1 } },
+  },
+} as const;
+
+/** POST /admin/recommendations（自治体: おすすめ店作成） */
+export const createRecommendationSchema = {
+  body: {
+    type: "object",
+    required: ["spotId", "type", "name"],
+    additionalProperties: false,
+    properties: {
+      spotId: { type: "string", minLength: 1 },
+      type: { type: "string", enum: ["お食事処", "お土産"] },
+      name: { type: "string", minLength: 1, maxLength: 128 },
+      address: { type: "string", maxLength: 256 },
+      lat: { type: "number" },
+      lon: { type: "number" },
+      comment: { type: "string", maxLength: 512 },
+      url: { type: "string", maxLength: 512 },
+    },
+  },
+} as const;
+
+/** DELETE /admin/recommendations/:id（自治体: おすすめ店削除） */
+export const deleteRecommendationSchema = {
+  params: idParams,
+} as const;

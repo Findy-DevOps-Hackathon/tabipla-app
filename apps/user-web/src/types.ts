@@ -41,3 +41,32 @@ export type SearchResponse = {
 
 /** フロントで選べる検索モード。 */
 export type SearchMode = "keyword" | "vector" | "hybrid";
+
+/** クーポン（バックエンド coupons テーブル対応）。 */
+export type RecommendationType = "お食事処" | "お土産";
+
+export type Coupon = {
+  id: string;
+  spotId: string;
+  title: string;
+  description?: string | null;
+  discountPercent: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Recommendation = {
+  id: string;
+  spotId: string;
+  type: RecommendationType;
+  name: string;
+  address?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  comment?: string | null;
+  url?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CouponWithSpot = Coupon & { spotName: string };
