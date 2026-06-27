@@ -36,6 +36,20 @@
       "when": 1782450127347,
       "tag": "0004_yummy_rhodey",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782573058320,
+      "tag": "0005_sharp_hellfire_club",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782580195516,
+      "tag": "0006_tired_crusher_hogan",
+      "breakpoints": true
     }
   ]
 }

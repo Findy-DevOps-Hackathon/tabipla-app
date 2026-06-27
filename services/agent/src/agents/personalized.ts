@@ -1,7 +1,6 @@
 import { KOMORO_SPOTS, SPOT_IMAGES, SPOT_TAGS } from "../fixtures/spots.js";
-import { buildProfile, rankSpots, type Swipes, summarizeProfile } from "../personalize.js";
-import { recommendAgent } from "./recommend.js";
-import { ask } from "./run.js";
+import { buildProfile, rankSpots, type Swipes, summarizeProfile, userProfiles } from "../personalize.js";
+import { runDebate } from "./debate.js";
 
 // スワイプの好み学習(コード・決定的) → その好みで「推薦エージェント」が
 // 「あなた向けのおすすめ」を返す。専用のプランナーエージェントは使わない（2エージェント構成）。
@@ -20,13 +19,46 @@ export interface PersonalizedResult {
   profileSummary: string;
   recommendations: Recommendation[]; // 好み学習による並べ替え（表示用）
   result: string; // 推薦エージェントの「あなた向けのおすすめ」文
+  debate?: { agent: "recommend" | "route" | "introduce"; message: string }[];
 }
 
-export async function personalizedPlan(sw: Swipes): Promise<PersonalizedResult> {
-  const profile = buildProfile(sw, KOMORO_SPOTS);
-  const ranked = rankSpots(profile, KOMORO_SPOTS, { excludeNoped: true });
+export async function personalizedPlan(
+  sw: Swipes,
+  userId = "demo",
+  timeBudget = "4時間",
+  origin = "小諸駅"
+): Promise<PersonalizedResult> {
+  // 好みプロファイルの構築/取得
+  let profile = buildProfile(sw, KOMORO_SPOTS);
+  const existing = userProfiles.get(userId);
+  if (existing) {
+    // 過去のフィードバックによって学習したメモを引き継ぐ
+    profile.feedbackNotes = existing.feedbackNotes;
+    profile.introStyle = existing.introStyle;
+  }
+  userProfiles.set(userId, profile);
 
-  const recommendations: Recommendation[] = ranked.slice(0, 5).map((r) => ({
+  const profileSummary = summarizeProfile(profile);
+
+  // ディベート（エージェント間会議）を実行
+  const debateRes = await runDebate({
+    userProfileSummary: profileSummary,
+    feedbackNotes: profile.feedbackNotes,
+    introStyle: profile.introStyle,
+    timeBudget,
+    origin,
+  }, userId);
+
+  // ディベートによって決定したスポットを優先してスコアリング
+  const ranked = rankSpots(profile, KOMORO_SPOTS, { excludeNoped: true });
+  
+  // ディベートが選んだ最終スポットを優先的に前に持ってくる
+  const finalSpotSet = new Set(debateRes.finalSpots);
+  const recommendedSpots = ranked.filter(r => finalSpotSet.has(r.spot.id));
+  const otherSpots = ranked.filter(r => !finalSpotSet.has(r.spot.id));
+  const orderedSpots = [...recommendedSpots, ...otherSpots];
+
+  const recommendations: Recommendation[] = orderedSpots.map((r) => ({
     id: r.spot.id,
     name: r.spot.name,
     category: r.spot.category,
@@ -37,15 +69,10 @@ export async function personalizedPlan(sw: Swipes): Promise<PersonalizedResult> 
     why: r.why,
   }));
 
-  const profileSummary = summarizeProfile(profile);
-  const topNames = recommendations
-    .slice(0, 3)
-    .map((r) => r.name)
-    .join("、");
-  const request = `小諸の観光で、次の好み傾向の人に合うおすすめスポットを提案して。\n好み: ${profileSummary}${
-    topNames ? `\n特に「${topNames}」のような所が好み。` : ""
-  }`;
-  const result = await ask(recommendAgent, request);
-
-  return { profileSummary, recommendations, result };
+  return {
+    profileSummary,
+    recommendations,
+    result: debateRes.summary,
+    debate: debateRes.debate,
+  };
 }

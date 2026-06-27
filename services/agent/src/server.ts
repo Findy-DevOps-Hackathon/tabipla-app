@@ -7,6 +7,9 @@ import { story } from "./agents/unchiku.js";
 import { KOMORO_SPOTS, SPOT_IMAGES, SPOT_TAGS } from "./fixtures/spots.js";
 import { sceneSvg } from "./sceneSvg.js";
 import { pageHtml, swipePageHtml } from "./ui.js";
+import { userProfiles, summarizeProfile } from "./personalize.js";
+import { askIntroduce } from "./agents/introduce.js";
+import { analyzeFeedback } from "./agents/feedback.js";
 
 const app = new Hono();
 
@@ -66,16 +69,122 @@ app.post("/v1/spots/:id/story", async (c) => {
   }
 });
 
-// パーソナライズ: スワイプ→好み学習→推薦エージェントが「あなた向けのおすすめ」を返す
+// パーソナライズ: スワイプ→好み学習→エージェント間のディベートを経てプラン提案
 app.post("/v1/personalized/plan", async (c) => {
-  const { likes = [], nopes = [] } = await c.req.json<{
+  const {
+    likes = [],
+    nopes = [],
+    userId = "demo",
+    timeBudget = "4時間",
+    origin = "小諸駅",
+  } = await c.req.json<{
     likes?: string[];
     nopes?: string[];
+    userId?: string;
+    timeBudget?: string;
+    origin?: string;
   }>();
   try {
-    return c.json(await personalizedPlan({ likes, nopes }));
+    const res = await personalizedPlan({ likes, nopes }, userId, timeBudget, origin);
+    return c.json(res);
   } catch (e) {
+    console.error(e);
     return c.json({ error: friendly(e) });
+  }
+});
+
+// スポットのGood/Badフィードバック
+app.post("/v1/personalized/feedback/spot", async (c) => {
+  const { userId = "demo", spotId, rating } = await c.req.json<{
+    userId?: string;
+    spotId: string;
+    rating: "good" | "bad";
+  }>();
+
+  try {
+    const profile = userProfiles.get(userId);
+    if (!profile) {
+      return c.json({ error: "プロフィールが見つかりません" }, 400);
+    }
+
+    const result = await analyzeFeedback({
+      currentFeedbackNotes: profile.feedbackNotes,
+      currentIntroStyle: profile.introStyle,
+      spotFeedbacks: [{ spotId, rating }],
+    }, userId);
+
+    profile.feedbackNotes = result.feedbackNotes;
+    profile.introStyle = result.introStyle;
+    userProfiles.set(userId, profile);
+
+    return c.json({ success: true, feedbackNotes: profile.feedbackNotes, introStyle: profile.introStyle });
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: friendly(e) }, 500);
+  }
+});
+
+// 旅行終了後のフィードバック
+app.post("/v1/personalized/feedback/trip", async (c) => {
+  const { userId = "demo", rating, comment, spotFeedbacks = [] } = await c.req.json<{
+    userId?: string;
+    rating: number;
+    comment: string;
+    spotFeedbacks?: { spotId: string; rating: "good" | "bad" }[];
+  }>();
+
+  try {
+    const profile = userProfiles.get(userId);
+    if (!profile) {
+      return c.json({ error: "プロフィールが見つかりません" }, 400);
+    }
+
+    const result = await analyzeFeedback({
+      currentFeedbackNotes: profile.feedbackNotes,
+      currentIntroStyle: profile.introStyle,
+      spotFeedbacks,
+      tripFeedback: { rating, comment },
+    }, userId);
+
+    profile.feedbackNotes = result.feedbackNotes;
+    profile.introStyle = result.introStyle;
+    userProfiles.set(userId, profile);
+
+    return c.json({ success: true, feedbackNotes: profile.feedbackNotes, introStyle: profile.introStyle });
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: friendly(e) }, 500);
+  }
+});
+
+// 紹介エージェントへのマルチモーダルな質問
+app.post("/v1/spots/:id/ask", async (c) => {
+  const spotId = c.req.param("id");
+  const { text, image, audio, userId = "demo" } = await c.req.json<{
+    text?: string;
+    image?: { mimeType: string; data: string };
+    audio?: { mimeType: string; data: string };
+    userId?: string;
+  }>();
+
+  try {
+    const profile = userProfiles.get(userId);
+    const profileSummary = profile ? summarizeProfile(profile) : "";
+    const introStyle = profile ? profile.introStyle : "";
+
+    const answer = await askIntroduce({
+      spotId,
+      text,
+      image,
+      audio,
+      introStyle,
+      userProfileSummary: profileSummary,
+    }, userId);
+
+    return c.json({ answer });
+  } catch (e) {
+    console.error(e);
+    return c.json({ answer: friendly(e) });
   }
 });
 

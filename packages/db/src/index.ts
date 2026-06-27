@@ -23,8 +23,13 @@ export {
   upsertSpot,
   upsertSpots,
 } from "./repository/spots.js";
+// リポジトリ（クーポン）
+export { getCouponsBySpotId, upsertCoupon } from "./repository/coupons.js";
+// リポジトリ（蘊蓄）
+export { getUnchikuFactsBySpotId, upsertUnchikuFact } from "./repository/unchiku.js";
 // リポジトリ（会員ユーザー）
 export { createUser, deleteUserById, getUserByEmail } from "./repository/users.js";
+// スキーマ / 型
 export type {
   AdminUserRow,
   NewAdminUserRow,
@@ -32,6 +37,31 @@ export type {
   NewUserRow,
   SpotRow,
   UserRow,
+  MunicipalityRow,
+  NewMunicipalityRow,
+  UnchikuFactRow,
+  NewUnchikuFactRow,
+  CouponRow,
+  NewCouponRow,
+  UserPreferenceRow,
+  NewUserPreferenceRow,
+  SpotFeedbackRow,
+  NewSpotFeedbackRow,
+  TripFeedbackRow,
+  NewTripFeedbackRow,
+  TripPlanRow,
+  NewTripPlanRow,
 } from "./schema.js";
-// スキーマ / 型
-export { adminUsers, spots, users } from "./schema.js";
+export {
+  adminUsers,
+  spots,
+  users,
+  municipalities,
+  unchikuFacts,
+  coupons,
+  userPreferences,
+  spotFeedbacks,
+  tripFeedbacks,
+  tripPlans,
+} from "./schema.js";
+
