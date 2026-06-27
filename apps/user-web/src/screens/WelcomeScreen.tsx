@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
-import { ArrowRightIcon, ClockIcon, MapPinIcon } from "../components/icons.tsx";
+import { ArrowRightIcon, ClockIcon, MapPinIcon, SearchIcon } from "../components/icons.tsx";
 import { RECOMMENDATIONS, type Recommendation } from "../data/spots.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 
@@ -68,6 +68,8 @@ function FeaturedCard({
 type WelcomeScreenProps = {
   /** 「好み診断から探す」タップ時。好み診断（スワイプ）フローへ進む。 */
   onStartDiagnosis: () => void;
+  /** 「探す」タップ時。おすすめスポット一覧へ進む。 */
+  onExplore: () => void;
   /** 「履歴を見る」タップ時。行った履歴画面へ進む。 */
   onViewHistory: () => void;
   /** 中央のおすすめカードをタップしたとき。スポット詳細を開く。 */
@@ -80,7 +82,12 @@ type WelcomeScreenProps = {
  * 背景は格子状（グリッド）のデザイン。淡いグリッド線にブランドカラーの
  * グロー（ぼかし円）を重ね、中央から外周に向けてフェードさせる。
  */
-export function WelcomeScreen({ onStartDiagnosis, onViewHistory, onOpenSpot }: WelcomeScreenProps) {
+export function WelcomeScreen({
+  onStartDiagnosis,
+  onExplore,
+  onViewHistory,
+  onOpenSpot,
+}: WelcomeScreenProps) {
   // ホーム中央に置くおすすめ観光スポット。一定時間ごとに次の候補へ外枠ごと入れ替える。
   const [featuredIndex, setFeaturedIndex] = useState(0);
   // 入れ替え中に左へ送り出している前のカードのインデックス（null なら入れ替えなし）。
@@ -161,11 +168,19 @@ export function WelcomeScreen({ onStartDiagnosis, onViewHistory, onOpenSpot }: W
             <ArrowRightIcon className="size-5 transition-transform group-active:translate-x-0.5" />
           </button>
 
-          <div className="pb-5">
+          <div className="flex gap-3 pb-5">
+            <button
+              type="button"
+              onClick={onExplore}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white/80 py-3 text-[13px] font-semibold text-[#475569] shadow-sm backdrop-blur transition active:scale-[0.98] active:bg-[#f1f5f9]"
+            >
+              <SearchIcon className="size-[15px]" />
+              探す
+            </button>
             <button
               type="button"
               onClick={onViewHistory}
-              className="flex w-full items-center justify-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white/80 py-3 text-[13px] font-semibold text-[#475569] shadow-sm backdrop-blur transition active:scale-[0.98] active:bg-[#f1f5f9]"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white/80 py-3 text-[13px] font-semibold text-[#475569] shadow-sm backdrop-blur transition active:scale-[0.98] active:bg-[#f1f5f9]"
             >
               <ClockIcon className="size-[15px]" />
               履歴を見る

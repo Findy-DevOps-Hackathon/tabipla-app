@@ -39,7 +39,8 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
 
     detectCurrentLocation()
       .then((current) => {
-        if (!cancelled) onSearch(current.label);
+        // 取得できたら入力欄に自動で反映するだけにとどめ、分析開始はユーザーの操作に任せる。
+        if (!cancelled) setValue(current.label);
       })
       .catch((error) => {
         if (!cancelled) {
@@ -57,7 +58,7 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
     return () => {
       cancelled = true;
     };
-  }, [afterDiagnosis, onSearch]);
+  }, [afterDiagnosis]);
 
   return (
     <div className="flex flex-1 flex-col justify-between">
@@ -85,7 +86,7 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
             <p className="text-[13px] text-[#64748b]">
               {afterDiagnosis
                 ? locating
-                  ? "現在地を取得しています。許可されるとそのまま分析を開始します"
+                  ? "現在地を取得しています。許可されると目的地に自動入力します"
                   : locationError
                     ? "市区町村または都道府県名を入力してください"
                     : "好み診断が完了しました。探したい地域を選んでください"
@@ -100,8 +101,8 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
           )}
 
           <div className="flex flex-col gap-4">
-            <div className="flex h-[52px] items-center gap-2.5 rounded-2xl border-[1.5px] border-[#0f172a] bg-white px-3">
-              <SearchIcon className="size-5 shrink-0 text-[#0f172a]" />
+            <div className="flex h-[52px] items-center gap-2.5 rounded-2xl border-[1.5px] border-(--brand) bg-white px-3">
+              <SearchIcon className="size-5 shrink-0 text-(--brand)" />
               <input
                 value={value}
                 onChange={(e) => setValue(e.target.value)}

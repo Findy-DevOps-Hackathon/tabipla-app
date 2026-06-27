@@ -4,8 +4,9 @@ import {
   ClockIcon,
   LogoutIcon,
   MapPinIcon,
-  XCircleIcon,
+  TrashIcon,
 } from "../components/icons.tsx";
+import { RECOMMENDATIONS, type Recommendation } from "../data/spots.ts";
 import { categoryBadgeClass } from "../lib/category.ts";
 import { DANGER_BUTTON, PRIMARY_BUTTON } from "../lib/ui.ts";
 import { listVisited, toggleVisited, type VisitedSpot } from "../lib/visited.ts";
@@ -17,6 +18,8 @@ type HistoryScreenProps = {
   isLoggedIn: boolean;
   /** 未ログインで「会員登録して始める」タップ時。 */
   onRequireAuth: () => void;
+  /** 履歴のスポットをタップしたとき。スポット詳細を開く。 */
+  onOpenSpot: (recommendation: Recommendation) => void;
   /** 「← 戻る」タップ時。 */
   onBack: () => void;
   /** 「ログアウト」タップ時。 */
@@ -67,18 +70,32 @@ export function HistoryScreen({
   userId,
   isLoggedIn,
   onRequireAuth,
+  onOpenSpot,
   onBack,
   onLogout,
 }: HistoryScreenProps) {
   const [items, setItems] = useState<VisitedSpot[]>(() => listVisited(userId));
   // 削除確認モーダルの対象スポット。null のときはモーダル非表示。
   const [pendingRemoval, setPendingRemoval] = useState<VisitedSpot | null>(null);
+  // スポット詳細が見つからなかったときのモーダル表示。null のときは非表示。
+  const [notFoundName, setNotFoundName] = useState<string | null>(null);
 
   const handleConfirmRemove = () => {
     if (!pendingRemoval) return;
     toggleVisited(userId, pendingRemoval);
     setItems(listVisited(userId));
     setPendingRemoval(null);
+  };
+
+  // 履歴のスポットをタップ → 詳細データを引き当てて詳細画面を開く。
+  // データが見つからない（提供終了・ID 変更など）場合は「見つかりませんでした」を表示する。
+  const handleOpenSpot = (spot: VisitedSpot) => {
+    const rec = RECOMMENDATIONS.find((r) => r.id === spot.id);
+    if (rec) {
+      onOpenSpot(rec);
+    } else {
+      setNotFoundName(spot.name);
+    }
   };
 
   const cityGroups = groupByCity(items);
@@ -160,7 +177,12 @@ export function HistoryScreen({
                     key={spot.id}
                     className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-[0_2px_4px_rgba(0,0,0,0.03)]"
                   >
-                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSpot(spot)}
+                      aria-label={`${spot.name} の詳細を見る`}
+                      className="flex min-w-0 flex-1 flex-col gap-1.5 text-left transition active:scale-[0.99]"
+                    >
                       <div className="flex items-center gap-2">
                         <span
                           className={`rounded-md px-2 py-[3px] text-[12px] font-bold ${categoryBadgeClass(
@@ -174,14 +196,14 @@ export function HistoryScreen({
                         </span>
                       </div>
                       <p className="truncate text-[16px] font-bold text-[#0f172a]">{spot.name}</p>
-                    </div>
+                    </button>
                     <button
                       type="button"
                       onClick={() => setPendingRemoval(spot)}
                       aria-label={`${spot.name} を履歴から削除`}
                       className="flex size-9 items-center justify-center rounded-full text-[#94a3b8] transition active:bg-[#f1f5f9]"
                     >
-                      <XCircleIcon className="size-5" />
+                      <TrashIcon className="size-5" />
                     </button>
                   </article>
                 ))}
@@ -196,7 +218,7 @@ export function HistoryScreen({
           <div className="flex w-full max-w-[330px] flex-col gap-5 rounded-3xl bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.3)]">
             <div className="flex flex-col items-center gap-2 text-center">
               <div className="flex size-12 items-center justify-center rounded-full bg-[#fff1f2]">
-                <XCircleIcon className="size-6 text-[#f43f5e]" />
+                <TrashIcon className="size-6 text-[#f43f5e]" />
               </div>
               <p className="text-[16px] font-extrabold text-[#0f172a]">履歴から削除しますか？</p>
               <p className="text-[13px] leading-[1.6] text-[#64748b]">
@@ -221,6 +243,31 @@ export function HistoryScreen({
                 キャンセル
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {notFoundName && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 p-6">
+          <div className="flex w-full max-w-[330px] flex-col gap-5 rounded-3xl bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.3)]">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full bg-[#f1f5f9]">
+                <MapPinIcon className="size-6 text-[#94a3b8]" />
+              </div>
+              <p className="text-[16px] font-extrabold text-[#0f172a]">見つかりませんでした</p>
+              <p className="text-[13px] leading-[1.6] text-[#64748b]">
+                <span className="font-bold text-[#0f172a]">{notFoundName}</span>
+                <br />
+                の詳細情報が見つかりませんでした。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNotFoundName(null)}
+              className={`${PRIMARY_BUTTON} h-12 text-[15px]`}
+            >
+              閉じる
+            </button>
           </div>
         </div>
       )}
