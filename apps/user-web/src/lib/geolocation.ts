@@ -29,44 +29,104 @@ export class GeolocationError extends Error {
   }
 }
 
-/** ブラウザの位置情報 API を Promise 化して現在の座標を取得する。 */
-function getCurrentCoordinates(): Promise<Coordinates> {
-  return new Promise((resolve, reject) => {
-    if (!("geolocation" in navigator)) {
-      reject(new GeolocationError("unsupported", "この端末では現在地を取得できません。"));
-      return;
-    }
+const GEO_OPTIONS: PositionOptions = {
+  enableHighAccuracy: false,
+  timeout: 15_000,
+  maximumAge: 0,
+};
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-      },
-      (error) => {
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            reject(
-              new GeolocationError(
-                "denied",
-                "位置情報の利用が許可されていません。ブラウザの設定をご確認ください。",
-              ),
-            );
-            break;
-          case error.POSITION_UNAVAILABLE:
-            reject(new GeolocationError("unavailable", "現在地を取得できませんでした。"));
-            break;
-          case error.TIMEOUT:
-            reject(new GeolocationError("timeout", "現在地の取得がタイムアウトしました。"));
-            break;
-          default:
-            reject(new GeolocationError("unknown", "現在地の取得に失敗しました。"));
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+function mapGeolocationError(error: GeolocationPositionError): GeolocationError {
+  switch (error.code) {
+    case error.PERMISSION_DENIED:
+      return new GeolocationError(
+        "denied",
+        "位置情報の利用が許可されていません。ブラウザの設定でこのサイトの位置情報を「許可」にしてください。",
+      );
+    case error.POSITION_UNAVAILABLE:
+      return new GeolocationError("unavailable", "現在地を取得できませんでした。");
+    case error.TIMEOUT:
+      return new GeolocationError("timeout", "現在地の取得がタイムアウトしました。");
+    default:
+      return new GeolocationError("unknown", "現在地の取得に失敗しました。");
+  }
+}
+
+function toCoordinates(position: GeolocationPosition): Coordinates {
+  return {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+  };
+}
+
+/** 位置情報の許可状態（Permissions API 非対応時は unknown）。 */
+export async function queryGeolocationPermission(): Promise<PermissionState | "unknown"> {
+  try {
+    if (!navigator.permissions?.query) return "unknown";
+    const result = await navigator.permissions.query({ name: "geolocation" });
+    return result.state;
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * 現在地の座標を取得する。
+ *
+ * iOS Safari は許可ダイアログを出すために「ユーザー操作（タップ）のハンドラ内で、
+ * setState や await より先に同期的に geolocation API を呼ぶ」ことを要求する。
+ * そのため呼び出し側（InputScreen）では、この関数を他の処理より先に呼ぶこと。
+ */
+export function requestCurrentCoordinates(
+  onSuccess: (coords: Coordinates) => void,
+  onError: (error: GeolocationError) => void,
+): void {
+  if (!window.isSecureContext) {
+    onError(
+      new GeolocationError(
+        "unsupported",
+        "位置情報はHTTPS接続（またはlocalhost）でのみ利用できます。",
+      ),
     );
-  });
+    return;
+  }
+
+  if (!("geolocation" in navigator)) {
+    onError(new GeolocationError("unsupported", "この端末では現在地を取得できません。"));
+    return;
+  }
+
+  // success / error のどちらか一方だけを確実に1回呼ぶためのガード。
+  let settled = false;
+  let watchdog = 0;
+  const finish = (run: () => void) => {
+    if (settled) return;
+    settled = true;
+    window.clearTimeout(watchdog);
+    run();
+  };
+
+  // 一部のモバイル端末では、OS 側の「位置情報サービス」が無効だと success/error の
+  // どちらのコールバックも呼ばれず無反応のまま固まることがある。その場合でも
+  // 画面が固まらないよう、案内付きのタイムアウトで打ち切る。
+  watchdog = window.setTimeout(
+    () => {
+      finish(() =>
+        onError(
+          new GeolocationError(
+            "timeout",
+            "現在地を取得できませんでした。端末の「位置情報サービス」と、ブラウザのサイト設定で位置情報を「許可」にしてからお試しください。",
+          ),
+        ),
+      );
+    },
+    (GEO_OPTIONS.timeout ?? 15_000) + 3_000,
+  );
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => finish(() => onSuccess(toCoordinates(position))),
+    (error) => finish(() => onError(mapGeolocationError(error))),
+    GEO_OPTIONS,
+  );
 }
 
 /** Nominatim の逆ジオコーディング結果から日本語のエリア名を組み立てる。 */
@@ -110,14 +170,22 @@ async function reverseGeocode(coords: Coordinates): Promise<string | null> {
   }
 }
 
-/**
- * 現在地を取得し、可能ならエリア名へ変換して返す。
- * 位置情報の取得自体に失敗した場合は {@link GeolocationError} を投げる。
- */
-export async function detectCurrentLocation(): Promise<CurrentLocation> {
-  const coords = await getCurrentCoordinates();
+export async function coordsToLocation(coords: Coordinates): Promise<CurrentLocation> {
   const area = await reverseGeocode(coords);
   const label =
     area ?? `現在地（${coords.latitude.toFixed(3)}, ${coords.longitude.toFixed(3)}）`;
   return { label, coords };
+}
+
+/**
+ * 現在地を取得し、可能ならエリア名へ変換して返す。
+ * 位置情報の取得自体に失敗した場合は {@link GeolocationError} を投げる。
+ *
+ * モバイルでは {@link requestCurrentCoordinates} をユーザータップの同期ハンドラ内で呼ぶこと。
+ */
+export async function detectCurrentLocation(): Promise<CurrentLocation> {
+  const coords = await new Promise<Coordinates>((resolve, reject) => {
+    requestCurrentCoordinates(resolve, reject);
+  });
+  return coordsToLocation(coords);
 }
