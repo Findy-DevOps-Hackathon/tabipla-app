@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSession, logout, type UserAccount } from "./auth.ts";
 import { BottomNav, type NavTab } from "./components/BottomNav.tsx";
-import { CouponModal } from "./components/CouponModal.tsx";
+
 import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
 import {
-  RECOMMENDATIONS,
   type Recommendation,
+  type SpotCategory,
   SWIPE_LIMIT,
   SWIPE_LIMIT_REFINE,
   SWIPE_SPOTS,
@@ -24,13 +24,14 @@ import { isVisited, markVisited, toggleVisited, type VisitableSpot } from "./lib
 import { AuthScreen } from "./screens/AuthScreen.tsx";
 import { HistoryScreen } from "./screens/HistoryScreen.tsx";
 import { InputScreen } from "./screens/InputScreen.tsx";
+import { MemoryScreen } from "./screens/MemoryScreen.tsx";
 import { ProcessingScreen } from "./screens/ProcessingScreen.tsx";
 import { RecommendationsScreen } from "./screens/RecommendationsScreen.tsx";
 import { SwipeScreen } from "./screens/SwipeScreen.tsx";
 import { WelcomeScreen } from "./screens/WelcomeScreen.tsx";
 
 /** 体験フローのステップ。 */
-type Step = "welcome" | "input" | "swipe" | "processing" | "recommendations" | "history";
+type Step = "welcome" | "input" | "swipe" | "memory" | "processing" | "recommendations" | "history";
 
 /** リロードしても直前の画面を保つために step を保存する localStorage キー。 */
 const STEP_KEY = "tabipla-step";
@@ -38,6 +39,7 @@ const STEP_VALUES: Step[] = [
   "welcome",
   "input",
   "swipe",
+  "memory",
   "processing",
   "recommendations",
   "history",
@@ -78,12 +80,9 @@ type ViewSnapshot = {
  *（＝「行った」のトグルなど見た目に出ない状態変化では履歴を増やさない）。
  */
 function viewKey(s: ViewSnapshot): string {
-  return [
-    s.step,
-    s.detailRec?.id ?? "",
-    s.activeCoupon?.id ?? "",
-    s.authPrompt ? "auth" : "",
-  ].join("|");
+  return [s.step, s.detailRec?.id ?? "", s.activeCoupon?.id ?? "", s.authPrompt ? "auth" : ""].join(
+    "|",
+  );
 }
 
 /** history.state 内に画面スナップショットを格納するためのキー。 */
@@ -116,6 +115,21 @@ export default function App() {
   const [diagnosisComplete, setDiagnosisComplete] = useState(isDiagnosisComplete);
   // 「好みをより詳しく設定する」を済ませたか。済ませたら同ボタンは表示しない。
   const [detailedComplete, setDetailedComplete] = useState(isDetailedDiagnosisComplete);
+
+  // エージェント連携用状態管理
+  const [likes, setLikes] = useState<string[]>([]);
+  const [nopes, setNopes] = useState<string[]>([]);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [debateLog, setDebateLog] = useState<
+    { agent: string; message: string; thought?: string }[]
+  >([]);
+  const [isFetchDone, setIsFetchDone] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [chatThreads, setChatThreads] = useState<
+    Record<string, { role: "user" | "ai"; text: string; isError?: boolean }[]>
+  >({});
+  const [travelMemory, setTravelMemory] = useState("");
+  const [pendingMemoryTransition, setPendingMemoryTransition] = useState(false);
 
   // 認証プロンプト（クーポン利用やログインボタンで開く）。null なら非表示。
   const [authPrompt, setAuthPrompt] = useState<{ reason?: string } | null>(null);
@@ -206,12 +220,10 @@ export default function App() {
       // 当アプリ管理外／古いビルドの履歴エントリ（スナップショットなし）に戻った場合でも
       // 固まらないよう、開いているオーバーレイは最低限閉じる（自己修復）。
       const current = navSnapshotRef.current;
-      if (current.detailRec || current.activeCoupon || current.authPrompt) {
+      if (current.detailRec || current.authPrompt) {
         isPopRef.current = true;
         setDetailRec(null);
-        setActiveCoupon(null);
         setAuthPrompt(null);
-        setPendingCoupon(null);
         setPendingVisit(null);
       }
     };
@@ -265,9 +277,7 @@ export default function App() {
     returnFromHistory,
     detailRec,
     detailVisited,
-    activeCoupon,
     authPrompt,
-    pendingCoupon,
     pendingVisit,
   ]);
   // -------------------------------------------------------------------------
@@ -294,6 +304,10 @@ export default function App() {
 
   const beginSwipe = useCallback(() => {
     setSwipeDeck(SWIPE_SPOTS.slice(0, SWIPE_LIMIT));
+    setLikes([]);
+    setNopes([]);
+    setRecommendations([]);
+    setDebateLog([]);
     setRefining(false);
     setRunId((id) => id + 1);
     setStep("swipe");
@@ -301,7 +315,7 @@ export default function App() {
 
   const selectDestination = useCallback((loc: string) => {
     setLocation(loc);
-    setStep("processing");
+    setStep("memory");
   }, []);
 
   // 「好みをより詳しく設定する」: 追加デッキ（10件）で好き嫌いをさらに振り分ける。
@@ -312,30 +326,110 @@ export default function App() {
     setStep("swipe");
   }, []);
 
-  const handleSwipeComplete = useCallback(() => {
-    setSwipedCount(swipeDeck.length);
-    // 深掘り（10件）を一度完了したら、以降は「好みをより詳しく設定する」を出さない。
-    if (refining) {
-      setDetailedComplete(true);
-      markDetailedDiagnosisComplete();
-    }
-    // 初回は目的地をまだ選んでいないので入力画面へ。深掘り時は目的地確定済みなので分析へ。
-    setStep(refining ? "processing" : "input");
-  }, [refining, swipeDeck.length]);
+  const handleSwipeComplete = useCallback(
+    (likedIds: string[]) => {
+      setLikes((prev) => {
+        const next = [...prev];
+        for (const id of likedIds) {
+          if (!next.includes(id)) next.push(id);
+        }
+        return next;
+      });
 
-  const handleUseCoupon = useCallback(
-    (rec: Recommendation) => {
-      if (user || !rec.memberOnly) {
-        // ログイン済み、または「だれでもクーポン」はそのまま表示。
-        setActiveCoupon(rec);
-      } else {
-        // 会員限定クーポンを未ログインで使う場合のみ、会員登録/ログインを促す。
-        setPendingCoupon(rec);
-        setAuthPrompt({ reason: "このクーポンの利用には会員登録が必要です" });
+      const deckIds = swipeDeck.map((s) => s.id);
+      const nopedIds = deckIds.filter((id) => !likedIds.includes(id));
+      setNopes((prev) => {
+        const next = [...prev];
+        for (const id of nopedIds) {
+          if (!next.includes(id)) next.push(id);
+        }
+        return next;
+      });
+
+      setSwipedCount(swipeDeck.length);
+      // 深掘り（10件）を一度完了したら、以降は「好みをより詳しく設定する」を出さない。
+      if (refining) {
+        setDetailedComplete(true);
+        markDetailedDiagnosisComplete();
       }
+      // 初回は目的地をまだ選んでいないので入力画面へ。深掘り時は目的地確定済みなので分析へ。
+      setStep(refining ? "processing" : "input");
     },
-    [user],
+    [refining, swipeDeck],
   );
+
+  useEffect(() => {
+    if (step !== "processing") return;
+
+    let active = true;
+    setIsFetchDone(false);
+    setApiError(null);
+
+    async function fetchPlan() {
+      try {
+        const res = await fetch("/api/v1/personalized/plan", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            likes,
+            nopes,
+            userId: visitorId,
+            timeBudget: "4時間",
+            origin: "小諸駅",
+            travelMemory,
+          }),
+        });
+
+        const data = await res.json();
+        if (!active) return;
+
+        if (!res.ok || data.error) {
+          throw new Error(data.error || "プランの作成に失敗しました。");
+        }
+
+        const categoryMap: Record<string, SpotCategory> = {
+          history: "歴史",
+          nature: "自然",
+          gourmet: "グルメ",
+        };
+
+        const getSpotImage = (id: string): string => {
+          const s = [...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE].find((sp) => sp.id === id);
+          return s ? s.image : `/api/img/${id}`;
+        };
+
+        const mapped: Recommendation[] = (data.recommendations || []).map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          prefecture: "長野県",
+          area: "小諸市",
+          category: categoryMap[r.category] || "観光",
+          description: r.description,
+          tags: r.tags || [],
+          reason: (r.why || []).join(" / "),
+          match: Math.round((r.score || 0.8) * 100),
+          memberOnly: r.memberOnly || false,
+          image: getSpotImage(r.id),
+        }));
+
+        setRecommendations(mapped);
+        setDebateLog(data.debate || []);
+        setIsFetchDone(true);
+      } catch (e: any) {
+        if (active) {
+          setApiError(e.message || "ネットワークエラーが発生しました。");
+        }
+      }
+    }
+
+    fetchPlan();
+
+    return () => {
+      active = false;
+    };
+  }, [step, likes, nopes, visitorId]);
+
+
 
   // 未ログインで「行った」を押したとき、会員登録/ログインを促す。認証後に履歴へ追加する。
   const requireAuthForVisit = useCallback((spot: VisitableSpot) => {
@@ -371,6 +465,80 @@ export default function App() {
     [user, visitorId, requireAuthForVisit],
   );
 
+  const handleSendChat = useCallback(
+    async (
+      spotId: string,
+      text: string,
+      img?: { mimeType: string; data: string } | null,
+      audio?: { mimeType: string; data: string } | null,
+    ) => {
+      // ユーザー発言をスレッドに追加
+      const userMsgText = audio ? "🎙️ 音声質問を送信しました" : text || "📸 添付画像を送信しました";
+      const userMsg = { role: "user" as const, text: userMsgText };
+
+      setChatThreads((prev) => ({
+        ...prev,
+        [spotId]: [
+          ...(prev[spotId] || [
+            {
+              role: "ai",
+              text: "このスポットについて、気になることや楽しみ方を聞いてみてください。写真や音声での質問も受け付けます！",
+            },
+          ]),
+          userMsg,
+        ],
+      }));
+
+      // AI「考え中…」表示を追加
+      const loadingMsg = { role: "ai" as const, text: "💬 AIガイドが回答を作成中…" };
+      setChatThreads((prev) => ({
+        ...prev,
+        [spotId]: [...(prev[spotId] || []), loadingMsg],
+      }));
+
+      try {
+        const res = await fetch(`/api/v1/spots/${spotId}/ask`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            userId: visitorId,
+            text: text || "写真を解析して解説してください",
+            image: img ? { mimeType: img.mimeType, data: img.data } : undefined,
+            audio: audio ? { mimeType: audio.mimeType, data: audio.data } : undefined,
+          }),
+        });
+
+        const data = await res.json();
+
+        // 考え中ローディングを削除し、回答を追加
+        setChatThreads((prev) => {
+          const thread = [...(prev[spotId] || [])];
+          const nextThread = thread.filter((m) => m.text !== "💬 AIガイドが回答を作成中…");
+          return {
+            ...prev,
+            [spotId]: [
+              ...nextThread,
+              { role: "ai" as const, text: data.answer || "回答が得られませんでした。" },
+            ],
+          };
+        });
+      } catch (e: any) {
+        setChatThreads((prev) => {
+          const thread = [...(prev[spotId] || [])];
+          const nextThread = thread.filter((m) => m.text !== "💬 AIガイドが回答を作成中…");
+          return {
+            ...prev,
+            [spotId]: [
+              ...nextThread,
+              { role: "ai" as const, text: `エラーが発生しました: ${e.message}`, isError: true },
+            ],
+          };
+        });
+      }
+    },
+    [visitorId],
+  );
+
   // ログアウト時は好み診断をリセットする（前ユーザーの結果を次の利用者に引き継がない）。
   const resetDiagnosisState = useCallback(() => {
     resetDiagnosis();
@@ -387,16 +555,16 @@ export default function App() {
       setAuthPrompt(null);
       // ログイン時は好み診断の結果を保持する（未ログインのまま診断した内容を、そのまま
       // 会員アカウントに引き継ぐ）。リセットはログアウト時のみ行う。
-      if (pendingCoupon) {
-        setActiveCoupon(pendingCoupon);
-        setPendingCoupon(null);
-      }
       if (pendingVisit) {
         markVisited(account.id, pendingVisit);
         setPendingVisit(null);
       }
+      if (pendingMemoryTransition) {
+        setPendingMemoryTransition(false);
+        setStep("processing");
+      }
     },
-    [pendingCoupon, pendingVisit],
+    [pendingVisit, pendingMemoryTransition],
   );
 
   // ログアウト。セッションを破棄してホームへ戻す（履歴は会員機能のため）。
@@ -418,9 +586,7 @@ export default function App() {
     // 履歴の起点（リロードで深い画面に直接入った等）では戻り先がないため、
     // 明示的なフォールバック画面へ遷移し、開いているオーバーレイは閉じる。
     setDetailRec(null);
-    setActiveCoupon(null);
     setAuthPrompt(null);
-    setPendingCoupon(null);
     setPendingVisit(null);
     setStep(fallback);
   }, []);
@@ -477,11 +643,7 @@ export default function App() {
       )}
 
       {step === "input" && (
-        <InputScreen
-          afterDiagnosis
-          onBack={() => goBack("welcome")}
-          onSearch={selectDestination}
-        />
+        <InputScreen afterDiagnosis onBack={() => goBack("welcome")} onSearch={selectDestination} />
       )}
 
       {step === "swipe" && (
@@ -490,7 +652,25 @@ export default function App() {
           spots={swipeDeck}
           refine={refining}
           onComplete={handleSwipeComplete}
-          onCancel={() => goBack(refining ? "recommendations" : "welcome")}
+          onCancel={() => {
+            // 中止時はホーム画面（welcome）へ戻るように接続
+            setStep("welcome");
+          }}
+        />
+      )}
+
+      {step === "memory" && (
+        <MemoryScreen
+          onBack={() => goBack("input")}
+          onSkipRegister={(memory) => {
+            setTravelMemory(memory);
+            setStep("processing");
+          }}
+          onGoRegister={(memory) => {
+            setTravelMemory(memory);
+            setPendingMemoryTransition(true);
+            setAuthPrompt({ reason: "診断結果やチャット履歴を保存するには登録が必要です" });
+          }}
         />
       )}
 
@@ -502,29 +682,33 @@ export default function App() {
             markDiagnosisComplete();
             setStep("recommendations");
           }}
+          isFetchDone={isFetchDone}
+          apiError={apiError}
+          onRestart={beginSwipe}
         />
       )}
 
       {step === "recommendations" && (
         <RecommendationsScreen
           key={visitorId}
-          recommendations={RECOMMENDATIONS}
+          recommendations={recommendations}
           diagnosisComplete={diagnosisComplete}
           detailedComplete={detailedComplete}
           userId={visitorId}
           onStartDiagnosis={beginSwipe}
           onRestart={refinePreferences}
           onOpenSpot={openSpotDetail}
+          debateLog={debateLog}
         />
       )}
 
-      {/* ホーム・好み診断・目的地選択・分析中・モーダル表示中はフッターを隠す。 */}
+      {/* ホーム・好み診断・目的地選択・思い出自由記述・分析中・モーダル表示中はフッターを隠す。 */}
       {step !== "welcome" &&
         step !== "swipe" &&
         step !== "input" &&
+        step !== "memory" &&
         step !== "processing" &&
-        !authPrompt &&
-        !activeCoupon && (
+        !authPrompt && (
           <>
             <div className="shrink-0" aria-hidden />
             <BottomNav active={footerTab} onNavigate={handleNavigate} visible={footerVisible} />
@@ -537,35 +721,28 @@ export default function App() {
             <AuthScreen
               reason={authPrompt.reason}
               onAuthenticated={handleAuthenticated}
-              onCancel={() => goBack("welcome")}
+              onCancel={() => {
+                if (pendingMemoryTransition) {
+                  setPendingMemoryTransition(false);
+                  setStep("memory");
+                } else {
+                  goBack("welcome");
+                }
+              }}
             />
           </div>
         </div>
       )}
 
-      {activeCoupon && (
-        <div className="fixed inset-0 z-50 flex justify-center">
-          <div className="relative h-screen w-full max-w-[500px]">
-            <CouponModal
-              recommendation={activeCoupon}
-              userName={user?.name ?? null}
-              userId={visitorId}
-              onClose={() => goBack("recommendations")}
-            />
-          </div>
-        </div>
-      )}
+
 
       {detailRec && (
         <SpotDetailModal
           recommendation={detailRec}
           visited={detailVisited}
+          chatHistory={chatThreads[detailRec.id] || []}
+          onSendChat={(text, img, audio) => handleSendChat(detailRec.id, text, img, audio)}
           onClose={() => goBack("recommendations")}
-          onUseCoupon={(rec) => {
-            // 認証/クーポンのオーバーレイより詳細が前面に来ないよう、先に詳細を閉じる。
-            setDetailRec(null);
-            handleUseCoupon(rec);
-          }}
           onToggleVisited={handleDetailToggleVisited}
         />
       )}

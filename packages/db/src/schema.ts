@@ -1,5 +1,31 @@
 import { randomUUID } from "node:crypto";
-import { doublePrecision, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  date,
+  doublePrecision,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
+
+/**
+ * municipalities テーブル（自治体データ）。
+ */
+export const municipalities = pgTable("municipalities", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  name: text("name").notNull(),
+  apiKeyHash: text("api_key_hash"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** SELECT 時の行型。 */
+export type MunicipalityRow = typeof municipalities.$inferSelect;
+/** INSERT 時の入力型。 */
+export type NewMunicipalityRow = typeof municipalities.$inferInsert;
 
 /**
  * spots テーブル（観光スポットのマスターデータ）。
@@ -20,7 +46,9 @@ export const spots = pgTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => randomUUID()),
-    /** スポット名（全文検索の主対象）。 */
+    /** 自治体IDへの参照。 */
+    municipalityId: text("municipality_id").references(() => municipalities.id),
+    /** スポット名（全文検索 of 主対象）。 */
     name: text("name").notNull(),
     /** 説明・本文。 */
     description: text("description").notNull(),
@@ -54,6 +82,44 @@ export const spots = pgTable(
 export type SpotRow = typeof spots.$inferSelect;
 /** INSERT 時の入力型。 */
 export type NewSpotRow = typeof spots.$inferInsert;
+
+/**
+ * unchiku_facts テーブル（蘊蓄ネタ）。
+ */
+export const unchikuFacts = pgTable("unchiku_facts", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  spotId: text("spot_id").references(() => spots.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  text: text("text").notNull(),
+  source: text("source"),
+});
+
+/** SELECT 時の行型。 */
+export type UnchikuFactRow = typeof unchikuFacts.$inferSelect;
+/** INSERT 時の入力型。 */
+export type NewUnchikuFactRow = typeof unchikuFacts.$inferInsert;
+
+/**
+ * coupons テーブル（クーポン・特典）。
+ */
+export const coupons = pgTable("coupons", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  spotId: text("spot_id").references(() => spots.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  discount: text("discount").notNull(),
+  conditions: text("conditions"),
+  validUntil: date("valid_until"),
+});
+
+/** SELECT 時の行型。 */
+export type CouponRow = typeof coupons.$inferSelect;
+/** INSERT 時の入力型。 */
+export type NewCouponRow = typeof coupons.$inferInsert;
 
 /**
  * 管理画面ログインユーザー。
@@ -104,3 +170,105 @@ export const users = pgTable(
 
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
+
+/**
+ * user_preferences テーブル（ユーザーの好みプロファイル）。
+ *
+ * エージェントが学習した好み情報やトーン＆マナーのメモを永続化します。
+ */
+export const userPreferences = pgTable(
+  "user_preferences",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id").notNull().unique(), // デモユーザーID ("demo") にも対応するため references はあえて貼らない
+    categoryScore: jsonb("category_score"), // カテゴリごとのスコア (JSONB)
+    tagScore: jsonb("tag_score"), // 特徴タグごとのスコア (JSONB)
+    preferredPriceMax: integer("preferred_price_max"),
+    likedIds: text("liked_ids").array(),
+    nopedIds: text("noped_ids").array(),
+    feedbackNotes: text("feedback_notes").default("").notNull(), // 推薦用の好みメモ
+    introStyle: text("intro_style").default("").notNull(), // 紹介スタイルメモ
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("user_preferences_user_id_idx").on(table.userId),
+  }),
+);
+
+export type UserPreferenceRow = typeof userPreferences.$inferSelect;
+export type NewUserPreferenceRow = typeof userPreferences.$inferInsert;
+
+/**
+ * spot_feedbacks テーブル（おすすめスポットに対するGood/Badフィードバック）。
+ */
+export const spotFeedbacks = pgTable(
+  "spot_feedbacks",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id").notNull(),
+    spotId: text("spot_id")
+      .notNull()
+      .references(() => spots.id, { onDelete: "cascade" }),
+    rating: text("rating").notNull(), // "good" | "bad"
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("spot_feedbacks_user_id_idx").on(table.userId),
+    spotIdIdx: index("spot_feedbacks_spot_id_idx").on(table.spotId),
+  }),
+);
+
+export type SpotFeedbackRow = typeof spotFeedbacks.$inferSelect;
+export type NewSpotFeedbackRow = typeof spotFeedbacks.$inferInsert;
+
+/**
+ * trip_feedbacks テーブル（旅行全体のフィードバック）。
+ */
+export const tripFeedbacks = pgTable(
+  "trip_feedbacks",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id").notNull(),
+    rating: integer("rating").notNull(), // 星評価（1〜5）
+    comment: text("comment"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("trip_feedbacks_user_id_idx").on(table.userId),
+  }),
+);
+
+export type TripFeedbackRow = typeof tripFeedbacks.$inferSelect;
+export type NewTripFeedbackRow = typeof tripFeedbacks.$inferInsert;
+
+/**
+ * trip_plans テーブル（旅行プランとディベートログの履歴）。
+ */
+export const tripPlans = pgTable(
+  "trip_plans",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id").notNull(),
+    origin: text("origin").notNull(),
+    timeBudget: text("time_budget").notNull(),
+    finalSpots: text("final_spots").array().notNull(),
+    summary: text("summary").notNull(),
+    debateLog: jsonb("debate_log").notNull(), // エージェント間のディベート会話ログ
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("trip_plans_user_id_idx").on(table.userId),
+  }),
+);
+
+export type TripPlanRow = typeof tripPlans.$inferSelect;
+export type NewTripPlanRow = typeof tripPlans.$inferInsert;

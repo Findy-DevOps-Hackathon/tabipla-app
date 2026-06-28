@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
 import { ArrowRightIcon, ClockIcon, MapPinIcon, SearchIcon } from "../components/icons.tsx";
-import { RECOMMENDATIONS, type Recommendation } from "../data/spots.ts";
+import { RECOMMENDATIONS, SWIPE_SPOTS, type Recommendation } from "../data/spots.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 
 /** ホーム中央カードを切り替える間隔（ミリ秒）。 */
@@ -11,7 +11,15 @@ const FEATURED_ROTATE_MS = 4000;
 const FEATURED_SWAP_MS = 1100;
 
 /** 相性スコアの高い順に並べたおすすめスポット（ホーム中央カードの表示候補）。 */
-const FEATURED_SPOTS = [...RECOMMENDATIONS].sort((a, b) => b.match - a.match);
+const FEATURED_SPOTS =
+  RECOMMENDATIONS.length > 0
+    ? [...RECOMMENDATIONS].sort((a, b) => b.match - a.match)
+    : SWIPE_SPOTS.map((s) => ({
+        ...s,
+        reason: "小諸のおすすめ観光スポット",
+        match: 85,
+        memberOnly: false,
+      }));
 
 /**
  * ホーム中央のおすすめスポットカードの「見た目」1枚分。

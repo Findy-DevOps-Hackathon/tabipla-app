@@ -5,10 +5,10 @@ import { bulkImportSpots } from "../api.ts";
 import { AdminShell } from "../components/layout/AdminShell.tsx";
 import { Button } from "../components/ui/Button.tsx";
 import { Toast } from "../components/ui/Modal.tsx";
-import { parseCsvLine, stripBom } from "../lib/csv.ts";
-import { CSV_HEADER } from "../lib/format.ts";
 import { extractAreaFromAddress } from "../lib/address.ts";
 import { parseCategories } from "../lib/categories.ts";
+import { parseCsvLine, stripBom } from "../lib/csv.ts";
+import { CSV_HEADER } from "../lib/format.ts";
 import { getFixedPrefecture } from "../master/index.ts";
 import type { Spot } from "../types.ts";
 
@@ -127,14 +127,16 @@ export default function BulkImportPage() {
                       : "bg-[#e2e8f0] text-[#64748b]"
                 } ${importing && n === 3 ? "animate-pulse" : ""}`}
               >
-                {importing && n === 3 ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
-                ) : (
-                  n
-                )}
+                {importing && n === 3 ? <Loader2 className="size-4 animate-spin" aria-hidden /> : n}
               </span>
               <span className="text-sm text-[#475569]">
-                {n === 1 ? "ファイル選択" : n === 2 ? "プレビュー" : importing ? "取り込み中" : "結果"}
+                {n === 1
+                  ? "ファイル選択"
+                  : n === 2
+                    ? "プレビュー"
+                    : importing
+                      ? "取り込み中"
+                      : "結果"}
               </span>
             </div>
           ))}

@@ -127,7 +127,9 @@ async function main() {
     };
   }
 
-  const stylesRes = await figmaGet(`/files/${fileKey}/styles`).catch(() => ({ meta: { styles: [] } }));
+  const stylesRes = await figmaGet(`/files/${fileKey}/styles`).catch(() => ({
+    meta: { styles: [] },
+  }));
 
   const output = {
     fetchedAt: new Date().toISOString(),

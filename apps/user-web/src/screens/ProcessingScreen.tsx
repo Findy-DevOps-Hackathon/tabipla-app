@@ -1,29 +1,54 @@
 import { useEffect, useState } from "react";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
 import { PREFERENCE_TAGS } from "../data/spots.ts";
+import { PRIMARY_BUTTON } from "../lib/ui.ts";
 
 type ProcessingScreenProps = {
   /** スワイプした件数（本文に表示）。 */
   count: number;
   /** 分析完了時。 */
   onDone: () => void;
+  /** APIフェッチが完了したか */
+  isFetchDone?: boolean;
+  /** APIエラーメッセージ */
+  apiError?: string | null;
+  /** エラー発生時のやり直し処理 */
+  onRestart?: () => void;
 };
 
-/** 分析にかける擬似的な所要時間（ms）。 */
-const ANALYZE_MS = 2400;
-
 /** フロー 4: 好みを分析中であることを示す画面（ai-processing）。 */
-export function ProcessingScreen({ count, onDone }: ProcessingScreenProps) {
+export function ProcessingScreen({
+  count,
+  onDone,
+  isFetchDone = false,
+  apiError = null,
+  onRestart,
+}: ProcessingScreenProps) {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    const raf = requestAnimationFrame(() => setProgress(100));
-    const timer = window.setTimeout(onDone, ANALYZE_MS);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.clearTimeout(timer);
-    };
-  }, [onDone]);
+    if (apiError) return;
+    // 擬似的に 95% まで徐々に進行させる
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 95) {
+          clearInterval(timer);
+          return 95;
+        }
+        return prev + 5;
+      });
+    }, 150);
+
+    return () => clearInterval(timer);
+  }, [apiError]);
+
+  useEffect(() => {
+    if (isFetchDone && !apiError) {
+      setProgress(100);
+      const timer = setTimeout(onDone, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [isFetchDone, apiError, onDone]);
 
   return (
     <div className="relative flex flex-1 flex-col justify-between overflow-hidden bg-(--page)">
@@ -36,35 +61,64 @@ export function ProcessingScreen({ count, onDone }: ProcessingScreenProps) {
       </div>
 
       <div className="relative flex flex-col items-center gap-8 px-4">
-        <div className="relative flex size-[100px] items-center justify-center">
-          <div className="size-16 animate-spin rounded-full border-4 border-(--ai-bg) border-t-(--ai-fg)" />
-        </div>
+        {apiError ? (
+          // エラー表示
+          <div className="flex flex-col items-center gap-6 text-center">
+            <div className="relative flex size-[80px] items-center justify-center rounded-full bg-red-50 text-red-500 text-[32px]">
+              ⚠️
+            </div>
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-[18px] font-semibold text-red-600">プラン生成エラー</p>
+              <p className="text-[14px] leading-[1.6] text-[#64748b] max-w-[280px]">{apiError}</p>
+            </div>
+            {onRestart && (
+              <button
+                type="button"
+                onClick={onRestart}
+                className={`${PRIMARY_BUTTON} px-6 py-2.5 text-[14px]`}
+              >
+                最初からやり直す
+              </button>
+            )}
+          </div>
+        ) : (
+          // ローディング表示
+          <>
+            <div className="relative flex size-[100px] items-center justify-center">
+              <div className="size-16 animate-spin rounded-full border-4 border-(--ai-bg) border-t-(--ai-fg)" />
+            </div>
 
-        <div className="flex flex-col items-center gap-3">
-          <p className="text-[18px] font-semibold text-[#0f172a]">あなたの好みを分析中…</p>
-          <p className="text-center text-[14px] leading-[1.6] text-[#64748b]">
-            スワイプした {count} 件のスポットをもとに
-            <br />
-            あなたにぴったりの旅先を探しています。
-          </p>
-        </div>
+            <div className="flex flex-col items-center gap-3">
+              <p className="text-[18px] font-semibold text-[#0f172a]">
+                AIエージェントがディベート中…
+              </p>
+              <p className="text-center text-[14px] leading-[1.6] text-[#64748b]">
+                スワイプした {count} 件のスポットをもとに
+                <br />
+                最適なプランを合意形成しています。
+              </p>
+            </div>
+          </>
+        )}
 
-        <div className="flex gap-2">
-          {PREFERENCE_TAGS.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-md bg-[#e2e8f0] px-2 py-1 text-[12px] text-[#475569]"
-            >
-              #{tag}
-            </span>
-          ))}
-        </div>
+        {!apiError && (
+          <div className="flex gap-2">
+            {PREFERENCE_TAGS.map((tag: string) => (
+              <span
+                key={tag}
+                className="rounded-md bg-[#e2e8f0] px-2 py-1 text-[12px] text-[#475569]"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="relative h-1 w-full bg-[#e2e8f0]">
         <div
           className="h-full bg-(--ai-fg) transition-[width] ease-out"
-          style={{ width: `${progress}%`, transitionDuration: `${ANALYZE_MS}ms` }}
+          style={{ width: `${progress}%`, transitionDuration: `200ms` }}
         />
       </div>
     </div>

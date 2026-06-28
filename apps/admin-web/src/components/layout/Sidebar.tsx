@@ -1,4 +1,4 @@
-import { BookOpen, LogOut, MapPin, Ticket } from "lucide-react";
+import { BookOpen, LogOut, MapPin } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { logout } from "../../auth.ts";
 import { MUNICIPALITY } from "../../master/index.ts";
@@ -7,7 +7,6 @@ import { AdminLogo } from "../AdminLogo.tsx";
 const navItems = [
   { to: "/spots", label: "スポット管理", icon: MapPin, end: true },
   { to: "/unchiku", label: "蘊蓄ファクト", icon: BookOpen },
-  { to: "/coupons", label: "クーポン", icon: Ticket },
 ] as const;
 
 export function Sidebar() {

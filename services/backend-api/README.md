@@ -36,6 +36,7 @@ Elasticsearch と連携します（ES へ直接アクセスしません）。
 | `HOST` | `0.0.0.0` | 待ち受けホスト |
 | `DATABASE_URL` | — | PostgreSQL 接続文字列（書き込み系 `/spots` と `reindex` で必須。`@tabipla/db` が解決） |
 | `ES_NODE` ほか | — | Elasticsearch 接続系は search-core 側で解決（`packages/search-core/README.md` 参照） |
+| `AGENT_API_URL` | `http://localhost:8080` | AIエージェントサービス（`@tabipla/agent`）のベースURL |
 
 ---
 
@@ -56,13 +57,15 @@ pnpm -C services/backend-api build
 pnpm -C services/backend-api start
 ```
 
-事前に Elasticsearch を起動しておくこと（`infra/docker` 参照）。
+事前に Elasticsearch およびエージェントサービスを起動しておくこと（`infra/docker` 参照）。
 
 ---
 
 ## エンドポイント
 
-検索対象の中心エンティティは**観光スポット（Spot）**です。
+検索およびAIエージェント関連のAPIを提供します。
+
+### 検索・スポット管理（Elasticsearch / DB 連携）
 
 | メソッド | パス | 説明 | データの流れ |
 |---|---|---|---|
@@ -74,6 +77,17 @@ pnpm -C services/backend-api start
 | GET | `/search?q=&size=&from=&index=` | キーワード検索 | `keywordSearch`（ES） |
 | POST | `/search/vector` | ベクトル検索（body: `{ embedding, k?, filters? }`） | `vectorSearch`（ES） |
 | POST | `/search/hybrid` | ハイブリッド検索（body: `{ query?, embedding?, ... }`） | `hybridSearch`（ES） |
+
+### AIエージェントプロキシ・モック
+
+| メソッド | パス | 説明 | データの流れ |
+|---|---|---|---|
+| POST | `/v1/spots/:spotId/story` | 観光スポットの薀蓄/ストーリー取得（モック） | 静的モックデータを返却 |
+| POST | `/v1/personalized/plan` | 好み学習およびエージェント間ディベートによる旅行プラン生成 | エージェントサービスプロキシ |
+| POST | `/v1/spots/:spotId/ask` | 紹介エージェントへのスポットに関するチャット質問 | エージェントサービスプロキシ |
+| POST | `/v1/personalized/feedback/spot` | スポット個別Good/Bad評価によるプロファイル学習更新 | エージェントサービスプロキシ |
+| POST | `/v1/personalized/feedback/trip` | 全体フィードバックによるプロファイル学習更新 | エージェントサービスプロキシ |
+| GET | `/img/:id` | スポットカード用の生成SVG画像の配信 | エージェントサービスプロキシ |
 
 ### 使用例
 

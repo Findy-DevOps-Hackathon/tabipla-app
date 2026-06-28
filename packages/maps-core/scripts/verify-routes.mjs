@@ -21,7 +21,7 @@ const origin = { lat: 36.331, lon: 138.425 }; // 小諸市 大手
 const destinations = [
   { lat: 36.329, lon: 138.424 }, // 小諸城址 懐古園
   { lat: 36.338, lon: 138.411 }, // 布引観音
-  { lat: 36.300, lon: 138.409 }, // 荒神山
+  { lat: 36.3, lon: 138.409 }, // 荒神山
 ];
 
 if (!process.env.GOOGLE_MAPS_API_KEY) {

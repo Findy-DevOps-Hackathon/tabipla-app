@@ -1,10 +1,12 @@
 import {
+  countSpots,
   createDatabase,
   createUser,
   type Database,
   deleteSpot,
   deleteUserById,
   getAdminUserByEmail,
+  getCouponsBySpotId,
   getSpotById,
   getUserByEmail,
   hashPassword,
@@ -39,12 +41,16 @@ import {
   deleteSpotSchema,
   ensureIndexSchema,
   geocodeSchema,
+  getSpotByIdSchema,
+  getSpotCouponsSchema,
   getSpotSchema,
   hybridSearchSchema,
   keywordSearchSchema,
   listSpotsSchema,
   loginSchema,
   placeLookupSchema,
+  postRecommendationsSchema,
+  postSpotStorySchema,
   searchCandidateSpotsSchema,
   semanticSearchSchema,
   travelTimesSchema,
@@ -120,6 +126,7 @@ export type BuildServerOptions = {
 export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   const app = Fastify({
     logger: true,
+    bodyLimit: 10485760, // 10MB
     // バリデーションを厳格化する:
     //   - removeAdditional:false → 未知フィールドを除去せず 400 で弾く
     //   - coerceTypes:true → querystring の文字列を integer 等へ変換（検索の size/from 用）
@@ -153,10 +160,30 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   });
 
   // ---- ヘルスチェック ------------------------------------------------------
-  app.get("/health", async () => {
-    const alive = await pingElasticsearch(client);
-    return { ok: true, elasticsearch: alive };
-  });
+  const checkHealth = async (req: any, reply: any) => {
+    let esAlive = false;
+    try {
+      esAlive = await pingElasticsearch(client);
+    } catch (e) {
+      req.log.error(e);
+    }
+
+    let dbAlive = false;
+    try {
+      const count = await countSpots(db);
+      dbAlive = typeof count === "number";
+    } catch (e) {
+      req.log.error(e);
+    }
+
+    if (!esAlive || !dbAlive) {
+      return reply.code(500).send({ ok: false, db: dbAlive, elasticsearch: esAlive });
+    }
+    return { ok: true, db: dbAlive, elasticsearch: esAlive };
+  };
+
+  app.get("/health", checkHealth);
+  app.get("/healthz", checkHealth);
 
   // ---- 管理画面ログイン ----------------------------------------------------
   app.post<{ Body: { email: string; password: string } }>(
@@ -500,6 +527,213 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       return getTravelTimes(req.body);
     },
   );
+
+  // ---- v1 Reference & Mock APIs (B5 / B7) ---------------------------------
+  app.get("/v1/meta/preference-tags", async (req, reply) => {
+    return {
+      tags: [
+        { id: "sakagura", label: "酒蔵" },
+        { id: "jinja", label: "神社" },
+        { id: "cafe", label: "カフェ" },
+        { id: "shizen", label: "自然" },
+        { id: "isan", label: "遺産" },
+      ],
+    };
+  });
+
+  app.get<{ Params: { id: string } }>(
+    "/v1/spots/:id",
+    { schema: getSpotByIdSchema },
+    async (req, reply) => {
+      const dbSpot = await getSpotById(db, req.params.id);
+      if (!dbSpot) {
+        return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
+      }
+
+      const dbCoupons = await getCouponsBySpotId(db, req.params.id);
+      const coupons = dbCoupons.map((c) => ({
+        id: c.id,
+        spotId: c.spotId,
+        title: c.title,
+        description: c.description ?? undefined,
+        discount: c.discount,
+        conditions: c.conditions ?? undefined,
+        validUntil: c.validUntil ?? undefined,
+      }));
+
+      // NOTE: main の spots.category は text[]（配列）型ですが、
+      // 外部APIの型仕様（GET /v1/spots/:id）が category: string (単一文字列) を想定している場合、
+      // 最初のカテゴリを返すか、または配列のまま渡します。
+      // フロントエンドの型定義（SpotDocument.category）は string | string[] を許容しているため、
+      // ここでは配列の最初の要素を返します。
+      const spot = {
+        id: dbSpot.id,
+        name: dbSpot.name,
+        category: dbSpot.category && dbSpot.category.length > 0 ? dbSpot.category[0] : "",
+        location: { lat: dbSpot.lat ?? 0, lng: dbSpot.lon ?? 0 },
+        address: dbSpot.address ?? "",
+        priceYen: dbSpot.price ?? 0,
+        estimatedStayMinutes: 60,
+        tags: dbSpot.tags ?? [],
+      };
+
+      return { spot, coupons };
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/v1/spots/:id/coupons",
+    { schema: getSpotCouponsSchema },
+    async (req, reply) => {
+      const dbSpot = await getSpotById(db, req.params.id);
+      if (!dbSpot) {
+        return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
+      }
+
+      const dbCoupons = await getCouponsBySpotId(db, req.params.id);
+      const coupons = dbCoupons.map((c) => ({
+        id: c.id,
+        spotId: c.spotId,
+        title: c.title,
+        description: c.description ?? undefined,
+        discount: c.discount,
+        conditions: c.conditions ?? undefined,
+        validUntil: c.validUntil ?? undefined,
+      }));
+
+      return { coupons };
+    },
+  );
+
+  app.post<{ Body: { transportMode: string } }>(
+    "/v1/recommendations",
+    { schema: postRecommendationsSchema },
+    async (req) => {
+      const body = req.body;
+      const mockSpotId = "spot-kiyomizu";
+      return {
+        recommendations: [
+          {
+            spot: {
+              id: mockSpotId,
+              name: "清水寺",
+              category: "isan",
+              location: { lat: 34.9948, lng: 135.785 },
+              address: "京都府京都市東山区清水1丁目294",
+              priceYen: 400,
+              estimatedStayMinutes: 90,
+              tags: ["isan", "shizen"],
+            },
+            travel: {
+              mode: body.transportMode,
+              travelMinutes: 15,
+              distanceMeters: 5000,
+            },
+            fitsInTime: true,
+            reason:
+              "歴史ある寺院で、静かな自然を楽しみたいというご希望にぴったりです。現在地から15分ほどで到着し、空き時間内で十分に楽しめます。",
+            matchScore: 0.92,
+          },
+        ],
+        agentMessage: "ご希望に合わせて、歴史と自然を感じられるスポットを見つけました。",
+      };
+    },
+  );
+
+  app.post<{ Params: { spotId: string }; Body: any }>(
+    "/v1/spots/:spotId/story",
+    { schema: postSpotStorySchema },
+    async (req) => {
+      const spotId = req.params.spotId;
+      return {
+        spotId,
+        story:
+          "清水寺は、実は「釘を一本も使わずに」建てられていることで有名です。139本の大柱に支えられた「清水の舞台」は、懸造り（かけづくり）と呼ばれる伝統工法で組まれています。",
+        sourceFacts: [
+          {
+            label: "工法",
+            text: "釘を一本も使わない懸造り（かけづくり）で組まれた舞台",
+          },
+          {
+            label: "歴史",
+            text: "世界遺産に登録されている京都を代表する寺院",
+          },
+        ],
+        talkingPoints: ["釘を一本も使わない「懸造り」", "清水の舞台から見下ろす京都の絶景"],
+      };
+    },
+  );
+
+  const agentApiUrl = process.env.AGENT_API_URL ?? "http://localhost:8080";
+
+  // エージェントプロキシ：旅行プランの生成とディベート
+  app.post("/v1/personalized/plan", async (req, reply) => {
+    const res = await fetch(`${agentApiUrl}/v1/personalized/plan`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return reply.code(res.status).send(data);
+    }
+    return data;
+  });
+
+  // エージェントプロキシ：チャット質問への回答
+  app.post("/v1/spots/:spotId/ask", async (req, reply) => {
+    const { spotId } = req.params as { spotId: string };
+    const res = await fetch(`${agentApiUrl}/v1/spots/${spotId}/ask`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return reply.code(res.status).send(data);
+    }
+    return data;
+  });
+
+  // エージェントプロキシ：スポットフィードバック
+  app.post("/v1/personalized/feedback/spot", async (req, reply) => {
+    const res = await fetch(`${agentApiUrl}/v1/personalized/feedback/spot`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return reply.code(res.status).send(data);
+    }
+    return data;
+  });
+
+  // エージェントプロキシ：全体フィードバック
+  app.post("/v1/personalized/feedback/trip", async (req, reply) => {
+    const res = await fetch(`${agentApiUrl}/v1/personalized/feedback/trip`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return reply.code(res.status).send(data);
+    }
+    return data;
+  });
+
+  // エージェントプロキシ：画像SVG配信
+  app.get("/img/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const res = await fetch(`${agentApiUrl}/img/${id}`);
+    if (!res.ok) {
+      return reply.code(res.status).send();
+    }
+    const buffer = await res.arrayBuffer();
+    reply.header("content-type", "image/svg+xml; charset=utf-8");
+    return reply.send(Buffer.from(buffer));
+  });
 
   // ---- 共通エラーハンドラ --------------------------------------------------
   // search-core が送出するエラーや、スキーマ検証エラーを握りつぶさず整形して返す。

@@ -19,12 +19,17 @@ export interface PreferenceProfile {
   preferredPriceMax: number | null;
   likedIds: string[];
   nopedIds: string[];
+  feedbackNotes: string; // 推薦精度向上のためのメモ
+  introStyle: string; // 紹介精度向上のためのメモ
 }
 export interface ScoredSpot {
   spot: Spot;
   score: number;
   why: string[];
 }
+
+// ユーザーごとのプロファイルを保持するインメモリDB
+export const userProfiles = new Map<string, PreferenceProfile>();
 
 export function buildProfile(sw: Swipes, catalog: Spot[]): PreferenceProfile {
   const byId = new Map(catalog.map((s) => [s.id, s]));
@@ -53,6 +58,8 @@ export function buildProfile(sw: Swipes, catalog: Spot[]): PreferenceProfile {
     preferredPriceMax: likedPrices.length ? Math.max(...likedPrices) : null,
     likedIds: [...sw.likes],
     nopedIds: [...sw.nopes],
+    feedbackNotes: "",
+    introStyle: "",
   };
 }
 

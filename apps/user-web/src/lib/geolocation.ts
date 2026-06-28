@@ -143,7 +143,13 @@ type NominatimAddress = {
 
 function pickAreaName(address: NominatimAddress): string | null {
   const area =
-    address.city ?? address.town ?? address.village ?? address.county ?? address.suburb ?? address.ward ?? null;
+    address.city ??
+    address.town ??
+    address.village ??
+    address.county ??
+    address.suburb ??
+    address.ward ??
+    null;
   if (area) return area;
   // 市区町村が取れない場合は都道府県でフォールバック。
   return address.state ?? address.province ?? null;
@@ -172,8 +178,7 @@ async function reverseGeocode(coords: Coordinates): Promise<string | null> {
 
 export async function coordsToLocation(coords: Coordinates): Promise<CurrentLocation> {
   const area = await reverseGeocode(coords);
-  const label =
-    area ?? `現在地（${coords.latitude.toFixed(3)}, ${coords.longitude.toFixed(3)}）`;
+  const label = area ?? `現在地（${coords.latitude.toFixed(3)}, ${coords.longitude.toFixed(3)}）`;
   return { label, coords };
 }
 
