@@ -1,11 +1,11 @@
 import { createDatabase } from "./client.js";
 import { hashPassword } from "./password.js";
 import { upsertAdminUser } from "./repository/adminUsers.js";
-import { upsertSpots } from "./repository/spots.js";
 import { upsertCoupon } from "./repository/coupons.js";
+import { upsertSpots } from "./repository/spots.js";
 import { upsertUnchikuFact } from "./repository/unchiku.js";
-import { municipalities } from "./schema.js";
 import type { NewSpotRow } from "./schema.js";
+import { municipalities } from "./schema.js";
 
 /**
  * 開発用シードデータ投入スクリプト。
@@ -70,10 +70,13 @@ async function main(): Promise<void> {
     const passwordHash = await hashPassword(seedPassword);
 
     // 自治体シード
-    await db.insert(municipalities).values({
-      id: "mun-komoro",
-      name: "小諸市",
-    }).onConflictDoNothing();
+    await db
+      .insert(municipalities)
+      .values({
+        id: "mun-komoro",
+        name: "小諸市",
+      })
+      .onConflictDoNothing();
 
     await upsertAdminUser(db, {
       id: "admin-komoro",

@@ -20,7 +20,7 @@ export interface PreferenceProfile {
   likedIds: string[];
   nopedIds: string[];
   feedbackNotes: string; // 推薦精度向上のためのメモ
-  introStyle: string;    // 紹介精度向上のためのメモ
+  introStyle: string; // 紹介精度向上のためのメモ
 }
 export interface ScoredSpot {
   spot: Spot;

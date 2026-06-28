@@ -70,9 +70,7 @@
         "admin_users_email_unique": {
           "name": "admin_users_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -132,12 +130,8 @@
           "name": "coupons_spot_id_spots_id_fk",
           "tableFrom": "coupons",
           "tableTo": "spots",
-          "columnsFrom": [
-            "spot_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["spot_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -329,12 +323,8 @@
           "name": "spots_municipality_id_municipalities_id_fk",
           "tableFrom": "spots",
           "tableTo": "municipalities",
-          "columnsFrom": [
-            "municipality_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["municipality_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -386,12 +376,8 @@
           "name": "unchiku_facts_spot_id_spots_id_fk",
           "tableFrom": "unchiku_facts",
           "tableTo": "spots",
-          "columnsFrom": [
-            "spot_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["spot_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -468,9 +454,7 @@
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},

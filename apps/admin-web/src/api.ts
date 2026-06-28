@@ -1,5 +1,5 @@
-import type { BulkImportResponse, Spot, SpotListResponse } from "./types.ts";
 import { getAuthToken, logout } from "./auth.ts";
+import type { BulkImportResponse, Spot, SpotListResponse } from "./types.ts";
 
 const BASE = "/api";
 
@@ -141,9 +141,7 @@ export async function geocodeAddress(
   const q = address.trim();
   if (!q) return null;
   try {
-    return await request<{ lat: number; lon: number }>(
-      `/geocode?${new URLSearchParams({ q })}`,
-    );
+    return await request<{ lat: number; lon: number }>(`/geocode?${new URLSearchParams({ q })}`);
   } catch {
     return null;
   }

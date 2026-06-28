@@ -1,5 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { date, doublePrecision, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  date,
+  doublePrecision,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 /**
  * municipalities テーブル（自治体データ）。
@@ -263,4 +272,3 @@ export const tripPlans = pgTable(
 
 export type TripPlanRow = typeof tripPlans.$inferSelect;
 export type NewTripPlanRow = typeof tripPlans.$inferInsert;
-

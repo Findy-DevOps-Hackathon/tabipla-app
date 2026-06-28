@@ -20,7 +20,7 @@ type SpotDetailModalProps = {
   onSendChat: (
     text: string,
     img?: { mimeType: string; data: string } | null,
-    audio?: { mimeType: string; data: string } | null
+    audio?: { mimeType: string; data: string } | null,
   ) => Promise<void>;
   /** 閉じる（戻る）操作。 */
   onClose: () => void;
@@ -44,7 +44,11 @@ export function SpotDetailModal({
 
   // チャット用のローカルステート
   const [textInput, setTextInput] = useState("");
-  const [selectedImage, setSelectedImage] = useState<{ mimeType: string; data: string; url: string } | null>(null);
+  const [selectedImage, setSelectedImage] = useState<{
+    mimeType: string;
+    data: string;
+    url: string;
+  } | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -232,12 +236,18 @@ export function SpotDetailModal({
               <h4 className="text-[13px] font-bold text-slate-700 flex items-center gap-1.5 border-b border-slate-100 pb-2">
                 💬 AIガイドに質問する
               </h4>
-              
+
               {/* メッセージ履歴 */}
               <div className="flex flex-col gap-2.5 max-h-[220px] overflow-y-auto pr-1 text-[13px]">
-                {(chatHistory.length > 0 ? chatHistory : [
-                  { role: "ai" as const, text: "このスポットについて、気になることや楽しみ方を聞いてみてください。写真や音声での質問も受け付けます！" }
-                ]).map((m, idx) => {
+                {(chatHistory.length > 0
+                  ? chatHistory
+                  : [
+                      {
+                        role: "ai" as const,
+                        text: "このスポットについて、気になることや楽しみ方を聞いてみてください。写真や音声での質問も受け付けます！",
+                      },
+                    ]
+                ).map((m, idx) => {
                   const isUser = m.role === "user";
                   return (
                     <div
@@ -246,8 +256,8 @@ export function SpotDetailModal({
                         isUser
                           ? "bg-teal-600 text-white self-end rounded-tr-none"
                           : m.isError
-                          ? "bg-red-50 text-red-600 border border-red-100 self-start rounded-tl-none"
-                          : "bg-slate-100 text-slate-700 self-start rounded-tl-none"
+                            ? "bg-red-50 text-red-600 border border-red-100 self-start rounded-tl-none"
+                            : "bg-slate-100 text-slate-700 self-start rounded-tl-none"
                       }`}
                     >
                       {m.text}
@@ -277,7 +287,10 @@ export function SpotDetailModal({
               {/* 送信フォーム */}
               <div className="flex items-center gap-2 border-t border-slate-100 pt-2 text-[13px]">
                 {/* カメラ画像アップロード */}
-                <label className="flex size-9 cursor-pointer items-center justify-center rounded-full bg-white hover:bg-slate-100 text-[16px] transition shrink-0 shadow-xs animate-none" title="写真を送る">
+                <label
+                  className="flex size-9 cursor-pointer items-center justify-center rounded-full bg-white hover:bg-slate-100 text-[16px] transition shrink-0 shadow-xs animate-none"
+                  title="写真を送る"
+                >
                   📸
                   <input
                     type="file"

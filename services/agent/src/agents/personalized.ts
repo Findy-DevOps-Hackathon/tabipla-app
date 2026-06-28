@@ -1,5 +1,11 @@
 import { KOMORO_SPOTS, SPOT_IMAGES, SPOT_TAGS } from "../fixtures/spots.js";
-import { buildProfile, rankSpots, type Swipes, summarizeProfile, userProfiles } from "../personalize.js";
+import {
+  buildProfile,
+  rankSpots,
+  type Swipes,
+  summarizeProfile,
+  userProfiles,
+} from "../personalize.js";
 import { runDebate } from "./debate.js";
 
 // スワイプの好み学習(コード・決定的) → その好みで「推薦エージェント」が
@@ -19,7 +25,7 @@ export interface PersonalizedResult {
   profileSummary: string;
   recommendations: Recommendation[]; // 好み学習による並べ替え（表示用）
   result: string; // 推薦エージェントの「あなた向けのおすすめ」文
-  debate?: { agent: "recommend" | "route" | "introduce"; message: string }[];
+  debate?: { agent: "recommend" | "route" | "introduce"; thought?: string; message: string }[];
 }
 
 export async function personalizedPlan(
@@ -27,10 +33,10 @@ export async function personalizedPlan(
   userId = "demo",
   timeBudget = "4時間",
   origin = "小諸駅",
-  travelMemory = ""
+  travelMemory = "",
 ): Promise<PersonalizedResult> {
   // 好みプロファイルの構築/取得
-  let profile = buildProfile(sw, KOMORO_SPOTS);
+  const profile = buildProfile(sw, KOMORO_SPOTS);
   const existing = userProfiles.get(userId);
   if (existing) {
     // 過去のフィードバックによって学習したメモを引き継ぐ
@@ -42,22 +48,25 @@ export async function personalizedPlan(
   const profileSummary = summarizeProfile(profile);
 
   // ディベート（エージェント間会議）を実行
-  const debateRes = await runDebate({
-    userProfileSummary: profileSummary,
-    feedbackNotes: profile.feedbackNotes,
-    introStyle: profile.introStyle,
-    timeBudget,
-    origin,
-    travelMemory,
-  }, userId);
+  const debateRes = await runDebate(
+    {
+      userProfileSummary: profileSummary,
+      feedbackNotes: profile.feedbackNotes,
+      introStyle: profile.introStyle,
+      timeBudget,
+      origin,
+      travelMemory,
+    },
+    userId,
+  );
 
   // ディベートによって決定したスポットを優先してスコアリング
   const ranked = rankSpots(profile, KOMORO_SPOTS, { excludeNoped: true });
-  
+
   // ディベートが選んだ最終スポットを優先的に前に持ってくる
   const finalSpotSet = new Set(debateRes.finalSpots);
-  const recommendedSpots = ranked.filter(r => finalSpotSet.has(r.spot.id));
-  const otherSpots = ranked.filter(r => !finalSpotSet.has(r.spot.id));
+  const recommendedSpots = ranked.filter((r) => finalSpotSet.has(r.spot.id));
+  const otherSpots = ranked.filter((r) => !finalSpotSet.has(r.spot.id));
   const orderedSpots = [...recommendedSpots, ...otherSpots];
 
   const recommendations: Recommendation[] = orderedSpots.map((r) => ({

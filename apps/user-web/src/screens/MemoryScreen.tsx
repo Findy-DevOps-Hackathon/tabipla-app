@@ -48,7 +48,9 @@ export function MemoryScreen({ onBack, onSkipRegister, onGoRegister }: MemoryScr
       {/* メインコンテンツ */}
       <div className="relative flex flex-1 flex-col justify-center px-6 gap-6 py-4">
         <div className="flex flex-col gap-2 text-center">
-          <h2 className="text-[20px] font-extrabold text-[#0f172a] tracking-tight">思い出の旅行を教えてください</h2>
+          <h2 className="text-[20px] font-extrabold text-[#0f172a] tracking-tight">
+            思い出の旅行を教えてください
+          </h2>
           <p className="text-[13px] leading-[1.6] text-[#64748b] max-w-[320px] mx-auto">
             過去の旅行で楽しかった体験や心に残っている場所などを教えてください（任意）。
           </p>
@@ -63,9 +65,7 @@ export function MemoryScreen({ onBack, onSkipRegister, onGoRegister }: MemoryScr
             rows={6}
             className="w-full rounded-2xl border border-slate-200 p-4 text-[14px] leading-[1.6] shadow-inner focus:border-teal-600 focus:outline-hidden focus:ring-1 focus:ring-teal-600 bg-white/90 placeholder:text-slate-400"
           />
-          <p className="text-[11px] text-right text-slate-400">
-            {memoryText.length} 文字
-          </p>
+          <p className="text-[11px] text-right text-slate-400">{memoryText.length} 文字</p>
         </div>
       </div>
 

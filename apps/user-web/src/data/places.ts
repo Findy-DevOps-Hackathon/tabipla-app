@@ -346,10 +346,7 @@ export function searchPlaces(query: string, limit = 8): Place[] {
   if (q === "") return [];
 
   const matched = PLACES.filter(
-    (p) =>
-      p.name.includes(q) ||
-      p.reading.includes(q) ||
-      (p.prefecture?.includes(q) ?? false),
+    (p) => p.name.includes(q) || p.reading.includes(q) || (p.prefecture?.includes(q) ?? false),
   );
 
   return matched

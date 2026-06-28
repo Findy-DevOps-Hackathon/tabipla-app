@@ -1,4 +1,4 @@
-import { LlmAgent, InMemoryRunner, stringifyContent } from "@google/adk";
+import { InMemoryRunner, LlmAgent, stringifyContent } from "@google/adk";
 import { z } from "zod";
 import { KOMORO_SPOTS } from "../fixtures/spots.js";
 
@@ -29,8 +29,8 @@ export const feedbackAgent = new LlmAgent({
 必ず指定されたJSON構造で出力してください。`,
   outputSchema: feedbackOutputSchema,
   generateContentConfig: {
-    thinkingConfig: { thinkingBudget: 0 }
-  }
+    thinkingConfig: { thinkingBudget: 0 },
+  },
 });
 
 export interface FeedbackInput {
@@ -45,7 +45,10 @@ export interface FeedbackResult {
   introStyle: string;
 }
 
-export async function analyzeFeedback(input: FeedbackInput, userId = "demo"): Promise<FeedbackResult> {
+export async function analyzeFeedback(
+  input: FeedbackInput,
+  userId = "demo",
+): Promise<FeedbackResult> {
   const runner = new InMemoryRunner({ agent: feedbackAgent });
   const session = await runner.sessionService.createSession({
     appName: runner.appName,

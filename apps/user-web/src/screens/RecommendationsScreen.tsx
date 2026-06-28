@@ -19,7 +19,7 @@ type RecommendationsScreenProps = {
   /** スポット詳細を開く。 */
   onOpenSpot: (recommendation: Recommendation) => void;
   /** 作戦会議ログ（エージェント間ディベート） */
-  debateLog?: { agent: string; message: string }[];
+  debateLog?: { agent: string; message: string; thought?: string }[];
 };
 
 /** フロー 5: 厳選したおすすめスポット一覧（ai-recommendations）。 */
@@ -51,14 +51,17 @@ export function RecommendationsScreen({
   const [tripRating, setTripRating] = useState(0);
   const [tripComment, setTripComment] = useState("");
   const [isSubmittingTripFeedback, setIsSubmittingTripFeedback] = useState(false);
-  const [tripFeedbackResult, setTripFeedbackResult] = useState<{ feedbackNotes: string; introStyle: string } | null>(null);
+  const [tripFeedbackResult, setTripFeedbackResult] = useState<{
+    feedbackNotes: string;
+    introStyle: string;
+  } | null>(null);
 
   // カテゴリ配色設定
   const CAT: Record<string, { l: string; c: string }> = {
-    "歴史": { l: "歴史", c: "bg-blue-600" },
-    "自然": { l: "自然", c: "bg-teal-600" },
-    "グルメ": { l: "グルメ", c: "bg-amber-600" },
-    "観光": { l: "観光", c: "bg-slate-600" },
+    歴史: { l: "歴史", c: "bg-blue-600" },
+    自然: { l: "自然", c: "bg-teal-600" },
+    グルメ: { l: "グルメ", c: "bg-amber-600" },
+    観光: { l: "観光", c: "bg-slate-600" },
   };
 
   useEffect(() => {
@@ -99,21 +102,102 @@ export function RecommendationsScreen({
   function renderDebateMessage(message: string) {
     if (!message) return "";
 
-    const spotPairs = recommendations
-      .filter((r) => r.name)
-      .map((r) => ({
-        id: r.id,
-        name: r.name,
-        escapedName: r.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&"),
-        rec: r,
-      }))
-      .sort((a, b) => b.name.length - a.name.length);
+    const generateAliases = (name: string): string[] => {
+      const aliases = [name];
+      const noBrackets = name.replace(/[(（].*?[)）]/g, "").trim();
+      if (noBrackets && noBrackets !== name) {
+        aliases.push(noBrackets);
+      }
 
-    if (spotPairs.length === 0) {
-      return <span className="whitespace-pre-wrap text-left break-words block w-full">{message}</span>;
+      const parts = name.split(/[\s　]+/);
+      if (parts.length > 1) {
+        parts.forEach((p) => {
+          const trimmed = p.trim();
+          if (trimmed && trimmed.length >= 2 && !aliases.includes(trimmed)) {
+            aliases.push(trimmed);
+          }
+        });
+      }
+
+      const suffixRegex =
+        /(?:小諸ワイナリー|ワイナリー|こもろ|サイクリングロード|眺望スポット|パティスリー)$/g;
+      const noSuffix = noBrackets.replace(suffixRegex, "").trim();
+      if (noSuffix && noSuffix.length >= 2 && !aliases.includes(noSuffix)) {
+        aliases.push(noSuffix);
+      }
+
+      const noPrefix = noBrackets.replace(/^(?:そば処|千曲川|千曲川流域の)\s*/, "").trim();
+      if (noPrefix && noPrefix.length >= 2 && !aliases.includes(noPrefix)) {
+        aliases.push(noPrefix);
+      }
+
+      const noYu = noBrackets
+        .replace(/こもろ$/, "")
+        .replace(/の湯$/, "")
+        .trim();
+      if (noYu && noYu.length >= 2 && !aliases.includes(noYu)) {
+        aliases.push(noYu);
+      }
+
+      return aliases;
+    };
+
+    // 一般的な単語や都市名などのブラックリスト（誤検出・誤リンク防止）
+    const BLACKLIST_WORDS = [
+      "小諸",
+      "小諸市",
+      "長野県",
+      "酒蔵",
+      "温泉",
+      "カフェ",
+      "スイーツ",
+      "ランチ",
+      "絶景",
+      "歴史",
+    ];
+
+    const keywordPairs: { keyword: string; escaped: string; id: string; rec: Recommendation }[] =
+      [];
+    const keywordToIds: Record<string, string[]> = {};
+
+    recommendations.forEach((rec) => {
+      const aliases = generateAliases(rec.name);
+      aliases.forEach((alias) => {
+        if (!alias) return;
+        if (BLACKLIST_WORDS.includes(alias)) return;
+
+        if (!keywordToIds[alias]) {
+          keywordToIds[alias] = [];
+        }
+        if (!keywordToIds[alias].includes(rec.id)) {
+          keywordToIds[alias].push(rec.id);
+        }
+
+        keywordPairs.push({
+          keyword: alias,
+          escaped: alias.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"),
+          id: rec.id,
+          rec,
+        });
+      });
+    });
+
+    // 重複チェック：複数の異なるスポットに対して同一の略称（キーワード）が紐づいた場合、
+    // 誤リンクを防止するためにそのキーワードはエイリアスリストから完全に除外する。
+    const uniqueKeywordPairs = keywordPairs.filter((p) => {
+      const ids = keywordToIds[p.keyword] || [];
+      return ids.length === 1;
+    });
+
+    uniqueKeywordPairs.sort((a, b) => b.keyword.length - a.keyword.length);
+
+    if (uniqueKeywordPairs.length === 0) {
+      return (
+        <span className="whitespace-pre-wrap text-left break-words block w-full">{message}</span>
+      );
     }
 
-    const namesPattern = spotPairs.map((p) => p.escapedName).join("|");
+    const namesPattern = uniqueKeywordPairs.map((p) => p.escaped).join("|");
     const regex = new RegExp(`(${namesPattern})(?:\\s*[(（](s\\d+)[)）])?`, "g");
 
     const parts = [];
@@ -129,7 +213,9 @@ export function RecommendationsScreen({
       const matchedName = match[1];
       const capturedId = match[2];
 
-      const pair = spotPairs.find((p) => (capturedId ? p.id === capturedId : p.name === matchedName));
+      const pair = uniqueKeywordPairs.find((p) =>
+        capturedId ? p.id === capturedId : p.keyword === matchedName,
+      );
 
       if (pair) {
         parts.push(
@@ -139,8 +225,8 @@ export function RecommendationsScreen({
             onClick={() => onOpenSpot(pair.rec)}
             className="font-extrabold text-teal-600 hover:text-teal-800 hover:underline inline-block mx-0.5"
           >
-            {pair.name}
-          </button>
+            {pair.rec.name}
+          </button>,
         );
       } else {
         parts.push(match[0]);
@@ -153,7 +239,11 @@ export function RecommendationsScreen({
       parts.push(message.substring(lastIndex));
     }
 
-    return <span className="whitespace-pre-wrap text-left break-words block w-full">{parts.length > 0 ? parts : message}</span>;
+    return (
+      <span className="whitespace-pre-wrap text-left break-words block w-full">
+        {parts.length > 0 ? parts : message}
+      </span>
+    );
   }
 
   // --- 全体フィードバック送信 --------------------------------------------
@@ -217,23 +307,76 @@ export function RecommendationsScreen({
               </span>
               <span>{isDebateOpen ? "▲" : "▼"}</span>
             </button>
-            
+
             {isDebateOpen && (
-              <div className="flex flex-col gap-2 p-3 max-h-[300px] overflow-y-auto border-t border-slate-100 bg-slate-50/50 text-[13px] leading-relaxed text-left w-full">
+              <div className="flex flex-col gap-3.5 p-3.5 max-h-[380px] overflow-y-auto border-t border-slate-100 bg-[#f8fafc] w-full shadow-inner">
                 {debateLog.map((log, i) => {
-                  const agentNames: Record<string, string> = {
-                    recommend: "🔵 推薦エージェント",
-                    route: "🟢 ルート計画エージェント",
-                    introduce: "🟠 紹介エージェント",
+                  const agentMeta: Record<
+                    string,
+                    {
+                      name: string;
+                      avatar: string;
+                      avatarBg: string;
+                      bubbleBg: string;
+                      textClass: string;
+                      border: string;
+                    }
+                  > = {
+                    recommend: {
+                      name: "推薦エージェント",
+                      avatar: "推",
+                      avatarBg: "bg-blue-600 text-white",
+                      bubbleBg: "bg-blue-50/70",
+                      textClass: "text-blue-950",
+                      border: "border-blue-100/80",
+                    },
+                    route: {
+                      name: "ルート計画エージェント",
+                      avatar: "ル",
+                      avatarBg: "bg-emerald-600 text-white",
+                      bubbleBg: "bg-emerald-50/70",
+                      textClass: "text-emerald-950",
+                      border: "border-emerald-100/80",
+                    },
+                    introduce: {
+                      name: "紹介エージェント",
+                      avatar: "紹",
+                      avatarBg: "bg-amber-600 text-white",
+                      bubbleBg: "bg-amber-50/70",
+                      textClass: "text-amber-950",
+                      border: "border-amber-100/80",
+                    },
                   };
-                  const colorClass = log.agent === "recommend" ? "border-l-4 border-blue-500 bg-blue-50/40" 
-                    : log.agent === "route" ? "border-l-4 border-green-500 bg-green-50/40"
-                    : "border-l-4 border-amber-500 bg-amber-50/40";
-                  
+
+                  const meta = agentMeta[log.agent] || {
+                    name: log.agent,
+                    avatar: "👤",
+                    avatarBg: "bg-slate-500 text-white",
+                    bubbleBg: "bg-slate-100",
+                    textClass: "text-slate-800",
+                    border: "border-slate-200",
+                  };
+
                   return (
-                    <div key={i} className={`p-2.5 rounded-r-md text-left w-full break-words ${colorClass}`}>
-                      <strong className="block text-[11px] text-slate-500 mb-0.5">{agentNames[log.agent] || log.agent}</strong>
-                      {renderDebateMessage(log.message)}
+                    <div key={i} className="flex items-start gap-2.5 w-full text-left">
+                      {/* アバター */}
+                      <div
+                        className={`flex size-8 shrink-0 items-center justify-center rounded-full text-[12px] font-extrabold shadow-xs ${meta.avatarBg}`}
+                      >
+                        {meta.avatar}
+                      </div>
+
+                      {/* メッセージ部 */}
+                      <div className="flex flex-col gap-1 max-w-[85%]">
+                        <span className="text-[10px] font-bold text-slate-400 px-0.5">
+                          {meta.name}
+                        </span>
+                        <div
+                          className={`rounded-2xl rounded-tl-xs border px-3.5 py-2.5 text-[12.5px] leading-relaxed shadow-2xs ${meta.bubbleBg} ${meta.border} ${meta.textClass}`}
+                        >
+                          {renderDebateMessage(log.message)}
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -293,7 +436,7 @@ export function RecommendationsScreen({
                       aria-label={`${rec.name} の詳細を見る`}
                       className="flex flex-col text-left transition flex-1 w-full"
                     >
-                      <div className="relative aspect-video w-full bg-slate-100 shrink-0">
+                      <div className="relative aspect-[16/13] w-full bg-slate-100 shrink-0">
                         <img
                           src={rec.image}
                           alt={rec.name}
@@ -304,7 +447,9 @@ export function RecommendationsScreen({
                           {rec.match}% Match
                         </div>
                         <div className="absolute inset-x-0 bottom-0 p-2">
-                          <span className={`inline-block rounded-xs ${cat.c} px-1.5 py-0.2 text-[8px] font-extrabold text-white mb-0.5`}>
+                          <span
+                            className={`inline-block rounded-xs ${cat.c} px-1.5 py-0.2 text-[8px] font-extrabold text-white mb-0.5`}
+                          >
                             {cat.l}
                           </span>
                           <p className="text-[12px] font-extrabold leading-tight text-white drop-shadow-xs line-clamp-1">
@@ -402,7 +547,9 @@ export function RecommendationsScreen({
                   type="button"
                   onClick={() => setTripRating(star)}
                   className={`text-[28px] transition ${
-                    star <= tripRating ? "text-amber-400 drop-shadow-xs scale-110" : "text-slate-200"
+                    star <= tripRating
+                      ? "text-amber-400 drop-shadow-xs scale-110"
+                      : "text-slate-200"
                   }`}
                 >
                   ★
@@ -412,7 +559,9 @@ export function RecommendationsScreen({
 
             {/* コメント入力 */}
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="tripComment" className="text-[12px] font-bold text-slate-600">感想コメント</label>
+              <label htmlFor="tripComment" className="text-[12px] font-bold text-slate-600">
+                感想コメント
+              </label>
               <textarea
                 id="tripComment"
                 value={tripComment}
@@ -431,7 +580,9 @@ export function RecommendationsScreen({
                 tripRating === 0 ? "opacity-50 cursor-not-allowed" : ""
               }`}
             >
-              {isSubmittingTripFeedback ? "送信してAIが自己学習中..." : "フィードバックを送信して学習させる"}
+              {isSubmittingTripFeedback
+                ? "送信してAIが自己学習中..."
+                : "フィードバックを送信して学習させる"}
             </button>
 
             {/* 学習結果の表示エリア */}
@@ -441,11 +592,15 @@ export function RecommendationsScreen({
                   🧠 AIエージェントが自己学習を完了しました！
                 </p>
                 <div>
-                  <strong className="block text-[11px] text-teal-600 font-bold tracking-wider uppercase">推薦の好み傾向メモ (feedbackNotes):</strong>
+                  <strong className="block text-[11px] text-teal-600 font-bold tracking-wider uppercase">
+                    推薦の好み傾向メモ (feedbackNotes):
+                  </strong>
                   <p className="mt-0.5">{tripFeedbackResult.feedbackNotes}</p>
                 </div>
                 <div className="mt-1">
-                  <strong className="block text-[11px] text-teal-600 font-bold tracking-wider uppercase">紹介スタイル (introStyle):</strong>
+                  <strong className="block text-[11px] text-teal-600 font-bold tracking-wider uppercase">
+                    紹介スタイル (introStyle):
+                  </strong>
                   <p className="mt-0.5">{tripFeedbackResult.introStyle}</p>
                 </div>
               </div>

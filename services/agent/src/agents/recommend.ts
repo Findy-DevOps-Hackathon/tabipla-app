@@ -23,12 +23,16 @@ export const recommendAgent = new LlmAgent({
 - まず search_spots を呼んで候補を得る。
 - 出発地と候補地が判明したら、必要に応じて travel_times を呼び出して移動時間を確認する。
 - 候補から最大3〜4件のスポットを推薦候補としてピックアップする。
-- ツールが返したスポット以外は絶対に推薦しない。事実は description の範囲で書き、無い情報は断定しない。0件なら正直にその旨を伝える。`,
+- ツールが返したスポット以外は絶対に推薦しない。事実は description の範囲で書き、無い情報は断定しない。0件なら正直にその旨を伝える。
+
+【セーフティネット / 目的外の話題への対応】
+- 観光スポットの推薦や旅行計画に関係のない話題（例：プログラミング、一般的な数学/科学/ITの質問、観光に直接関係のない雑談、人生相談、不適切な発言など）が入力された場合は、search_spots や travel_times などのツールを一切呼び出さず、以下のように極めて簡潔（1文程度）に回答を拒否して処理を終了してください。
+  - 返答例：「申し訳ありませんが、当システムでは観光スポットの推薦や旅行計画に関するご質問以外にはお答えできません。」`,
   tools: [searchSpotsTool, travelTimesTool],
   // gemini-2.5-flashの「思考」が出力予算を食い切り、空応答(parts:[])を返すことがあるため抑制。
   generateContentConfig: {
     thinkingConfig: { thinkingBudget: 0 },
-    maxOutputTokens: 2048,
+    maxOutputTokens: 1024,
   },
 });
 

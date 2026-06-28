@@ -17,7 +17,13 @@ type ProcessingScreenProps = {
 };
 
 /** フロー 4: 好みを分析中であることを示す画面（ai-processing）。 */
-export function ProcessingScreen({ count, onDone, isFetchDone = false, apiError = null, onRestart }: ProcessingScreenProps) {
+export function ProcessingScreen({
+  count,
+  onDone,
+  isFetchDone = false,
+  apiError = null,
+  onRestart,
+}: ProcessingScreenProps) {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -63,9 +69,7 @@ export function ProcessingScreen({ count, onDone, isFetchDone = false, apiError 
             </div>
             <div className="flex flex-col items-center gap-2">
               <p className="text-[18px] font-semibold text-red-600">プラン生成エラー</p>
-              <p className="text-[14px] leading-[1.6] text-[#64748b] max-w-[280px]">
-                {apiError}
-              </p>
+              <p className="text-[14px] leading-[1.6] text-[#64748b] max-w-[280px]">{apiError}</p>
             </div>
             {onRestart && (
               <button
@@ -85,7 +89,9 @@ export function ProcessingScreen({ count, onDone, isFetchDone = false, apiError 
             </div>
 
             <div className="flex flex-col items-center gap-3">
-              <p className="text-[18px] font-semibold text-[#0f172a]">AIエージェントがディベート中…</p>
+              <p className="text-[18px] font-semibold text-[#0f172a]">
+                AIエージェントがディベート中…
+              </p>
               <p className="text-center text-[14px] leading-[1.6] text-[#64748b]">
                 スワイプした {count} 件のスポットをもとに
                 <br />

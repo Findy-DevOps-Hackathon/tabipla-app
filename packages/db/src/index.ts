@@ -11,6 +11,8 @@ export type { CreateDatabaseOptions, Database } from "./client.js";
 export { createDatabase } from "./client.js";
 export { hashPassword, verifyPassword } from "./password.js";
 export { getAdminUserByEmail, upsertAdminUser } from "./repository/adminUsers.js";
+// リポジトリ（クーポン）
+export { getCouponsBySpotId, upsertCoupon } from "./repository/coupons.js";
 export type { ListSpotsOptions } from "./repository/spots.js";
 // リポジトリ（spots）
 export {
@@ -23,8 +25,6 @@ export {
   upsertSpot,
   upsertSpots,
 } from "./repository/spots.js";
-// リポジトリ（クーポン）
-export { getCouponsBySpotId, upsertCoupon } from "./repository/coupons.js";
 // リポジトリ（蘊蓄）
 export { getUnchikuFactsBySpotId, upsertUnchikuFact } from "./repository/unchiku.js";
 // リポジトリ（会員ユーザー）
@@ -32,36 +32,35 @@ export { createUser, deleteUserById, getUserByEmail } from "./repository/users.j
 // スキーマ / 型
 export type {
   AdminUserRow,
-  NewAdminUserRow,
-  NewSpotRow,
-  NewUserRow,
-  SpotRow,
-  UserRow,
-  MunicipalityRow,
-  NewMunicipalityRow,
-  UnchikuFactRow,
-  NewUnchikuFactRow,
   CouponRow,
+  MunicipalityRow,
+  NewAdminUserRow,
   NewCouponRow,
-  UserPreferenceRow,
-  NewUserPreferenceRow,
-  SpotFeedbackRow,
+  NewMunicipalityRow,
   NewSpotFeedbackRow,
-  TripFeedbackRow,
+  NewSpotRow,
   NewTripFeedbackRow,
-  TripPlanRow,
   NewTripPlanRow,
+  NewUnchikuFactRow,
+  NewUserPreferenceRow,
+  NewUserRow,
+  SpotFeedbackRow,
+  SpotRow,
+  TripFeedbackRow,
+  TripPlanRow,
+  UnchikuFactRow,
+  UserPreferenceRow,
+  UserRow,
 } from "./schema.js";
 export {
   adminUsers,
-  spots,
-  users,
-  municipalities,
-  unchikuFacts,
   coupons,
-  userPreferences,
+  municipalities,
   spotFeedbacks,
+  spots,
   tripFeedbacks,
   tripPlans,
+  unchikuFacts,
+  userPreferences,
+  users,
 } from "./schema.js";
-

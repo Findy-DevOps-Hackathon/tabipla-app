@@ -1,16 +1,21 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { analyzeFeedback } from "./agents/feedback.js";
+import { askIntroduce } from "./agents/introduce.js";
 import { personalizedPlan } from "./agents/personalized.js";
 import { recommendAgent } from "./agents/recommend.js";
 import { ask } from "./agents/run.js";
 import { story } from "./agents/unchiku.js";
 import { KOMORO_SPOTS, SPOT_IMAGES, SPOT_TAGS } from "./fixtures/spots.js";
+import { summarizeProfile, userProfiles } from "./personalize.js";
 import { sceneSvg } from "./sceneSvg.js";
-import { userProfiles, summarizeProfile } from "./personalize.js";
-import { askIntroduce } from "./agents/introduce.js";
-import { analyzeFeedback } from "./agents/feedback.js";
+import { toolCallStorage } from "./tools/tracker.js";
 
 const app = new Hono();
+
+app.use("*", async (c, next) => {
+  return toolCallStorage.run({ count: 0 }, next);
+});
 
 app.get("/healthz", (c) => c.json({ ok: true }));
 
@@ -92,7 +97,11 @@ app.post("/v1/personalized/plan", async (c) => {
 
 // スポットのGood/Badフィードバック
 app.post("/v1/personalized/feedback/spot", async (c) => {
-  const { userId = "demo", spotId, rating } = await c.req.json<{
+  const {
+    userId = "demo",
+    spotId,
+    rating,
+  } = await c.req.json<{
     userId?: string;
     spotId: string;
     rating: "good" | "bad";
@@ -104,17 +113,24 @@ app.post("/v1/personalized/feedback/spot", async (c) => {
       return c.json({ error: "プロフィールが見つかりません" }, 400);
     }
 
-    const result = await analyzeFeedback({
-      currentFeedbackNotes: profile.feedbackNotes,
-      currentIntroStyle: profile.introStyle,
-      spotFeedbacks: [{ spotId, rating }],
-    }, userId);
+    const result = await analyzeFeedback(
+      {
+        currentFeedbackNotes: profile.feedbackNotes,
+        currentIntroStyle: profile.introStyle,
+        spotFeedbacks: [{ spotId, rating }],
+      },
+      userId,
+    );
 
     profile.feedbackNotes = result.feedbackNotes;
     profile.introStyle = result.introStyle;
     userProfiles.set(userId, profile);
 
-    return c.json({ success: true, feedbackNotes: profile.feedbackNotes, introStyle: profile.introStyle });
+    return c.json({
+      success: true,
+      feedbackNotes: profile.feedbackNotes,
+      introStyle: profile.introStyle,
+    });
   } catch (e) {
     console.error(e);
     return c.json({ error: friendly(e) }, 500);
@@ -123,7 +139,12 @@ app.post("/v1/personalized/feedback/spot", async (c) => {
 
 // 旅行終了後のフィードバック
 app.post("/v1/personalized/feedback/trip", async (c) => {
-  const { userId = "demo", rating, comment, spotFeedbacks = [] } = await c.req.json<{
+  const {
+    userId = "demo",
+    rating,
+    comment,
+    spotFeedbacks = [],
+  } = await c.req.json<{
     userId?: string;
     rating: number;
     comment: string;
@@ -136,18 +157,25 @@ app.post("/v1/personalized/feedback/trip", async (c) => {
       return c.json({ error: "プロフィールが見つかりません" }, 400);
     }
 
-    const result = await analyzeFeedback({
-      currentFeedbackNotes: profile.feedbackNotes,
-      currentIntroStyle: profile.introStyle,
-      spotFeedbacks,
-      tripFeedback: { rating, comment },
-    }, userId);
+    const result = await analyzeFeedback(
+      {
+        currentFeedbackNotes: profile.feedbackNotes,
+        currentIntroStyle: profile.introStyle,
+        spotFeedbacks,
+        tripFeedback: { rating, comment },
+      },
+      userId,
+    );
 
     profile.feedbackNotes = result.feedbackNotes;
     profile.introStyle = result.introStyle;
     userProfiles.set(userId, profile);
 
-    return c.json({ success: true, feedbackNotes: profile.feedbackNotes, introStyle: profile.introStyle });
+    return c.json({
+      success: true,
+      feedbackNotes: profile.feedbackNotes,
+      introStyle: profile.introStyle,
+    });
   } catch (e) {
     console.error(e);
     return c.json({ error: friendly(e) }, 500);
@@ -157,7 +185,12 @@ app.post("/v1/personalized/feedback/trip", async (c) => {
 // 紹介エージェントへのマルチモーダルな質問
 app.post("/v1/spots/:id/ask", async (c) => {
   const spotId = c.req.param("id");
-  const { text, image, audio, userId = "demo" } = await c.req.json<{
+  const {
+    text,
+    image,
+    audio,
+    userId = "demo",
+  } = await c.req.json<{
     text?: string;
     image?: { mimeType: string; data: string };
     audio?: { mimeType: string; data: string };
@@ -169,14 +202,17 @@ app.post("/v1/spots/:id/ask", async (c) => {
     const profileSummary = profile ? summarizeProfile(profile) : "";
     const introStyle = profile ? profile.introStyle : "";
 
-    const answer = await askIntroduce({
-      spotId,
-      text,
-      image,
-      audio,
-      introStyle,
-      userProfileSummary: profileSummary,
-    }, userId);
+    const answer = await askIntroduce(
+      {
+        spotId,
+        text,
+        image,
+        audio,
+        introStyle,
+        userProfileSummary: profileSummary,
+      },
+      userId,
+    );
 
     return c.json({ answer });
   } catch (e) {

@@ -31,14 +31,7 @@ import { SwipeScreen } from "./screens/SwipeScreen.tsx";
 import { WelcomeScreen } from "./screens/WelcomeScreen.tsx";
 
 /** 体験フローのステップ。 */
-type Step =
-  | "welcome"
-  | "input"
-  | "swipe"
-  | "memory"
-  | "processing"
-  | "recommendations"
-  | "history";
+type Step = "welcome" | "input" | "swipe" | "memory" | "processing" | "recommendations" | "history";
 
 /** リロードしても直前の画面を保つために step を保存する localStorage キー。 */
 const STEP_KEY = "tabipla-step";
@@ -87,12 +80,9 @@ type ViewSnapshot = {
  *（＝「行った」のトグルなど見た目に出ない状態変化では履歴を増やさない）。
  */
 function viewKey(s: ViewSnapshot): string {
-  return [
-    s.step,
-    s.detailRec?.id ?? "",
-    s.activeCoupon?.id ?? "",
-    s.authPrompt ? "auth" : "",
-  ].join("|");
+  return [s.step, s.detailRec?.id ?? "", s.activeCoupon?.id ?? "", s.authPrompt ? "auth" : ""].join(
+    "|",
+  );
 }
 
 /** history.state 内に画面スナップショットを格納するためのキー。 */
@@ -130,10 +120,14 @@ export default function App() {
   const [likes, setLikes] = useState<string[]>([]);
   const [nopes, setNopes] = useState<string[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [debateLog, setDebateLog] = useState<{ agent: string; message: string }[]>([]);
+  const [debateLog, setDebateLog] = useState<
+    { agent: string; message: string; thought?: string }[]
+  >([]);
   const [isFetchDone, setIsFetchDone] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [chatThreads, setChatThreads] = useState<Record<string, { role: "user" | "ai"; text: string; isError?: boolean }[]>>({});
+  const [chatThreads, setChatThreads] = useState<
+    Record<string, { role: "user" | "ai"; text: string; isError?: boolean }[]>
+  >({});
   const [travelMemory, setTravelMemory] = useState("");
   const [pendingMemoryTransition, setPendingMemoryTransition] = useState(false);
 
@@ -336,34 +330,37 @@ export default function App() {
     setStep("swipe");
   }, []);
 
-  const handleSwipeComplete = useCallback((likedIds: string[]) => {
-    setLikes((prev) => {
-      const next = [...prev];
-      for (const id of likedIds) {
-        if (!next.includes(id)) next.push(id);
-      }
-      return next;
-    });
+  const handleSwipeComplete = useCallback(
+    (likedIds: string[]) => {
+      setLikes((prev) => {
+        const next = [...prev];
+        for (const id of likedIds) {
+          if (!next.includes(id)) next.push(id);
+        }
+        return next;
+      });
 
-    const deckIds = swipeDeck.map(s => s.id);
-    const nopedIds = deckIds.filter(id => !likedIds.includes(id));
-    setNopes((prev) => {
-      const next = [...prev];
-      for (const id of nopedIds) {
-        if (!next.includes(id)) next.push(id);
-      }
-      return next;
-    });
+      const deckIds = swipeDeck.map((s) => s.id);
+      const nopedIds = deckIds.filter((id) => !likedIds.includes(id));
+      setNopes((prev) => {
+        const next = [...prev];
+        for (const id of nopedIds) {
+          if (!next.includes(id)) next.push(id);
+        }
+        return next;
+      });
 
-    setSwipedCount(swipeDeck.length);
-    // 深掘り（10件）を一度完了したら、以降は「好みをより詳しく設定する」を出さない。
-    if (refining) {
-      setDetailedComplete(true);
-      markDetailedDiagnosisComplete();
-    }
-    // 初回は目的地をまだ選んでいないので入力画面へ。深掘り時は目的地確定済みなので分析へ。
-    setStep(refining ? "processing" : "input");
-  }, [refining, swipeDeck]);
+      setSwipedCount(swipeDeck.length);
+      // 深掘り（10件）を一度完了したら、以降は「好みをより詳しく設定する」を出さない。
+      if (refining) {
+        setDetailedComplete(true);
+        markDetailedDiagnosisComplete();
+      }
+      // 初回は目的地をまだ選んでいないので入力画面へ。深掘り時は目的地確定済みなので分析へ。
+      setStep(refining ? "processing" : "input");
+    },
+    [refining, swipeDeck],
+  );
 
   useEffect(() => {
     if (step !== "processing") return;
@@ -397,7 +394,12 @@ export default function App() {
         const categoryMap: Record<string, SpotCategory> = {
           history: "歴史",
           nature: "自然",
-          gourmet: "グルメ"
+          gourmet: "グルメ",
+        };
+
+        const getSpotImage = (id: string): string => {
+          const s = [...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE].find((sp) => sp.id === id);
+          return s ? s.image : `/api/img/${id}`;
         };
 
         const mapped: Recommendation[] = (data.recommendations || []).map((r: any) => ({
@@ -412,7 +414,7 @@ export default function App() {
           match: Math.round((r.score || 0.8) * 100),
           coupon: r.coupon,
           memberOnly: r.memberOnly || false,
-          image: r.image || `/api/img/${r.id}`
+          image: getSpotImage(r.id),
         }));
 
         setRecommendations(mapped);
@@ -480,64 +482,79 @@ export default function App() {
     [user, visitorId, requireAuthForVisit],
   );
 
-  const handleSendChat = useCallback(async (
-    spotId: string,
-    text: string,
-    img?: { mimeType: string; data: string } | null,
-    audio?: { mimeType: string; data: string } | null
-  ) => {
-    // ユーザー発言をスレッドに追加
-    const userMsgText = audio ? "🎙️ 音声質問を送信しました" : text || "📸 添付画像を送信しました";
-    const userMsg = { role: "user" as const, text: userMsgText };
-    
-    setChatThreads((prev) => ({
-      ...prev,
-      [spotId]: [...(prev[spotId] || [
-        { role: "ai", text: "このスポットについて、気になることや楽しみ方を聞いてみてください。写真や音声での質問も受け付けます！" }
-      ]), userMsg]
-    }));
+  const handleSendChat = useCallback(
+    async (
+      spotId: string,
+      text: string,
+      img?: { mimeType: string; data: string } | null,
+      audio?: { mimeType: string; data: string } | null,
+    ) => {
+      // ユーザー発言をスレッドに追加
+      const userMsgText = audio ? "🎙️ 音声質問を送信しました" : text || "📸 添付画像を送信しました";
+      const userMsg = { role: "user" as const, text: userMsgText };
 
-    // AI「考え中…」表示を追加
-    const loadingMsg = { role: "ai" as const, text: "💬 AIガイドが回答を作成中…" };
-    setChatThreads((prev) => ({
-      ...prev,
-      [spotId]: [...(prev[spotId] || []), loadingMsg]
-    }));
+      setChatThreads((prev) => ({
+        ...prev,
+        [spotId]: [
+          ...(prev[spotId] || [
+            {
+              role: "ai",
+              text: "このスポットについて、気になることや楽しみ方を聞いてみてください。写真や音声での質問も受け付けます！",
+            },
+          ]),
+          userMsg,
+        ],
+      }));
 
-    try {
-      const res = await fetch(`/api/v1/spots/${spotId}/ask`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          userId: visitorId,
-          text: text || "写真を解析して解説してください",
-          image: img ? { mimeType: img.mimeType, data: img.data } : undefined,
-          audio: audio ? { mimeType: audio.mimeType, data: audio.data } : undefined,
-        }),
-      });
+      // AI「考え中…」表示を追加
+      const loadingMsg = { role: "ai" as const, text: "💬 AIガイドが回答を作成中…" };
+      setChatThreads((prev) => ({
+        ...prev,
+        [spotId]: [...(prev[spotId] || []), loadingMsg],
+      }));
 
-      const data = await res.json();
-      
-      // 考え中ローディングを削除し、回答を追加
-      setChatThreads((prev) => {
-        const thread = [...(prev[spotId] || [])];
-        const nextThread = thread.filter((m) => m.text !== "💬 AIガイドが回答を作成中…");
-        return {
-          ...prev,
-          [spotId]: [...nextThread, { role: "ai" as const, text: data.answer || "回答が得られませんでした。" }]
-        };
-      });
-    } catch (e: any) {
-      setChatThreads((prev) => {
-        const thread = [...(prev[spotId] || [])];
-        const nextThread = thread.filter((m) => m.text !== "💬 AIガイドが回答を作成中…");
-        return {
-          ...prev,
-          [spotId]: [...nextThread, { role: "ai" as const, text: `エラーが発生しました: ${e.message}`, isError: true }]
-        };
-      });
-    }
-  }, [visitorId]);
+      try {
+        const res = await fetch(`/api/v1/spots/${spotId}/ask`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            userId: visitorId,
+            text: text || "写真を解析して解説してください",
+            image: img ? { mimeType: img.mimeType, data: img.data } : undefined,
+            audio: audio ? { mimeType: audio.mimeType, data: audio.data } : undefined,
+          }),
+        });
+
+        const data = await res.json();
+
+        // 考え中ローディングを削除し、回答を追加
+        setChatThreads((prev) => {
+          const thread = [...(prev[spotId] || [])];
+          const nextThread = thread.filter((m) => m.text !== "💬 AIガイドが回答を作成中…");
+          return {
+            ...prev,
+            [spotId]: [
+              ...nextThread,
+              { role: "ai" as const, text: data.answer || "回答が得られませんでした。" },
+            ],
+          };
+        });
+      } catch (e: any) {
+        setChatThreads((prev) => {
+          const thread = [...(prev[spotId] || [])];
+          const nextThread = thread.filter((m) => m.text !== "💬 AIガイドが回答を作成中…");
+          return {
+            ...prev,
+            [spotId]: [
+              ...nextThread,
+              { role: "ai" as const, text: `エラーが発生しました: ${e.message}`, isError: true },
+            ],
+          };
+        });
+      }
+    },
+    [visitorId],
+  );
 
   // ログアウト時は好み診断をリセットする（前ユーザーの結果を次の利用者に引き継がない）。
   const resetDiagnosisState = useCallback(() => {
@@ -649,11 +666,7 @@ export default function App() {
       )}
 
       {step === "input" && (
-        <InputScreen
-          afterDiagnosis
-          onBack={() => goBack("welcome")}
-          onSearch={selectDestination}
-        />
+        <InputScreen afterDiagnosis onBack={() => goBack("welcome")} onSearch={selectDestination} />
       )}
 
       {step === "swipe" && (

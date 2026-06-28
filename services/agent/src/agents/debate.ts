@@ -1,4 +1,4 @@
-import { LlmAgent, InMemoryRunner, stringifyContent } from "@google/adk";
+import { InMemoryRunner, LlmAgent, stringifyContent } from "@google/adk";
 import { z } from "zod";
 import { KOMORO_SPOTS, SPOT_HOURS, SPOT_TAGS } from "../fixtures/spots.js";
 
@@ -6,8 +6,17 @@ const debateOutputSchema = z.object({
   debate: z.array(
     z.object({
       agent: z.enum(["recommend", "route", "introduce"]),
-      message: z.string(),
-    })
+      thought: z
+        .string()
+        .describe(
+          "エージェントの頭の中での詳細な計算、分析、選定理由、妥当性チェックなどの推敲思考プロセス",
+        ),
+      message: z
+        .string()
+        .describe(
+          "対話ログ表示用の簡潔な発言（他エージェントへの1〜2文程度の極めて簡潔な提案や指摘、最大80文字程度）",
+        ),
+    }),
   ),
   finalSpots: z.array(z.string()),
   summary: z.string(),
@@ -28,12 +37,9 @@ export const debateAgent = new LlmAgent({
 3. **紹介エージェント (introduce)**: スポットのおすすめポイントや楽しみ方がユーザーの好み（introStyleなど）に合うかを評価し、滞在時間の調整や差し替え案を提案する役割。
 
 【議論のルール】
-- 議論は3〜5回程度の発言の往復（ディベート）で構成してください。
-- 議論の流れ：
-  - 推薦エージェントが好みに基づく初期候補地を提案。
-  - ルートエージェントが移動時間や滞在時間の合計（時間猶予内か）をチェックし、問題があれば「遠すぎる」「時間が足りない」と指摘。
-  - 紹介エージェントが、ユーザーの紹介スタイルや好みに合わせて、別のスポットを提案したり、滞在時間を調整するアイデアを提案。
-  - 推薦エージェントがそれに合意し、最終的なおすすめスポットリストを決定する。
+- 議論は各エージェントが順に1回ずつ発言する全3回の往復（推薦の提案 -> ルートの検証・指摘 -> 紹介の修正提案と合意）で構成してください。
+- 議論の際、まず \`thought\`（思考プロセス）で、スポットカタログの詳細情報（滞在時間、移動時間、ユーザープロファイルなど）を照らし合わせた綿密な計算や分析を十分に行い、
+- その後、\`message\` に、他エージェントに語りかける「簡潔な発言（1〜2文程度、最大80文字程度）」を出力してください（裏での複雑な検討や計算結果は \`thought\` に書き、\`message\` には長文を載せないでください）。
 - 最終的に合意されたスポットIDのリストを finalSpots に入れてください。
 - 議論の中に、具体的なスポット名や移動時間、滞在時間の数値を出し、あたかも本当に計画を練っているようにリアルに描写してください。
 
@@ -41,12 +47,13 @@ export const debateAgent = new LlmAgent({
 必ず指定されたJSON構造で出力してください。`,
   outputSchema: debateOutputSchema,
   generateContentConfig: {
-    thinkingConfig: { thinkingBudget: 0 }
-  }
+    thinkingConfig: { thinkingBudget: 0 },
+    maxOutputTokens: 2048,
+  },
 });
 
 export interface DebateResult {
-  debate: { agent: "recommend" | "route" | "introduce"; message: string }[];
+  debate: { agent: "recommend" | "route" | "introduce"; thought: string; message: string }[];
   finalSpots: string[];
   summary: string;
 }
@@ -56,7 +63,7 @@ export interface DebateInput {
   feedbackNotes?: string;
   introStyle?: string;
   timeBudget: string; // e.g. "3時間", "6時間", "1日"
-  origin: string;     // e.g. "小諸駅"
+  origin: string; // e.g. "小諸駅"
   travelMemory?: string;
 }
 

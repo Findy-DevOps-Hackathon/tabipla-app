@@ -1,6 +1,6 @@
-import { LlmAgent, InMemoryRunner, stringifyContent } from "@google/adk";
-import { getUnchikuSourceTool } from "../tools/index.js";
+import { InMemoryRunner, LlmAgent, stringifyContent } from "@google/adk";
 import { getUnchikuSource } from "../tools/dataSources.js";
+import { getUnchikuSourceTool } from "../tools/index.js";
 
 // 紹介エージェント：ユーザーの好みに合わせた紹介スタイルで解説を行い、マルチモーダル質問にも対応する。
 export const introduceAgent = new LlmAgent({
@@ -17,11 +17,15 @@ export const introduceAgent = new LlmAgent({
 
 【マルチモーダル対応】
 - ユーザーから画像（現地の写真など）や音声での質問を受け取った場合は、その内容を分析し、対象 of スポットに関する疑問に答えてください。
-- 画像の中に写っているものや、音声のニュアンスも考慮しつつ、事実（facts）に記載されている範囲で正確に解説を返してください。 facts に無いデタラメな歴史や固有名詞は絶対に創作しないでください。`,
+- 画像の中に写っているものや、音声のニュアンスも考慮しつつ、事実（facts）に記載されている範囲で正確に解説を返してください。 facts に無いデタラメな歴史や固有名詞は絶対に創作しないでください。
+
+【セーフティネット / 目的外の話題への対応】
+- 当該スポットの紹介や観光案内、現地状況の解説に関係のない話題（例：プログラミング、一般的な数学/科学/ITの質問、無関係な雑談や悩み相談など）に対しては、get_unchiku_source などのツールを呼び出さず、以下のように極めて簡潔（1文程度）に回答を拒否して処理を終了してください。
+  - 返答例：「申し訳ありませんが、当スポットの解説や観光に関するご質問以外にはお答えできません。」`,
   tools: [getUnchikuSourceTool],
   generateContentConfig: {
     thinkingConfig: { thinkingBudget: 0 },
-    maxOutputTokens: 2048,
+    maxOutputTokens: 1024,
   },
 });
 
@@ -49,7 +53,9 @@ export async function askIntroduce(input: MultimodalInput, userId = "demo"): Pro
 `;
 
   const parts: any[] = [];
-  parts.push({ text: `${systemContext}\n\n質問: ${input.text || "このスポットのおすすめポイントと楽しみポイントを教えてください。"}` });
+  parts.push({
+    text: `${systemContext}\n\n質問: ${input.text || "このスポットのおすすめポイントと楽しみポイントを教えてください。"}`,
+  });
 
   if (input.image) {
     parts.push({

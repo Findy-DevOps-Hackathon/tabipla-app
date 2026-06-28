@@ -1,6 +1,6 @@
+import { getFixedPrefecture } from "../master/index.ts";
 import { extractAreaFromAddress } from "./address.ts";
 import { formatCategories } from "./categories.ts";
-import { getFixedPrefecture } from "../master/index.ts";
 
 export function formatDateTime(iso?: string): string {
   if (!iso) return "—";
@@ -37,8 +37,7 @@ export function spotToCsvRow(spot: {
   const quoteCsvField = (v: string) => `"${v.replace(/"/g, '""')}"`;
   const prefecture = spot.prefecture ?? getFixedPrefecture();
   const area =
-    spot.area ??
-    (spot.address ? extractAreaFromAddress(spot.address, getFixedPrefecture()) : "");
+    spot.area ?? (spot.address ? extractAreaFromAddress(spot.address, getFixedPrefecture()) : "");
   return [
     spot.name,
     spot.description,
@@ -54,5 +53,4 @@ export function spotToCsvRow(spot: {
     .join(",");
 }
 
-export const CSV_HEADER =
-  "name,description,category,area,prefecture,address,lat,lon,price";
+export const CSV_HEADER = "name,description,category,area,prefecture,address,lat,lon,price";
