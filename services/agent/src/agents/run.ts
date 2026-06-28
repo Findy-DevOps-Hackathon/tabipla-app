@@ -3,6 +3,9 @@ import { InMemoryRunner, stringifyContent } from "@google/adk";
 
 // エージェントに1メッセージ投げ、最終テキストを返す共通ヘルパ。
 export async function ask(agent: LlmAgent, text: string, userId = "demo"): Promise<string> {
+  if (process.env.USE_MOCK !== "0") {
+    return `【モック回答】「${text}」に対するAIエージェントのダミー返答です。現在はデモモード（USE_MOCK=1）のため、Geminiは起動していません。`;
+  }
   const runner = new InMemoryRunner({ agent });
   const session = await runner.sessionService.createSession({
     appName: runner.appName,

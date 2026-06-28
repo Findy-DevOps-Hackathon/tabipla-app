@@ -49,6 +49,12 @@ export async function analyzeFeedback(
   input: FeedbackInput,
   userId = "demo",
 ): Promise<FeedbackResult> {
+  if (process.env.USE_MOCK !== "0") {
+    return {
+      feedbackNotes: input.currentFeedbackNotes || "歴史散策やマイナーなスポットを好む傾向があります。",
+      introStyle: input.currentIntroStyle || "説明は簡潔で、歴史的背景を重視するスタイルです。"
+    };
+  }
   const runner = new InMemoryRunner({ agent: feedbackAgent });
   const session = await runner.sessionService.createSession({
     appName: runner.appName,

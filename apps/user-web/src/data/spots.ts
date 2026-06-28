@@ -31,7 +31,6 @@ export type Recommendation = {
   tags: string[];
   reason: string;
   match: number;
-  coupon?: string;
   memberOnly: boolean;
   image: string;
 };
@@ -188,12 +187,3 @@ export const RECOMMENDATIONS: Recommendation[] = [];
 
 export const PREFERENCE_TAGS = ["歴史", "自然", "グルメ", "温泉", "絶景"];
 
-/** スポット ID から一意な 8 桁のクーポンコードを擬似生成する。 */
-export function couponCodeFor(spotId: string): string {
-  let hash = 0;
-  for (let i = 0; i < spotId.length; i++) {
-    hash = (hash << 5) - hash + spotId.charCodeAt(i);
-    hash |= 0;
-  }
-  return `CP-${Math.abs(hash).toString(16).toUpperCase().padStart(6, "0").slice(0, 6)}`;
-}

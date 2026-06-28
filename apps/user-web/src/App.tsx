@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSession, logout, type UserAccount } from "./auth.ts";
 import { BottomNav, type NavTab } from "./components/BottomNav.tsx";
-import { CouponModal } from "./components/CouponModal.tsx";
+
 import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
 import {
@@ -220,12 +220,10 @@ export default function App() {
       // 当アプリ管理外／古いビルドの履歴エントリ（スナップショットなし）に戻った場合でも
       // 固まらないよう、開いているオーバーレイは最低限閉じる（自己修復）。
       const current = navSnapshotRef.current;
-      if (current.detailRec || current.activeCoupon || current.authPrompt) {
+      if (current.detailRec || current.authPrompt) {
         isPopRef.current = true;
         setDetailRec(null);
-        setActiveCoupon(null);
         setAuthPrompt(null);
-        setPendingCoupon(null);
         setPendingVisit(null);
       }
     };
@@ -279,9 +277,7 @@ export default function App() {
     returnFromHistory,
     detailRec,
     detailVisited,
-    activeCoupon,
     authPrompt,
-    pendingCoupon,
     pendingVisit,
   ]);
   // -------------------------------------------------------------------------
@@ -412,7 +408,6 @@ export default function App() {
           tags: r.tags || [],
           reason: (r.why || []).join(" / "),
           match: Math.round((r.score || 0.8) * 100),
-          coupon: r.coupon,
           memberOnly: r.memberOnly || false,
           image: getSpotImage(r.id),
         }));
@@ -434,19 +429,7 @@ export default function App() {
     };
   }, [step, likes, nopes, visitorId]);
 
-  const handleUseCoupon = useCallback(
-    (rec: Recommendation) => {
-      if (user || !rec.memberOnly) {
-        // ログイン済み、または「だれでもクーポン」はそのまま表示。
-        setActiveCoupon(rec);
-      } else {
-        // 会員限定クーポンを未ログインで使う場合のみ、会員登録/ログインを促す。
-        setPendingCoupon(rec);
-        setAuthPrompt({ reason: "このクーポンの利用には会員登録が必要です" });
-      }
-    },
-    [user],
-  );
+
 
   // 未ログインで「行った」を押したとき、会員登録/ログインを促す。認証後に履歴へ追加する。
   const requireAuthForVisit = useCallback((spot: VisitableSpot) => {
@@ -572,10 +555,6 @@ export default function App() {
       setAuthPrompt(null);
       // ログイン時は好み診断の結果を保持する（未ログインのまま診断した内容を、そのまま
       // 会員アカウントに引き継ぐ）。リセットはログアウト時のみ行う。
-      if (pendingCoupon) {
-        setActiveCoupon(pendingCoupon);
-        setPendingCoupon(null);
-      }
       if (pendingVisit) {
         markVisited(account.id, pendingVisit);
         setPendingVisit(null);
@@ -585,7 +564,7 @@ export default function App() {
         setStep("processing");
       }
     },
-    [pendingCoupon, pendingVisit, pendingMemoryTransition],
+    [pendingVisit, pendingMemoryTransition],
   );
 
   // ログアウト。セッションを破棄してホームへ戻す（履歴は会員機能のため）。
@@ -607,9 +586,7 @@ export default function App() {
     // 履歴の起点（リロードで深い画面に直接入った等）では戻り先がないため、
     // 明示的なフォールバック画面へ遷移し、開いているオーバーレイは閉じる。
     setDetailRec(null);
-    setActiveCoupon(null);
     setAuthPrompt(null);
-    setPendingCoupon(null);
     setPendingVisit(null);
     setStep(fallback);
   }, []);
@@ -675,7 +652,10 @@ export default function App() {
           spots={swipeDeck}
           refine={refining}
           onComplete={handleSwipeComplete}
-          onCancel={() => goBack(refining ? "recommendations" : "welcome")}
+          onCancel={() => {
+            // 中止時はホーム画面（welcome）へ戻るように接続
+            setStep("welcome");
+          }}
         />
       )}
 
@@ -728,8 +708,7 @@ export default function App() {
         step !== "input" &&
         step !== "memory" &&
         step !== "processing" &&
-        !authPrompt &&
-        !activeCoupon && (
+        !authPrompt && (
           <>
             <div className="shrink-0" aria-hidden />
             <BottomNav active={footerTab} onNavigate={handleNavigate} visible={footerVisible} />
@@ -755,18 +734,7 @@ export default function App() {
         </div>
       )}
 
-      {activeCoupon && (
-        <div className="fixed inset-0 z-50 flex justify-center">
-          <div className="relative h-screen w-full max-w-[500px]">
-            <CouponModal
-              recommendation={activeCoupon}
-              userName={user?.name ?? null}
-              userId={visitorId}
-              onClose={() => goBack("recommendations")}
-            />
-          </div>
-        </div>
-      )}
+
 
       {detailRec && (
         <SpotDetailModal
@@ -775,11 +743,6 @@ export default function App() {
           chatHistory={chatThreads[detailRec.id] || []}
           onSendChat={(text, img, audio) => handleSendChat(detailRec.id, text, img, audio)}
           onClose={() => goBack("recommendations")}
-          onUseCoupon={(rec) => {
-            // 認証/クーポンのオーバーレイより詳細が前面に来ないよう、先に詳細を閉じる。
-            setDetailRec(null);
-            handleUseCoupon(rec);
-          }}
           onToggleVisited={handleDetailToggleVisited}
         />
       )}

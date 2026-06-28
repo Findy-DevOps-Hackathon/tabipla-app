@@ -64,14 +64,7 @@ export default function App() {
           </RequireAuth>
         }
       />
-      <Route
-        path="/coupons"
-        element={
-          <RequireAuth>
-            <PlaceholderPage title="クーポン" />
-          </RequireAuth>
-        }
-      />
+
       <Route path="*" element={<Navigate to="/spots" replace />} />
     </Routes>
   );

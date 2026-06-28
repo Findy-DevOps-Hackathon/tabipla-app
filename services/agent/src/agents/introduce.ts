@@ -39,6 +39,9 @@ export interface MultimodalInput {
 }
 
 export async function askIntroduce(input: MultimodalInput, userId = "demo"): Promise<string> {
+  if (process.env.USE_MOCK !== "0") {
+    return `【モック紹介】スポット ID: ${input.spotId} のご紹介です。ユーザーの好みに合わせ、こちらのおすすめポイントや楽しみ方を丁寧にお伝えします。デモモードのためダミー文面を表示しています。`;
+  }
   const runner = new InMemoryRunner({ agent: introduceAgent });
   const session = await runner.sessionService.createSession({
     appName: runner.appName,

@@ -24,8 +24,6 @@ type SpotDetailModalProps = {
   ) => Promise<void>;
   /** 閉じる（戻る）操作。 */
   onClose: () => void;
-  /** 「クーポンを使う」タップ時。 */
-  onUseCoupon: (recommendation: Recommendation) => void;
   /** 「行った」トグル時。 */
   onToggleVisited: (recommendation: Recommendation) => void;
 };
@@ -37,7 +35,6 @@ export function SpotDetailModal({
   chatHistory,
   onSendChat,
   onClose,
-  onUseCoupon,
   onToggleVisited,
 }: SpotDetailModalProps) {
   useLockBodyScroll();
@@ -209,27 +206,7 @@ export function SpotDetailModal({
               <span className="text-[11px] font-medium text-(--brand)">地図を見る</span>
             </a>
 
-            {rec.coupon && (
-              <button
-                type="button"
-                onClick={() => onUseCoupon(rec)}
-                className="flex flex-col gap-2 rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] p-3.5 text-left transition active:scale-[0.99]"
-              >
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
-                    style={{ backgroundColor: rec.memberOnly ? "var(--member)" : "var(--brand)" }}
-                  >
-                    {rec.memberOnly ? "会員限定クーポン" : "だれでもクーポン"}
-                  </span>
-                  {!rec.memberOnly && (
-                    <span className="text-[11px] font-medium text-(--brand)">登録不要で使える</span>
-                  )}
-                </div>
-                <p className="text-[14px] font-bold leading-[1.4] text-[#0f172a]">{rec.coupon}</p>
-                <span className="text-[11px] text-[#94a3b8]">タップしてクーポンを開く</span>
-              </button>
-            )}
+
 
             {/* AIチャットセクション（個別画面内に移植） */}
             <section className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-[#f8fafc] p-4 shadow-inner mt-2">
@@ -339,23 +316,11 @@ export function SpotDetailModal({
         </div>
 
         <div className="flex gap-2 border-t border-[#e2e8f0] bg-white px-4 pb-6 pt-4">
-          {rec.coupon && (
-            <button
-              type="button"
-              onClick={() => onUseCoupon(rec)}
-              style={{ backgroundColor: rec.memberOnly ? "var(--member)" : "var(--brand)" }}
-              className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full text-[14px] font-bold text-white transition active:scale-[0.99]"
-            >
-              クーポンを使う
-            </button>
-          )}
           <button
             type="button"
             onClick={() => onToggleVisited(rec)}
             aria-pressed={visited}
-            className={`flex h-11 items-center justify-center gap-1.5 rounded-full px-4 text-[14px] font-bold transition active:scale-[0.99] ${
-              rec.coupon ? "" : "flex-1"
-            } ${
+            className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-4 text-[14px] font-bold transition active:scale-[0.99] ${
               visited
                 ? "bg-[#059669] text-white"
                 : "border border-[#cbd5e1] bg-white text-[#475569]"
