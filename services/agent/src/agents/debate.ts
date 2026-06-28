@@ -57,6 +57,7 @@ export interface DebateInput {
   introStyle?: string;
   timeBudget: string; // e.g. "3時間", "6時間", "1日"
   origin: string;     // e.g. "小諸駅"
+  travelMemory?: string;
 }
 
 export async function runDebate(input: DebateInput, userId = "demo"): Promise<DebateResult> {
@@ -82,6 +83,7 @@ export async function runDebate(input: DebateInput, userId = "demo"): Promise<De
 - ユーザーの好み概要: ${input.userProfileSummary}
 - 過去の推薦フィードバック（隠れた好み）: ${input.feedbackNotes || "特になし"}
 - 過去の紹介フィードバック（紹介スタイル）: ${input.introStyle || "特になし"}
+- ユーザーの思い出に残っている旅行（この傾向や体験を今回の推薦にも考慮してください）: ${input.travelMemory || "特になし"}
 
 【利用可能なスポットカタログ（小諸）】
 ${JSON.stringify(spotsCatalog, null, 2)}

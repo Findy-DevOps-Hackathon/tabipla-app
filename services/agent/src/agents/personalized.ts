@@ -26,7 +26,8 @@ export async function personalizedPlan(
   sw: Swipes,
   userId = "demo",
   timeBudget = "4時間",
-  origin = "小諸駅"
+  origin = "小諸駅",
+  travelMemory = ""
 ): Promise<PersonalizedResult> {
   // 好みプロファイルの構築/取得
   let profile = buildProfile(sw, KOMORO_SPOTS);
@@ -47,6 +48,7 @@ export async function personalizedPlan(
     introStyle: profile.introStyle,
     timeBudget,
     origin,
+    travelMemory,
   }, userId);
 
   // ディベートによって決定したスポットを優先してスコアリング

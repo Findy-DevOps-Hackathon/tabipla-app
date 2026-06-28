@@ -6,16 +6,11 @@ import { ask } from "./agents/run.js";
 import { story } from "./agents/unchiku.js";
 import { KOMORO_SPOTS, SPOT_IMAGES, SPOT_TAGS } from "./fixtures/spots.js";
 import { sceneSvg } from "./sceneSvg.js";
-import { pageHtml, swipePageHtml } from "./ui.js";
 import { userProfiles, summarizeProfile } from "./personalize.js";
 import { askIntroduce } from "./agents/introduce.js";
 import { analyzeFeedback } from "./agents/feedback.js";
 
 const app = new Hono();
-
-// スワイプUI(主役)。開発用パネルは /dev。
-app.get("/", (c) => c.html(swipePageHtml));
-app.get("/dev", (c) => c.html(pageHtml));
 
 app.get("/healthz", (c) => c.json({ ok: true }));
 
@@ -77,15 +72,17 @@ app.post("/v1/personalized/plan", async (c) => {
     userId = "demo",
     timeBudget = "4時間",
     origin = "小諸駅",
+    travelMemory = "",
   } = await c.req.json<{
     likes?: string[];
     nopes?: string[];
     userId?: string;
     timeBudget?: string;
     origin?: string;
+    travelMemory?: string;
   }>();
   try {
-    const res = await personalizedPlan({ likes, nopes }, userId, timeBudget, origin);
+    const res = await personalizedPlan({ likes, nopes }, userId, timeBudget, origin, travelMemory);
     return c.json(res);
   } catch (e) {
     console.error(e);

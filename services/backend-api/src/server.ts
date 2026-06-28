@@ -126,6 +126,7 @@ export type BuildServerOptions = {
 export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   const app = Fastify({
     logger: true,
+    bodyLimit: 10485760, // 10MB
     // バリデーションを厳格化する:
     //   - removeAdditional:false → 未知フィールドを除去せず 400 で弾く
     //   - coerceTypes:true → querystring の文字列を integer 等へ変換（検索の size/from 用）
@@ -662,6 +663,77 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       };
     },
   );
+
+  const agentApiUrl = process.env.AGENT_API_URL ?? "http://localhost:8080";
+
+  // エージェントプロキシ：旅行プランの生成とディベート
+  app.post("/v1/personalized/plan", async (req, reply) => {
+    const res = await fetch(`${agentApiUrl}/v1/personalized/plan`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return reply.code(res.status).send(data);
+    }
+    return data;
+  });
+
+  // エージェントプロキシ：チャット質問への回答
+  app.post("/v1/spots/:spotId/ask", async (req, reply) => {
+    const { spotId } = req.params as { spotId: string };
+    const res = await fetch(`${agentApiUrl}/v1/spots/${spotId}/ask`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return reply.code(res.status).send(data);
+    }
+    return data;
+  });
+
+  // エージェントプロキシ：スポットフィードバック
+  app.post("/v1/personalized/feedback/spot", async (req, reply) => {
+    const res = await fetch(`${agentApiUrl}/v1/personalized/feedback/spot`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return reply.code(res.status).send(data);
+    }
+    return data;
+  });
+
+  // エージェントプロキシ：全体フィードバック
+  app.post("/v1/personalized/feedback/trip", async (req, reply) => {
+    const res = await fetch(`${agentApiUrl}/v1/personalized/feedback/trip`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return reply.code(res.status).send(data);
+    }
+    return data;
+  });
+
+  // エージェントプロキシ：画像SVG配信
+  app.get("/img/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const res = await fetch(`${agentApiUrl}/img/${id}`);
+    if (!res.ok) {
+      return reply.code(res.status).send();
+    }
+    const buffer = await res.arrayBuffer();
+    reply.header("content-type", "image/svg+xml; charset=utf-8");
+    return reply.send(Buffer.from(buffer));
+  });
 
   // ---- 共通エラーハンドラ --------------------------------------------------
   // search-core が送出するエラーや、スキーマ検証エラーを握りつぶさず整形して返す。
