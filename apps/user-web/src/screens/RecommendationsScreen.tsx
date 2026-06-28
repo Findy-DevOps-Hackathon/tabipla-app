@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { CardsIcon, SparklesIcon } from "../components/icons.tsx";
+import { CardsIcon } from "../components/icons.tsx";
 import { RECOMMENDATIONS_PAGE_SIZE, type Recommendation } from "../data/spots.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 import { isVisited } from "../lib/visited.ts";
@@ -99,16 +99,22 @@ export function RecommendationsScreen({
   function renderDebateMessage(message: string) {
     if (!message) return "";
 
-    const spotNames = recommendations.map((r) => r.name);
-    const escapedNames = spotNames
-      .filter(Boolean)
-      .map((name) => name.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&"));
+    const spotPairs = recommendations
+      .filter((r) => r.name)
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        escapedName: r.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&"),
+        rec: r,
+      }))
+      .sort((a, b) => b.name.length - a.name.length);
 
-    let regex = /([^\s(（]+)\s*[(（](s\d+)[)）]/g;
-    if (escapedNames.length > 0) {
-      const namesPattern = escapedNames.join("|");
-      regex = new RegExp(`(${namesPattern})\\s*[(（](s\\d+)[)）]`, "g");
+    if (spotPairs.length === 0) {
+      return <span className="whitespace-pre-wrap text-left break-words block w-full">{message}</span>;
     }
+
+    const namesPattern = spotPairs.map((p) => p.escapedName).join("|");
+    const regex = new RegExp(`(${namesPattern})(?:\\s*[(（](s\\d+)[)）])?`, "g");
 
     const parts = [];
     let lastIndex = 0;
@@ -120,24 +126,24 @@ export function RecommendationsScreen({
         parts.push(message.substring(lastIndex, matchIndex));
       }
 
-      const spotName = match[1];
-      const spotId = match[2];
+      const matchedName = match[1];
+      const capturedId = match[2];
 
-      const rec = recommendations.find((r) => r.id === spotId);
+      const pair = spotPairs.find((p) => (capturedId ? p.id === capturedId : p.name === matchedName));
 
-      if (rec) {
+      if (pair) {
         parts.push(
           <button
             key={matchIndex}
             type="button"
-            onClick={() => onOpenSpot(rec)}
+            onClick={() => onOpenSpot(pair.rec)}
             className="font-extrabold text-teal-600 hover:text-teal-800 hover:underline inline-block mx-0.5"
           >
-            {spotName}({spotId})
+            {pair.name}
           </button>
         );
       } else {
-        parts.push(`${spotName}(${spotId})`);
+        parts.push(match[0]);
       }
 
       lastIndex = regex.lastIndex;
@@ -271,121 +277,111 @@ export function RecommendationsScreen({
           <p className="text-[12px] font-semibold text-[#64748b]">AIエージェント合意ルート順</p>
         )}
 
-        {diagnosisComplete &&
-          displayedRecommendations.map((rec, index) => {
-            const cat = CAT[rec.category] || { l: rec.category, c: "bg-slate-600" };
-            const feedbackVal = spotFeedbacks[rec.id];
+        {diagnosisComplete && visibleRecommendations.length > 0 && (
+          <div className="grid grid-cols-2 gap-3 w-full">
+            {displayedRecommendations.map((rec, index) => {
+              const cat = CAT[rec.category] || { l: rec.category, c: "bg-slate-600" };
+              const feedbackVal = spotFeedbacks[rec.id];
 
-            return (
-              <Fragment key={rec.id}>
-                <article className="flex shrink-0 flex-col overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
-                  {/* スポット画像と名前 */}
-                  <button
-                    type="button"
-                    onClick={() => onOpenSpot(rec)}
-                    aria-label={`${rec.name} の詳細を見る`}
-                    className="flex flex-col text-left transition active:opacity-95"
-                  >
-                    <div className="relative aspect-16/10 w-full bg-slate-100">
-                      <img
-                        src={rec.image}
-                        alt={rec.name}
-                        className="absolute inset-0 size-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-linear-to-t from-black/75 via-black/15 to-transparent" />
-                      <div className="absolute top-3 left-3 rounded px-2 py-0.5 text-[11px] font-bold text-white bg-black/40">
-                        Match {rec.match}%
-                      </div>
-                      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-4">
-                        <p className="text-[11px] font-medium text-white/80">
-                          {rec.prefecture} / {rec.area}
-                        </p>
-                        <p className="text-[20px] font-extrabold leading-tight text-white drop-shadow-sm">
-                          {rec.name}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-3 p-4">
-                      {/* 推薦理由 */}
-                      <div className="flex items-start gap-1.5 rounded-md bg-(--ai-bg) px-2.5 py-2">
-                        <SparklesIcon className="size-3.5 mt-0.5 shrink-0 text-(--ai-fg)" />
-                        <p className="text-[12px] font-semibold text-(--ai-fg) leading-relaxed">{rec.reason}</p>
-                      </div>
-
-                      <div className="flex flex-wrap gap-1">
-                        <span className={`rounded-md ${cat.c} px-2 py-0.5 text-[11px] font-bold text-white`}>
-                          {cat.l}
-                        </span>
-                        {rec.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-md bg-[#e2e8f0] px-2 py-0.5 text-[11px] text-[#475569]"
-                          >
-                            #{tag}
+              return (
+                <Fragment key={rec.id}>
+                  <article className="flex shrink-0 flex-col overflow-hidden rounded-xl border border-[#e2e8f0] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition active:scale-[0.99] w-full">
+                    {/* スポット画像と名前 */}
+                    <button
+                      type="button"
+                      onClick={() => onOpenSpot(rec)}
+                      aria-label={`${rec.name} の詳細を見る`}
+                      className="flex flex-col text-left transition flex-1 w-full"
+                    >
+                      <div className="relative aspect-video w-full bg-slate-100 shrink-0">
+                        <img
+                          src={rec.image}
+                          alt={rec.name}
+                          className="absolute inset-0 size-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                        <div className="absolute top-1.5 left-1.5 rounded px-1 py-0.2 text-[8px] font-bold text-white bg-black/40">
+                          {rec.match}% Match
+                        </div>
+                        <div className="absolute inset-x-0 bottom-0 p-2">
+                          <span className={`inline-block rounded-xs ${cat.c} px-1.5 py-0.2 text-[8px] font-extrabold text-white mb-0.5`}>
+                            {cat.l}
                           </span>
-                        ))}
+                          <p className="text-[12px] font-extrabold leading-tight text-white drop-shadow-xs line-clamp-1">
+                            {rec.name}
+                          </p>
+                        </div>
                       </div>
 
-                      <p className="text-[13px] text-slate-600 line-clamp-2 leading-relaxed whitespace-pre-wrap">
-                        {rec.description}
-                      </p>
-                    </div>
-                  </button>
+                      <div className="flex flex-col gap-1.5 p-2 flex-1 justify-between w-full">
+                        <p className="text-[11px] text-slate-500 line-clamp-2 leading-normal whitespace-pre-wrap">
+                          {rec.description}
+                        </p>
+                      </div>
+                    </button>
 
-                  <div className="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 bg-slate-50/30">
-                    <div className="flex items-center justify-between">
-                      {/* ② スポット個別 Good/Bad フィードバック */}
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between border-t border-slate-100 px-2 py-1.5 bg-slate-50/30 shrink-0">
+                      <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => handleSpotFeedback(rec.id, "good")}
-                          className={`flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-[12px] font-medium transition ${
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSpotFeedback(rec.id, "good");
+                          }}
+                          className={`flex items-center justify-center size-6 rounded-full border border-slate-200 text-[10px] transition ${
                             feedbackVal === "good"
                               ? "bg-green-600 text-white border-green-600"
                               : "bg-white text-slate-600 hover:bg-slate-50"
                           }`}
                         >
-                          👍 Good
+                          👍
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleSpotFeedback(rec.id, "bad")}
-                          className={`flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-[12px] font-medium transition ${
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSpotFeedback(rec.id, "bad");
+                          }}
+                          className={`flex items-center justify-center size-6 rounded-full border border-slate-200 text-[10px] transition ${
                             feedbackVal === "bad"
                               ? "bg-rose-600 text-white border-rose-600"
                               : "bg-white text-slate-600 hover:bg-slate-50"
                           }`}
                         >
-                          👎 Bad
+                          👎
                         </button>
                       </div>
 
-                      {/* ③ AIガイド起動トリガー（詳細モーダルへ誘導） */}
                       <button
                         type="button"
-                        onClick={() => onOpenSpot(rec)}
-                        className="text-[12px] font-bold text-teal-600 hover:underline flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenSpot(rec);
+                        }}
+                        className="text-[11px] font-bold text-teal-600 hover:underline flex items-center gap-0.5"
                       >
-                        💬 AIガイドに質問する
+                        💬 質問
                       </button>
                     </div>
-                  </div>
-                </article>
+                  </article>
 
-                {!detailedComplete && (index + 1) % 10 === 0 && (
-                  <button
-                    type="button"
-                    onClick={onRestart}
-                    className={`${PRIMARY_BUTTON} relative h-8 shrink-0 overflow-hidden py-8 text-[15px] tracking-[1.6px]`}
-                  >
-                    <CardsIcon className="pointer-events-none absolute left-4 top-3/5 size-24 -translate-y-1/2 text-white/30 opacity-50" />
-                    <span className="relative text-shadow-md">好みをより詳しく分析する</span>
-                  </button>
-                )}
-              </Fragment>
-            );
-          })}
+                  {!detailedComplete && (index + 1) % 10 === 0 && (
+                    <div className="col-span-2 py-2">
+                      <button
+                        type="button"
+                        onClick={onRestart}
+                        className={`${PRIMARY_BUTTON} relative h-8 shrink-0 overflow-hidden py-8 text-[15px] tracking-[1.6px]`}
+                      >
+                        <CardsIcon className="pointer-events-none absolute left-4 top-3/5 size-24 -translate-y-1/2 text-white/30 opacity-50" />
+                        <span className="relative text-shadow-md">好みをより詳しく分析する</span>
+                      </button>
+                    </div>
+                  )}
+                </Fragment>
+              );
+            })}
+          </div>
+        )}
 
         {/* ④ 旅行終了後の全体フィードバックフォーム */}
         {diagnosisComplete && visibleRecommendations.length > 0 && (
