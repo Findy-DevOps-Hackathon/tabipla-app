@@ -648,8 +648,9 @@ export default function App() {
           refine={refining}
           onComplete={handleSwipeComplete}
           onCancel={() => {
-            // 中止時はホーム画面（welcome）へ戻るように接続
-            setStep("welcome");
+            const wasRefining = refining;
+            if (wasRefining) setRefining(false);
+            goBack(wasRefining ? "recommendations" : "welcome");
           }}
         />
       )}
