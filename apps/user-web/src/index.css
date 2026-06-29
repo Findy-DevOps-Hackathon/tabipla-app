@@ -52,6 +52,41 @@ body {
   animation: swipe-hint-wiggle 0.85s ease-in-out;
 }
 
+/** 比較カード初回表示時のごく弱い揺れ（操作ヒント）。 */
+@keyframes compare-card-wiggle-top {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  35% {
+    transform: translateY(-2px) rotate(0.35deg);
+  }
+  70% {
+    transform: translateY(1.5px) rotate(-0.2deg);
+  }
+}
+
+@keyframes compare-card-wiggle-bottom {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  35% {
+    transform: translateY(-2px) rotate(-0.35deg);
+  }
+  70% {
+    transform: translateY(1.5px) rotate(0.2deg);
+  }
+}
+
+.animate-compare-hint-top {
+  animation: compare-card-wiggle-top 1.15s ease-in-out;
+}
+
+.animate-compare-hint-bottom {
+  animation: compare-card-wiggle-bottom 1.15s ease-in-out 0.12s;
+}
+
 /** ホーム背景の格子（グリッド）を下方向へ無限スクロールさせる。
     背景サイズ 28px と同じ量だけ動かすことで継ぎ目なくループする。 */
 @keyframes grid-drift {

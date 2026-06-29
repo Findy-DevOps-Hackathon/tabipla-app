@@ -1,19 +1,29 @@
-import { useRef, useState } from "react";
-import type { Recommendation } from "../data/spots.ts";
-import { categoryBadgeClass } from "../lib/category.ts";
+import { useEffect, useRef, useState } from "react";
+import { getSpotTrivia, type Recommendation } from "../data/spots.ts";
+import { copyToClipboard } from "../lib/clipboard.ts";
+import { buildSpotShareUrl } from "../lib/spotLink.ts";
 import { useLockBodyScroll } from "../lib/useLockBodyScroll.ts";
-import { CheckIcon, ChevronLeftIcon, MapPinIcon, SparklesIcon } from "./icons.tsx";
+import { useVisualViewport } from "../lib/useVisualViewport.ts";
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  CopyIcon,
+  MapPinIcon,
+  MicIcon,
+  SendIcon,
+  ShareIcon,
+} from "./icons.tsx";
 
 type ChatMessage = {
   role: "user" | "ai";
   text: string;
   isError?: boolean;
+  /** ユーザーが添付した画像（data URL） */
+  image?: string;
 };
 
 type SpotDetailModalProps = {
   recommendation: Recommendation;
-  /** このスポットが「行った」済みか。 */
-  visited: boolean;
   /** チャット履歴 */
   chatHistory: ChatMessage[];
   /** チャット発言送信 */
@@ -24,41 +34,88 @@ type SpotDetailModalProps = {
   ) => Promise<void>;
   /** 閉じる（戻る）操作。 */
   onClose: () => void;
-  /** 「行った」トグル時。 */
-  onToggleVisited: (recommendation: Recommendation) => void;
 };
 
 /** おすすめ候補をタップしたときに表示するスポット詳細（フルスクリーン）。 */
 export function SpotDetailModal({
   recommendation: rec,
-  visited,
   chatHistory,
   onSendChat,
   onClose,
-  onToggleVisited,
 }: SpotDetailModalProps) {
   useLockBodyScroll();
+  // iOS Safari は input フォーカス時に position:fixed が壊れ、ドキュメントを勝手にスクロールして
+  // しまう（スクロール・タップが効かなくなる）。そこでキーボード表示中だけモーダルの高さ・位置を
+  // 「見えている領域（visualViewport）」へ合わせ、入力欄を常にキーボードの上に置く。
+  // キーボードを閉じている間は全画面（inset-0）のままにして見た目の崩れを防ぐ。
+  const viewport = useVisualViewport();
+  const layoutHeight = typeof window !== "undefined" ? window.innerHeight : viewport.height;
+  const keyboardInset = Math.max(0, layoutHeight - viewport.height - viewport.offsetTop);
+  const keyboardOpen = keyboardInset > 100;
+  const trivia = getSpotTrivia(rec.id);
 
   // チャット用のローカルステート
   const [textInput, setTextInput] = useState("");
-  const [selectedImage, setSelectedImage] = useState<{
-    mimeType: string;
-    data: string;
-    url: string;
-  } | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [nameCopied, setNameCopied] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shareResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // 新しいメッセージが追加されたら、モーダル全体を最下部までスクロールして最新の発言を表示する。
+  // 初回表示（履歴なし）では勝手にスクロールしないよう、履歴があるときだけ実行する。
+  useEffect(() => {
+    if (chatHistory.length === 0) return;
+    const el = scrollContainerRef.current;
+    // 即時スクロール（smooth は iOS でタッチ操作を奪い、スクロールが固まる原因になる）。
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chatHistory]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
+      if (shareResetTimerRef.current) clearTimeout(shareResetTimerRef.current);
+    };
+  }, []);
+
+  async function handleCopyName() {
+    const ok = await copyToClipboard(rec.name);
+    if (!ok) return;
+    setNameCopied(true);
+    if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
+    copyResetTimerRef.current = setTimeout(() => setNameCopied(false), 2000);
+  }
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     `${rec.prefecture}${rec.area} ${rec.name}`,
   )}`;
 
+  async function handleShare() {
+    const appUrl = typeof window !== "undefined" ? buildSpotShareUrl(rec.id) : "";
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: rec.name, url: appUrl });
+        return;
+      }
+      const ok = await copyToClipboard(appUrl);
+      if (!ok) return;
+      setShareCopied(true);
+      if (shareResetTimerRef.current) clearTimeout(shareResetTimerRef.current);
+      shareResetTimerRef.current = setTimeout(() => setShareCopied(false), 2000);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+    }
+  }
+
   // --- 音声録音処理 --------------------------------------------------------
   async function handleMicToggle() {
     if (!isRecording) {
       try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error("このブラウザ・環境では録音機能がサポートされていません。");
         }
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -77,14 +134,16 @@ export function SpotDetailModal({
             onSendChat("", null, { mimeType: "audio/webm", data: base64data });
           };
           reader.readAsDataURL(audioBlob);
-          stream.getTracks().forEach((track) => track.stop());
+          stream.getTracks().forEach((track) => {
+            track.stop();
+          });
         };
 
         mediaRecorderRef.current = mediaRecorder;
         mediaRecorder.start();
         setIsRecording(true);
-      } catch (err: any) {
-        alert(err.message || "マイクのアクセスに失敗しました。");
+      } catch (err: unknown) {
+        alert(err instanceof Error ? err.message : "マイクのアクセスに失敗しました。");
       }
     } else {
       if (mediaRecorderRef.current) {
@@ -94,37 +153,29 @@ export function SpotDetailModal({
     }
   }
 
-  // --- 画像添付処理 --------------------------------------------------------
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64data = (reader.result as string).split(",")[1] || "";
-      setSelectedImage({
-        mimeType: file.type,
-        data: base64data,
-        url: URL.createObjectURL(file),
-      });
-    };
-    reader.readAsDataURL(file);
-  }
-
-  // --- テキスト/画像送信 ----------------------------------------------------
+  // --- テキスト送信 ----------------------------------------------------
   function handleSendText() {
     const text = textInput.trim();
-    if (!text && !selectedImage) return;
+    if (!text) return;
 
-    onSendChat(text, selectedImage, null);
+    onSendChat(text, null, null);
     setTextInput("");
-    setSelectedImage(null);
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex justify-center">
+    <div
+      className="fixed inset-0 z-30 flex justify-center"
+      style={
+        keyboardOpen
+          ? { top: viewport.offsetTop, height: viewport.height, bottom: "auto" }
+          : undefined
+      }
+    >
       <div className="flex h-full w-full max-w-[500px] flex-col overflow-hidden bg-white">
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+        <div
+          ref={scrollContainerRef}
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+        >
           <div className="relative aspect-16/11 w-full shrink-0">
             <img
               src={rec.image}
@@ -137,17 +188,13 @@ export function SpotDetailModal({
               type="button"
               onClick={onClose}
               aria-label="戻る"
-              className="absolute left-3 top-3 flex size-9 items-center justify-center rounded-full bg-white/90 text-[#0f172a] shadow-sm transition active:scale-95"
+              className="absolute left-3 top-3 z-10 flex size-10 items-center justify-center rounded-full bg-white/90 text-[#0f172a] shadow-sm transition active:scale-95"
             >
-              <ChevronLeftIcon className="size-5" />
+              <ChevronLeftIcon className="size-6 mr-0.5" />
             </button>
 
-            <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 p-4">
-              <span
-                className={`w-fit rounded-md px-2 py-[3px] text-[12px] font-bold ${categoryBadgeClass(
-                  rec.category,
-                )}`}
-              >
+            <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 p-4 pr-28">
+              <span className="w-fit rounded-md bg-slate-600/90 px-2 py-[3px] text-[12px] font-bold text-white">
                 {rec.category}
               </span>
               <p className="text-[12px] font-medium text-white/85">
@@ -157,6 +204,25 @@ export function SpotDetailModal({
                 {rec.name}
               </p>
             </div>
+
+            <div className="absolute bottom-3 right-4 z-10 flex gap-2">
+              <button
+                type="button"
+                onClick={handleCopyName}
+                aria-label={nameCopied ? "コピーしました" : "スポット名をコピー"}
+                className="flex size-11 items-center justify-center rounded-full bg-white/20 text-white transition active:scale-95 hover:bg-white/30"
+              >
+                {nameCopied ? <CheckIcon className="size-5" /> : <CopyIcon className="size-5" />}
+              </button>
+              <button
+                type="button"
+                onClick={handleShare}
+                aria-label={shareCopied ? "コピーしました" : "スポットを共有"}
+                className="flex size-11 items-center justify-center rounded-full bg-white/20 text-white transition active:scale-95 hover:bg-white/30"
+              >
+                {shareCopied ? <CheckIcon className="size-5" /> : <ShareIcon className="size-5" />}
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-col gap-4 p-4">
@@ -165,27 +231,14 @@ export function SpotDetailModal({
               <p className="text-[14px] leading-[1.6] text-[#475569]">{rec.description}</p>
             </section>
 
-            <section className="flex items-start gap-2 rounded-xl bg-(--ai-bg) px-3 py-2.5">
-              <SparklesIcon className="mt-0.5 size-4 shrink-0 text-(--ai-fg)" />
-              <div className="flex flex-col gap-0.5">
-                <p className="text-[12px] font-bold text-(--ai-fg)">おすすめ理由</p>
-                <p className="text-[13px] leading-normal text-(--ai-fg)">{rec.reason}</p>
-              </div>
-            </section>
-
-            <section className="flex flex-col gap-1.5">
-              <p className="text-[13px] font-bold text-[#0f172a]">タグ</p>
-              <div className="flex flex-wrap gap-1.5">
-                {rec.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-md bg-[#e2e8f0] px-2 py-1 text-[12px] text-[#475569]"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            </section>
+            {trivia && (
+              <section className="flex items-start gap-2">
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-[13px] font-bold text-[#0f172a]">おすすめポイント</p>
+                  <p className="text-[13px] leading-normal text-[#475569]">{trivia}</p>
+                </div>
+              </section>
+            )}
 
             <a
               href={mapsUrl}
@@ -206,129 +259,94 @@ export function SpotDetailModal({
               <span className="text-[11px] font-medium text-(--brand)">地図を見る</span>
             </a>
 
-
-
             {/* AIチャットセクション（個別画面内に移植） */}
-            <section className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-[#f8fafc] p-4 shadow-inner mt-2">
-              <h4 className="text-[13px] font-bold text-slate-700 flex items-center gap-1.5 border-b border-slate-100 pb-2">
-                💬 AIガイドに質問する
-              </h4>
-
-              {/* メッセージ履歴 */}
-              <div className="flex flex-col gap-2.5 max-h-[220px] overflow-y-auto pr-1 text-[13px]">
-                {(chatHistory.length > 0
-                  ? chatHistory
-                  : [
-                      {
-                        role: "ai" as const,
-                        text: "このスポットについて、気になることや楽しみ方を聞いてみてください。写真や音声での質問も受け付けます！",
-                      },
-                    ]
-                ).map((m, idx) => {
-                  const isUser = m.role === "user";
-                  return (
-                    <div
-                      key={idx}
-                      className={`rounded-xl px-3 py-2 max-w-[85%] whitespace-pre-wrap leading-relaxed ${
-                        isUser
-                          ? "bg-teal-600 text-white self-end rounded-tr-none"
-                          : m.isError
-                            ? "bg-red-50 text-red-600 border border-red-100 self-start rounded-tl-none"
-                            : "bg-slate-100 text-slate-700 self-start rounded-tl-none"
-                      }`}
-                    >
-                      {m.text}
-                    </div>
-                  );
-                })}
+            <section className="flex flex-col gap-3">
+              <div>
+                <p className="flex items-center gap-1.5 text-[13px] font-bold text-[#0f172a]">
+                  AIガイドに質問する
+                </p>
+                <p className="text-[11px] text-[#7788a0]">
+                  正確な情報は公式サイトをご確認ください。
+                </p>
               </div>
-
-              {/* 画像添付プレビュー */}
-              {selectedImage && (
-                <div className="relative w-20 h-20 border border-slate-200 rounded-lg overflow-hidden">
-                  <img
-                    src={selectedImage.url}
-                    alt="添付プレビュー"
-                    className="w-full h-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSelectedImage(null)}
-                    className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-full bg-black/60 text-white text-[10px] font-bold"
-                  >
-                    ✕
-                  </button>
+              <div className="flex flex-col gap-3 rounded-xl border border-[#e2e8f0] bg-white p-3">
+                {/* メッセージ履歴（モーダル全体で1つのスクロールにするため内部スクロールはしない） */}
+                <div className="flex flex-col gap-2.5 pr-1 text-[13px]">
+                  {(chatHistory.length > 0
+                    ? chatHistory
+                    : [
+                        {
+                          role: "ai" as const,
+                          text: "このスポットについて、気になることを聞いてみてください。",
+                        },
+                      ]
+                  ).map((m) => {
+                    const isUser = m.role === "user";
+                    return (
+                      <div
+                        key={`${m.role}-${m.text}-${m.image ?? ""}`}
+                        className={`flex max-w-[85%] flex-col gap-1.5 whitespace-pre-wrap rounded-xl px-3 py-2 leading-relaxed ${
+                          isUser
+                            ? "self-end rounded-tr-none bg-(--brand) text-white"
+                            : m.isError
+                              ? "self-start rounded-tl-none border border-rose-100 bg-rose-50 text-rose-600"
+                              : "self-start rounded-tl-none bg-(--ai-bg) text-(--ai-fg)"
+                        }`}
+                      >
+                        {m.image && (
+                          <img
+                            src={m.image}
+                            alt="添付画像"
+                            className="max-h-40 w-full rounded-lg object-cover"
+                          />
+                        )}
+                        {m.text && <span>{m.text}</span>}
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-
-              {/* 送信フォーム */}
-              <div className="flex items-center gap-2 border-t border-slate-100 pt-2 text-[13px]">
-                {/* カメラ画像アップロード */}
-                <label
-                  className="flex size-9 cursor-pointer items-center justify-center rounded-full bg-white hover:bg-slate-100 text-[16px] transition shrink-0 shadow-xs animate-none"
-                  title="写真を送る"
-                >
-                  📸
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                </label>
-
-                {/* マイク音声録音 */}
-                <button
-                  type="button"
-                  onClick={handleMicToggle}
-                  className={`flex size-9 items-center justify-center rounded-full text-[16px] transition shrink-0 shadow-xs ${
-                    isRecording
-                      ? "bg-red-500 text-white animate-pulse"
-                      : "bg-white hover:bg-slate-100"
-                  }`}
-                  title={isRecording ? "録音を停止して送信" : "音声で話しかける"}
-                >
-                  🎙️
-                </button>
-
-                {/* テキスト入力 */}
-                <input
-                  type="text"
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSendText();
-                  }}
-                  placeholder="知りたいことを質問..."
-                  className="flex-1 rounded-full border border-slate-200 px-3 py-1.5 focus:outline-teal-600 focus:ring-0 text-[13px] bg-white"
-                />
-
-                <button
-                  type="button"
-                  onClick={handleSendText}
-                  className="rounded-full bg-teal-600 px-3.5 py-1.5 font-bold text-white hover:bg-teal-700 transition shrink-0 shadow-xs"
-                >
-                  送信
-                </button>
               </div>
             </section>
           </div>
         </div>
 
-        <div className="flex gap-2 border-t border-[#e2e8f0] bg-white px-4 pb-6 pt-4">
-          <button
-            type="button"
-            onClick={() => onToggleVisited(rec)}
-            aria-pressed={visited}
-            className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-4 text-[14px] font-bold transition active:scale-[0.99] ${
-              visited
-                ? "bg-[#059669] text-white"
-                : "border border-[#cbd5e1] bg-white text-[#475569]"
-            }`}
-          >
-            <CheckIcon className="size-4" />
-            {visited ? "行った" : "行った？"}
-          </button>
+        {/* 入力バー（スクロール領域の外に固定し、メッセージ件数やキーボードに関わらず常に操作可能にする） */}
+        <div className="shrink-0 border-t border-[#e2e8f0] bg-white p-3">
+          <div className="flex items-center gap-2 text-[13px]">
+            <button
+              type="button"
+              onClick={handleMicToggle}
+              aria-label={isRecording ? "録音を停止して送信" : "音声で話す"}
+              className={`flex size-10 shrink-0 items-center justify-center rounded-full border transition active:scale-95 ${
+                isRecording
+                  ? "animate-pulse border-rose-500 bg-rose-500 text-white"
+                  : "border-[#e2e8f0] bg-white text-[#475569] hover:bg-(--page)"
+              }`}
+            >
+              <MicIcon className="size-5" />
+            </button>
+
+            {/* テキスト入力 */}
+            <input
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSendText();
+              }}
+              placeholder="知りたいことを質問..."
+              className="min-w-0 flex-1 rounded-full border border-[#e2e8f0] bg-white px-3.5 py-2 text-[16px] text-[#0f172a] placeholder:text-[#94a3b8] focus:border-(--brand) focus:outline-none"
+            />
+
+            <button
+              type="button"
+              onClick={handleSendText}
+              aria-label="送信"
+              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-(--brand) text-white transition hover:opacity-90 active:scale-95"
+            >
+              <SendIcon className="size-5 -ml-0.5 -mb-0.5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

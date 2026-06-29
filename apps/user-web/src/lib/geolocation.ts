@@ -40,14 +40,23 @@ function mapGeolocationError(error: GeolocationPositionError): GeolocationError 
     case error.PERMISSION_DENIED:
       return new GeolocationError(
         "denied",
-        "位置情報の利用が許可されていません。ブラウザの設定でこのサイトの位置情報を「許可」にしてください。",
+        "位置情報の利用が許可されていません。\nブラウザの設定でこのサイトの位置情報を「許可」にしてください。",
       );
     case error.POSITION_UNAVAILABLE:
-      return new GeolocationError("unavailable", "現在地を取得できませんでした。");
+      return new GeolocationError(
+        "unavailable",
+        "現在地を取得できませんでした。\n端末の「位置情報サービス」と、ブラウザのサイト設定で位置情報を「許可」にしてからお試しください。",
+      );
     case error.TIMEOUT:
-      return new GeolocationError("timeout", "現在地の取得がタイムアウトしました。");
+      return new GeolocationError(
+        "timeout",
+        "現在地の取得がタイムアウトしました。\n端末の「位置情報サービス」と、ブラウザのサイト設定で位置情報を「許可」にしてからお試しください。",
+      );
     default:
-      return new GeolocationError("unknown", "現在地の取得に失敗しました。");
+      return new GeolocationError(
+        "unknown",
+        "現在地の取得に失敗しました。\n端末の「位置情報サービス」と、ブラウザのサイト設定で位置情報を「許可」にしてからお試しください。",
+      );
   }
 }
 
@@ -80,18 +89,13 @@ export function requestCurrentCoordinates(
   onSuccess: (coords: Coordinates) => void,
   onError: (error: GeolocationError) => void,
 ): void {
-  if (!window.isSecureContext) {
+  if (!("geolocation" in navigator)) {
     onError(
       new GeolocationError(
         "unsupported",
-        "位置情報はHTTPS接続（またはlocalhost）でのみ利用できます。",
+        "この端末では現在地を取得できません。\n端末の「位置情報サービス」と、ブラウザのサイト設定で位置情報を「許可」にしてからお試しください。",
       ),
     );
-    return;
-  }
-
-  if (!("geolocation" in navigator)) {
-    onError(new GeolocationError("unsupported", "この端末では現在地を取得できません。"));
     return;
   }
 

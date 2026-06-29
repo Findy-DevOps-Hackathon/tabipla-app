@@ -3,27 +3,19 @@ import {
   AuthError,
   deleteAccount,
   login,
-  register,
   type UserAccount,
   verifyCredentials,
 } from "../auth.ts";
 import { ChevronLeftIcon, EyeIcon, EyeOffIcon } from "../components/icons.tsx";
 import { DANGER_BUTTON, PRIMARY_BUTTON } from "../lib/ui.ts";
 import { useLockBodyScroll } from "../lib/useLockBodyScroll.ts";
-import {
-  PASSWORD_MIN,
-  validateEmail,
-  validateLoginPassword,
-  validateName,
-  validatePassword,
-} from "../lib/validation.ts";
+import { validateEmail, validateLoginPassword } from "../lib/validation.ts";
 
-type AuthMode = "login" | "register";
-/** 表示中のビュー。ログイン/登録 or 退会ページ。 */
+/** 表示中のビュー。ログイン or 退会ページ。 */
 type AuthView = "auth" | "delete";
 
 type AuthScreenProps = {
-  /** ログイン/登録に成功したとき。 */
+  /** ログインに成功したとき。 */
   onAuthenticated: (user: UserAccount) => void;
   /** 表示する理由（例: クーポン利用のため）。指定時はバナーを出す。 */
   reason?: string;
@@ -96,18 +88,15 @@ function Field({
   );
 }
 
-/** ログイン / 新規会員登録の画面（クーポン利用時などにプロンプトとして表示）。 */
+/** ログイン画面（クーポン利用時などにプロンプトとして表示）。 */
 export function AuthScreen({ onAuthenticated, reason, onCancel }: AuthScreenProps) {
   useLockBodyScroll();
 
   const [view, setView] = useState<AuthView>("auth");
-  const [mode, setMode] = useState<AuthMode>("login");
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<{
-    name?: string;
     email?: string;
     password?: string;
   }>({});
@@ -117,15 +106,6 @@ export function AuthScreen({ onAuthenticated, reason, onCancel }: AuthScreenProp
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState("");
-
-  const isRegister = mode === "register";
-
-  function switchMode(next: AuthMode) {
-    setMode(next);
-    setError("");
-    setNotice("");
-    setFieldErrors({});
-  }
 
   // 退会ページを開く。入力内容はクリアして専用フォームから入力し直してもらう。
   function openDelete() {
@@ -137,7 +117,7 @@ export function AuthScreen({ onAuthenticated, reason, onCancel }: AuthScreenProp
     setPassword("");
   }
 
-  // 退会ページからログイン/登録に戻る。
+  // 退会ページからログインに戻る。
   function closeDelete() {
     setView("auth");
     setConfirmDelete(false);
@@ -181,7 +161,6 @@ export function AuthScreen({ onAuthenticated, reason, onCancel }: AuthScreenProp
       await deleteAccount({ email, password });
       setConfirmDelete(false);
       setView("auth");
-      setMode("login");
       setEmail("");
       setPassword("");
       setNotice("退会が完了しました。\nご利用ありがとうございました。");
@@ -196,16 +175,12 @@ export function AuthScreen({ onAuthenticated, reason, onCancel }: AuthScreenProp
   }
 
   function validateAll(): boolean {
-    const next: { name?: string; email?: string; password?: string } = {};
-    if (isRegister) {
-      next.name = validateName(name) ?? undefined;
-    }
+    const next: { email?: string; password?: string } = {};
     next.email = validateEmail(email) ?? undefined;
-    next.password =
-      (isRegister ? validatePassword(password) : validateLoginPassword(password)) ?? undefined;
+    next.password = validateLoginPassword(password) ?? undefined;
 
     setFieldErrors(next);
-    return !next.name && !next.email && !next.password;
+    return !next.email && !next.password;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -217,9 +192,7 @@ export function AuthScreen({ onAuthenticated, reason, onCancel }: AuthScreenProp
 
     setSubmitting(true);
     try {
-      const user = await (isRegister
-        ? register({ name, email, password })
-        : login({ email, password }));
+      const user = await login({ email, password });
       onAuthenticated(user);
     } catch (err) {
       setError(
@@ -371,21 +344,6 @@ export function AuthScreen({ onAuthenticated, reason, onCancel }: AuthScreenProp
       )}
 
       <form onSubmit={handleSubmit} className="mt-10 flex flex-col gap-4">
-        {isRegister && (
-          <Field
-            label="お名前"
-            type="text"
-            value={name}
-            onChange={(v) => {
-              setName(v);
-              setError("");
-              setFieldErrors((prev) => ({ ...prev, name: undefined }));
-            }}
-            placeholder="旅 太郎"
-            autoComplete="name"
-            error={fieldErrors.name}
-          />
-        )}
         <Field
           label="メールアドレス"
           type="email"
@@ -408,10 +366,8 @@ export function AuthScreen({ onAuthenticated, reason, onCancel }: AuthScreenProp
             setError("");
             setFieldErrors((prev) => ({ ...prev, password: undefined }));
           }}
-          placeholder={isRegister ? `${PASSWORD_MIN}文字以上` : ""}
-          autoComplete={isRegister ? "new-password" : "current-password"}
+          autoComplete="current-password"
           error={fieldErrors.password}
-          hint={isRegister ? `${PASSWORD_MIN}文字以上・英字と数字を含めてください` : undefined}
         />
 
         {notice && (
@@ -431,26 +387,9 @@ export function AuthScreen({ onAuthenticated, reason, onCancel }: AuthScreenProp
           disabled={submitting}
           className={`${PRIMARY_BUTTON} mt-2 h-[52px] text-[16px]`}
         >
-          {submitting
-            ? isRegister
-              ? "登録中…"
-              : "ログイン中…"
-            : isRegister
-              ? "登録して始める"
-              : "ログイン"}
+          {submitting ? "ログイン中…" : "ログイン"}
         </button>
       </form>
-
-      <p className="mt-6 text-center text-[13px] text-[#64748b]">
-        {isRegister ? "すでにアカウントをお持ちですか？" : "アカウントをお持ちでないですか？"}{" "}
-        <button
-          type="button"
-          onClick={() => switchMode(isRegister ? "login" : "register")}
-          className="font-bold text-[#0f172a] underline-offset-2 hover:underline"
-        >
-          {isRegister ? "ログイン" : "新規登録"}
-        </button>
-      </p>
 
       <div className="mt-auto flex flex-col items-center gap-1 pt-8">
         <button

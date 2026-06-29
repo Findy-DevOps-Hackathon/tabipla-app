@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
-import { PREFERENCE_TAGS } from "../data/spots.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 
 type ProcessingScreenProps = {
@@ -89,29 +88,14 @@ export function ProcessingScreen({
             </div>
 
             <div className="flex flex-col items-center gap-3">
-              <p className="text-[18px] font-semibold text-[#0f172a]">
-                AIエージェントがディベート中…
-              </p>
+              <p className="text-[18px] font-semibold text-[#0f172a]">回答を基に診断中…</p>
               <p className="text-center text-[14px] leading-[1.6] text-[#64748b]">
-                スワイプした {count} 件のスポットをもとに
+                回答 {count} 件をもとに
                 <br />
-                最適なプランを合意形成しています。
+                最適なプランを生成しています。
               </p>
             </div>
           </>
-        )}
-
-        {!apiError && (
-          <div className="flex gap-2">
-            {PREFERENCE_TAGS.map((tag: string) => (
-              <span
-                key={tag}
-                className="rounded-md bg-[#e2e8f0] px-2 py-1 text-[12px] text-[#475569]"
-              >
-                #{tag}
-              </span>
-            ))}
-          </div>
         )}
       </div>
 

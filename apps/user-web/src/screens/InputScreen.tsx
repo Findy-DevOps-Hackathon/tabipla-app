@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ArrowRightIcon,
   ChevronLeftIcon,
+  ChevronRightIcon,
   MapPinIcon,
   SearchIcon,
   XCircleIcon,
@@ -24,12 +24,19 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
   const [value, setValue] = useState("");
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  /** 入力値が現在地取得（逆ジオコーディング）で自動入力されたか。 */
+  const [fromCurrentLocation, setFromCurrentLocation] = useState(false);
   const location = value.trim();
   const canSearch = location.length > 0 && !locating;
   const placeMatches = location.length > 0 ? searchPlaces(location) : [];
   const showSuggestions = !locating;
+  const showPlaceSuggestions =
+    showSuggestions && location.length > 0 && !(fromCurrentLocation && placeMatches.length === 0);
 
-  const handleUseCurrentLocation = useCallback(() => {
+  // showErrors=false の場合はエラーメッセージを表示しない（画面表示時の自動取得用）。
+  // 「位置情報の利用が許可されていません。」等は、ユーザーが「現在地から探す」を
+  // タップしたときにのみ出すため、自動取得では握りつぶす。
+  const handleUseCurrentLocation = useCallback((showErrors = true) => {
     // iOS Safari は「タップのハンドラ内で setState より先に同期的に geolocation を呼ぶ」
     // ことを要求するため、ここでは何より先に requestCurrentCoordinates を呼ぶ。
     let erroredSync = false;
@@ -38,9 +45,10 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
         void coordsToLocation(coords)
           .then((current) => {
             setValue(current.label);
+            setFromCurrentLocation(true);
           })
           .catch(() => {
-            setLocationError("現在地を取得できませんでした。");
+            if (showErrors) setLocationError("現在地を取得できませんでした。");
           })
           .finally(() => {
             setLocating(false);
@@ -49,7 +57,7 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
       (error) => {
         erroredSync = true;
         setLocating(false);
-        setLocationError(error.message);
+        if (showErrors) setLocationError(error.message);
       },
     );
 
@@ -68,7 +76,8 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
     if (!afterDiagnosis) return;
     if (autoRequestedRef.current) return;
     autoRequestedRef.current = true;
-    handleUseCurrentLocation();
+    // 自動取得では許可拒否などのエラーを表示しない（タップ時のみ表示する）。
+    handleUseCurrentLocation(false);
   }, [afterDiagnosis, handleUseCurrentLocation]);
 
   return (
@@ -92,37 +101,38 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
         <div className="flex flex-1 flex-col gap-6 px-4 pt-6">
           <div className="flex flex-col gap-1">
             <p className="text-[20px] font-bold text-[#0f172a]">
-              {afterDiagnosis ? "目的地を選ぶ" : "目的地を入力"}
+              {afterDiagnosis ? "旅先を選ぶ" : "旅先を入力"}
             </p>
             <p className="text-[13px] text-[#64748b]">
               {afterDiagnosis
                 ? locating
                   ? "現在地を取得しています。許可されると目的地に自動入力します"
-                  : "好み診断が完了しました。現在地を使うか、探したい地域を選んでください"
+                  : "現在地を使うか、探したい地域を入力してください"
                 : "市区町村または都道府県名を入力してください"}
             </p>
           </div>
 
-          {locationError && (
-            <p className="whitespace-pre-line rounded-xl bg-[#ecececb0] px-3 py-2 text-[13px] text-[#64748b]">
-              {locationError}
-            </p>
-          )}
-
           <div className="flex flex-col gap-4">
-            <div className="flex h-[52px] items-center gap-2.5 rounded-2xl border-[1.5px] border-(--brand) bg-white px-3">
+            <div className="flex h-[52px] items-center gap-2.5 rounded-xl border-[1.5px] border-(--brand-from)/30 bg-white px-3 shadow-[0_2px_4px_rgba(10,161,155,0.03)]">
               <SearchIcon className="size-5 shrink-0 text-(--brand)" />
               <input
                 value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder={locating ? "現在地を取得中…" : "目的地を入力"}
+                onChange={(e) => {
+                  setValue(e.target.value);
+                  setFromCurrentLocation(false);
+                  setLocationError(null);
+                }}
+                placeholder={locating ? "現在地を取得中…" : "旅先を入力"}
                 disabled={locating}
                 className="min-w-0 flex-1 bg-transparent text-[16px] text-[#0f172a] outline-none placeholder:text-[#94a3b8] disabled:opacity-60"
               />
               {value.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setValue("")}
+                  onClick={() => {
+                    setValue("");
+                    setFromCurrentLocation(false);
+                  }}
                   aria-label="入力をクリア"
                   className="shrink-0 text-[#94a3b8] transition active:opacity-60"
                 >
@@ -130,33 +140,40 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
                 </button>
               )}
             </div>
-
             {afterDiagnosis && (
               <button
                 type="button"
-                onClick={handleUseCurrentLocation}
+                onClick={() => handleUseCurrentLocation(true)}
                 disabled={locating}
-                className="flex h-[44px] items-center justify-center gap-2 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] text-[14px] font-medium text-[#475569] transition active:bg-[#f1f5f9] disabled:opacity-60"
+                className="flex h-12 items-center justify-center gap-2 rounded-full border border-[#94a3b8] bg-white text-[14px] font-semibold text-[#94a3b8] transition active:bg-[#f1f5f9] disabled:opacity-60 shadow-[0_3px_6px_rgba(10,161,155,0.03)]"
               >
-                <MapPinIcon className="size-4 shrink-0 text-(--brand)" />
-                {locating ? "現在地を取得中…" : "現在地を使う"}
+                <MapPinIcon className="size-5 shrink-0 text-[#94a3b8]" />
+                {locating ? "現在地を取得中…" : "現在地から探す"}
               </button>
             )}
+            {locationError && (
+              <p className="whitespace-pre-line rounded-xl bg-[#ecececb0] px-3 py-2 text-[13px] text-[#64748b]">
+                {locationError}
+              </p>
+            )}
 
-            {showSuggestions && location.length > 0 && (
-              <ul className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_2px_4px_rgba(15,23,42,0.03)]">
-                {placeMatches.length === 0 ? (
-                  <li className="px-4 py-3 text-[13px] text-[#94a3b8]">
-                    該当する地名が見つかりませんでした
-                  </li>
-                ) : (
-                  placeMatches.map((place) => {
+            {showPlaceSuggestions &&
+              (placeMatches.length === 0 ? (
+                <ul className="px-1 py-1">
+                  <li className="text-[13px] text-[#94a3b8]">該当する地名が見つかりませんでした</li>
+                </ul>
+              ) : (
+                <ul className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_2px_4px_rgba(15,23,42,0.03)]">
+                  {placeMatches.map((place) => {
                     const selected = place.name === location;
                     return (
                       <li key={`${place.prefecture ?? ""}-${place.name}`}>
                         <button
                           type="button"
-                          onClick={() => setValue(place.name)}
+                          onClick={() => {
+                            setValue(place.name);
+                            setFromCurrentLocation(false);
+                          }}
                           className={`flex w-full flex-col items-start gap-0.5 border-b border-[#f8fafc] px-4 py-3 text-left transition active:bg-[#f1f5f9] ${
                             selected ? "bg-[#f1f5f9]" : "bg-white"
                           }`}
@@ -171,30 +188,29 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
                         </button>
                       </li>
                     );
-                  })
-                )}
-              </ul>
-            )}
+                  })}
+                </ul>
+              ))}
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 border-t border-[#e2e8f0] bg-white px-4 pb-8 pt-4">
+      <div className="flex flex-col gap-3 border-t  border-[#e2e8f0] bg-white px-4 pb-8 pt-4">
         <button
           type="button"
           disabled={!canSearch}
           onClick={() => canSearch && onSearch(location)}
-          className={`${PRIMARY_BUTTON} h-[52px] text-[16px]`}
+          className={`${PRIMARY_BUTTON} h-16 leading-none flex w-full items-center justify-center gap-1.5 px-5 py-[17px] text-[16px] tracking-[1.2px]`}
         >
           {canSearch ? (
             <>
-              {location}で探す
-              <ArrowRightIcon className="size-[18px]" />
+              <div>{location}で探す</div>
+              <ChevronRightIcon className="size-5 mt-0.5" />
             </>
           ) : locating ? (
             "現在地を取得中…"
           ) : (
-            "目的地を入力してください"
+            "旅先を入力してください"
           )}
         </button>
       </div>

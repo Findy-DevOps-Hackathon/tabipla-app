@@ -1,7 +1,7 @@
-import { ClockIcon, HomeIcon, SearchIcon } from "./icons.tsx";
+import { HomeIcon, SearchIcon } from "./icons.tsx";
 
 /** 下部ナビのタブ種別。 */
-export type NavTab = "home" | "search" | "history";
+export type NavTab = "home" | "search";
 
 type BottomNavProps = {
   /** 現在アクティブなタブ。 */
@@ -15,12 +15,11 @@ type BottomNavProps = {
 const TABS = [
   { id: "home", label: "ホーム", Icon: HomeIcon },
   { id: "search", label: "探す", Icon: SearchIcon },
-  { id: "history", label: "履歴", Icon: ClockIcon },
 ] as const;
 
 /**
  * 画面下部に固定表示するタブバー風フッター。
- * ホーム / 探す / 履歴 の主要セクションを切り替える。
+ * ホーム / 探す の主要セクションを切り替える。
  * iOS のホームインジケータ領域（safe-area-inset-bottom）を考慮して余白を確保する。
  */
 export function BottomNav({ active, onNavigate, visible = true }: BottomNavProps) {

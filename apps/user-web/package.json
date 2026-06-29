@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "generate:places": "node scripts/generate-municipalities.mjs",
     "clean": "rm -rf dist",
     "deploy": "pnpm build && firebase deploy --only hosting"
   },
