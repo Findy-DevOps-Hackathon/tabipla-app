@@ -70,7 +70,7 @@ function ComparisonCard({
       type="button"
       disabled={disabled}
       onClick={onSelect}
-      aria-label={`${position === "top" ? "上" : "下"}のスポットを選ぶ`}
+      aria-label={`${spot.name}を選ぶ`}
       style={{
         transition: showWiggle
           ? "opacity 0.28s ease-out, box-shadow 0.28s ease-out"
@@ -100,9 +100,14 @@ function ComparisonCard({
         >
           {spot.category}
         </span>
-        <p className="absolute inset-x-0 bottom-0 px-4 pb-4 text-[13px] leading-relaxed font-medium text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
-          {comparisonTrivia(spot.trivia)}
-        </p>
+        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 px-4 pb-4">
+          <p className="text-[15px] font-bold leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
+            {spot.name}
+          </p>
+          <p className="text-[13px] leading-relaxed font-medium text-white/90 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
+            {comparisonTrivia(spot.trivia)}
+          </p>
+        </div>
       </div>
     </button>
   );
@@ -260,7 +265,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
 
         <div className="flex flex-col items-center gap-3 px-4 pt-5">
           <p className="text-center text-[15px] font-bold text-[#64748b]">
-            あなたの好みに合う方を選んでください
+            どちらが好みの観光地ですか？
           </p>
 
           {currentTop && currentBottom && (
