@@ -1,5 +1,5 @@
 /**
- * 旅行者（user-web）向けの会員登録・ログインを扱うクライアント。
+ * 旅行者（user-web）向けのログインを扱うクライアント。
  *
  * 認証は backend-api（`/api/users/*`）で行い、アカウント・パスワード（ハッシュ）は
  * PostgreSQL に保存される。フロントはサーバから受け取ったトークンと公開情報のみを
@@ -9,8 +9,6 @@
 import {
   validateEmail,
   validateLoginPassword,
-  validateName,
-  validatePassword,
 } from "./lib/validation.ts";
 
 const SESSION_KEY = "tabipla-user-session";
@@ -29,7 +27,7 @@ type StoredSession = {
   user: UserAccount;
 };
 
-/** 会員登録/ログインの失敗を表すエラー。 */
+/** ログインの失敗を表すエラー。 */
 export class AuthError extends Error {}
 
 /** backend-api がエラー時に返す JSON 形（{ error, ... }）。 */
@@ -83,31 +81,6 @@ export function getSession(): UserAccount | null {
 /** 認証付きリクエスト用のアクセストークン（未ログインなら null）。 */
 export function getToken(): string | null {
   return readSession()?.token ?? null;
-}
-
-/** 新規会員登録を行い、ログイン状態にする。失敗時は AuthError。 */
-export async function register(input: {
-  name: string;
-  email: string;
-  password: string;
-}): Promise<UserAccount> {
-  const name = input.name.trim();
-  const email = input.email.trim();
-
-  const nameError = validateName(name);
-  if (nameError) throw new AuthError(nameError);
-  const emailError = validateEmail(email);
-  if (emailError) throw new AuthError(emailError);
-  const passwordError = validatePassword(input.password);
-  if (passwordError) throw new AuthError(passwordError);
-
-  const { token, user } = await postAuth("/users/register", {
-    name,
-    email,
-    password: input.password,
-  });
-  writeSession({ token, user });
-  return user;
 }
 
 /** メール・パスワードでログインする。失敗時は AuthError。 */
