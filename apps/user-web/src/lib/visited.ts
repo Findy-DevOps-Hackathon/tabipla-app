@@ -1,9 +1,8 @@
 /**
  * 「行った」スポットの訪問履歴をクライアントサイド（localStorage）で管理する。
  *
- * backend-api には訪問履歴 API が存在しないため、auth.ts と同様にブラウザ完結の
- * デモ実装にしている。履歴はログインユーザーごとに保存され、将来的には backend-api
- * に履歴 API を追加して各関数を HTTP 呼び出しへ差し替える想定。
+ * backend-api には訪問履歴 API が存在しないため、ブラウザ完結のデモ実装。
+ * 現状は匿名ユーザー ID（`guest`）のみを使う。
  */
 
 import type { SpotCategory } from "../data/spots.ts";
