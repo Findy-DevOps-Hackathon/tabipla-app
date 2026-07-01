@@ -10,7 +10,8 @@
     "start": "node --env-file-if-exists=.env dist/server.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "deploy": "bash scripts/deploy.sh"
   },
   "engines": {
     "node": ">=22"

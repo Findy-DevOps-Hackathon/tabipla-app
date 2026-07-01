@@ -20,6 +20,56 @@ pnpm --filter @tabipla/agent dev
 # → http://localhost:8080/
 ```
 
+## デプロイ（Cloud Run / GCP）
+
+Hono サーバを **Cloud Run** に載せます。Vertex AI（Gemini）を使うため、Firebase Hosting（user-web）と同じ GCP プロジェクト（例: `tabipla-user-web`）へのデプロイを想定しています。
+
+### 前提
+
+- [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)（`gcloud`）がインストール済み
+- `gcloud auth login` 済み
+- 対象プロジェクトで **Cloud Run API**・**Cloud Build API**・**Vertex AI API** が有効
+- Cloud Run の実行サービスアカウントに **Vertex AI User**（`roles/aiplatform.user`）を付与
+
+```bash
+# プロジェクト指定（未設定の場合）
+gcloud config set project tabipla-user-web
+
+# ローカル開発用 ADC（任意。Cloud Run 上では実行 SA が使われる）
+gcloud auth application-default login
+```
+
+### 手順
+
+```bash
+# リポジトリルートまたは services/agent から
+pnpm --filter @tabipla/agent run deploy
+```
+
+`pnpm run deploy` は `package.json` の `deploy`（= `bash scripts/deploy.sh`）です。
+`run` を省いた `pnpm deploy` は pnpm の組み込みコマンドと衝突するため、必ず `pnpm run deploy` を使う。
+
+### backend-api との接続
+
+`services/backend-api` は `AGENT_API_URL`（既定 `http://localhost:8080`）経由で agent を呼び出します。
+backend-api も Cloud Run 等に載せる場合は、デプロイ後の URL を設定してください。
+
+```bash
+AGENT_API_URL=https://tabipla-agent-xxxxx-uc.a.run.app
+```
+
+### ローカルで Docker イメージを試す
+
+```bash
+# リポジトリルートで
+docker build -f services/agent/Dockerfile -t tabipla-agent .
+docker run --rm -p 8080:8080 \
+  -e GOOGLE_GENAI_USE_VERTEXAI=TRUE \
+  -e GOOGLE_CLOUD_PROJECT=your-project \
+  -e GOOGLE_CLOUD_LOCATION=us-central1 \
+  tabipla-agent
+```
+
 ## 安全対策・セーフティネットの仕様
 
 本番公開を見据え、エージェントのトークン無駄遣いや無限ループ防止のため、以下の安全機能を搭載しています。
