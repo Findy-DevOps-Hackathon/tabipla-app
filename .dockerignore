@@ -1,0 +1,17 @@
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+.git
+.github
+**/*.md
+!services/agent/README.md
+apps
+packages
+services/backend-api
+infra
+docs
+scripts
+.cursor
+*.log
