@@ -37,12 +37,3 @@ export function markDetailedDiagnosisComplete(): void {
   }
 }
 
-/** 好み診断の記録（通常・深掘り）をすべて消去する。ログイン/ログアウト時に呼ぶ。 */
-export function resetDiagnosis(): void {
-  try {
-    localStorage.removeItem(KEY);
-    localStorage.removeItem(DETAILED_KEY);
-  } catch {
-    // 失敗しても致命的ではない。
-  }
-}

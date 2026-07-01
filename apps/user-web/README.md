@@ -1,13 +1,16 @@
 # @tabipla/user-web
 
-tabipla のユーザー向け Web フロントエンドです。観光スポット（Spot）を検索・閲覧します。
+tabipla のユーザー向け Web フロントエンドです。スワイプ型のレコメンド体験と AI エージェント連携を提供します。
 
-**検索ロジックは持たず**、必ず `services/backend-api`（HTTP）を経由します。Elasticsearch /
-`@tabipla/search-core` には直接アクセスしません。
+**検索ロジックは持たず**、Elasticsearch / `@tabipla/search-core` には直接アクセスしません。
+エージェント API は開発時に `backend-api` 経由でプロキシされます。
 
 ```text
-user-web ──(HTTP /api)──▶ backend-api ──▶ search-core ──▶ Elasticsearch
+user-web ──(HTTP /api/v1/*)──▶ backend-api ──▶ services/agent
+         ──(将来) /api/search* ──▶ backend-api ──▶ search-core ──▶ Elasticsearch
 ```
+
+会員登録・ログイン機能は提供しません（`@tabipla/db` も利用しません）。
 
 ---
 
@@ -33,15 +36,16 @@ user-web ──(HTTP /api)──▶ backend-api ──▶ search-core ──▶ 
 # リポジトリルートで依存インストール
 pnpm install
 
-# backend-api を起動しておく（別ターミナル。Elasticsearch も事前に起動）
+# backend-api + agent を起動しておく（別ターミナル）
 pnpm -C services/backend-api dev
+pnpm -C services/agent dev
 
 # フロント開発起動（http://localhost:5173）
 pnpm -C apps/user-web dev
 ```
 
 開発時は Vite dev server が `/api/*` を backend-api へプロキシするため、CORS 設定なしで
-検索 API を呼び出せます（`vite.config.ts`）。
+エージェント API を呼び出せます（`vite.config.ts`）。
 
 ```bash
 # 本番相当ビルド / プレビュー
@@ -89,14 +93,12 @@ pnpm run deploy
 
 ## デプロイ時の注意事項
 
-- **検索 API（`/api/*`）は本番では未接続**。`/api` のプロキシは開発サーバ（`vite.config.ts`）
-  限定のため、Firebase Hosting 単体では `backend-api` に到達できず**検索機能は動きません**。
+- **エージェント API（`/api/v1/*`）は本番では未接続**。`/api` のプロキシは開発サーバ（`vite.config.ts`）
+  限定のため、Firebase Hosting 単体では `backend-api` / `agent` に到達できず**プラン生成・AI チャットは動きません**。
   画面遷移・スワイプ等のデモ動作は問題なく確認できます。
-- **本番で実検索を繋ぐ場合**は、`backend-api` を別 URL（例: Cloud Run）へデプロイし、
+- **本番でエージェントを繋ぐ場合**は、`backend-api` と `agent` を別 URL（例: Cloud Run）へデプロイし、
   `firebase.json` の `rewrites` に `/api/**` → そのバックエンドへの転送（`run` 連携 or リバースプロキシ）
   を追加する。`src/api.ts` の `API_BASE` 切り替えでも対応可能。
-- **会員登録/ログインはフロント完結のデモ**（`src/auth.ts`、localStorage 保存）。本番公開時は
-  認証情報がサーバーに送られない点に留意（将来 user 向け会員 API へ差し替え予定）。
 - **`dist/` はビルド成果物**なのでコミット不要（`pnpm deploy` が毎回再生成）。
 - **インフラ管理（Terraform 等）は不要**。フロント静的配信のみで状態管理対象がほぼないため、
   `firebase deploy` で完結する。backend 一式を GCP に本格構築する段階で IaC を検討する。
@@ -106,16 +108,14 @@ pnpm run deploy
 ## 画面・機能
 
 スワイプ型のレコメンド体験（モバイルファースト 390×844）。Figma デザイン
-（`docs/figma-user-design-brief.md` / Findy DevOps ファイル）に準拠した 5 ステップのフロー。
-未ログイン時は会員登録/ログイン画面（`AuthScreen`）を入口に表示する。
+（`docs/figma-user-design-brief.md` / Findy DevOps ファイル）に準拠したフロー。
 
-0. **会員登録 / ログイン**（`AuthScreen`）— 新規登録（お名前・メール・パスワード）またはログイン
-1. **ようこそ**（`WelcomeScreen`）— 挨拶・ログアウト、「現在地を使う」/「目的地を入力する」を選ぶ
-2. **目的地入力**（`InputScreen`）— 市区町村・都道府県を入力、サジェスト表示
-3. **スワイプ**（`SwipeScreen`）— スポットカードを左右スワイプ（好き / 興味なし）。
-   ドラッグ量に応じて LIKE / NOPE オーバーレイを表示し、ボタン操作にも対応
-4. **分析中**（`ProcessingScreen`）— スワイプ結果から好みを擬似分析
-5. **おすすめ一覧**（`RecommendationsScreen`）— おすすめ理由・相性スコア付きカード
+1. **ようこそ**（`WelcomeScreen`）— 挨拶、「好み診断を始める」
+2. **スワイプ**（`SwipeScreen`）— スポットカードを左右スワイプ（好き / 興味なし）
+3. **目的地入力**（`InputScreen`）— 市区町村・都道府県を入力、サジェスト表示
+4. **旅の記憶**（`MemoryScreen`）— 過去の旅行体験を自由記述
+5. **分析中**（`ProcessingScreen`）— エージェント API でプラン生成
+6. **おすすめ一覧**（`RecommendationsScreen`）— おすすめ理由・相性スコア付きカード
 
 ---
 
@@ -123,26 +123,21 @@ pnpm run deploy
 
 | ファイル | 役割 |
 |---|---|
-| `src/App.tsx` | 認証ゲート + フロー全体のステップ状態機械 |
-| `src/auth.ts` | 会員登録・ログイン・セッション（localStorage、フロント完結のデモ実装） |
+| `src/App.tsx` | フロー全体のステップ状態機械 |
 | `src/components/PhoneShell.tsx` | 端末フレーム・ステータスバー・ホームインジケータ |
 | `src/components/icons.tsx` | インライン SVG アイコン群 |
 | `src/screens/*.tsx` | 各ステップの画面 |
-| `src/data/spots.ts` | 小諸市のデモスポット・サジェスト・おすすめデータと型 |
-| `src/lib/category.ts` | カテゴリバッジの配色 |
-| `src/api.ts` / `src/types.ts` | backend-api 検索クライアントと型（将来のスポット候補取得用に保持） |
+| `src/data/spots.ts` | 小諸市のデモスポット・おすすめデータと型 |
+| `src/lib/visited.ts` | 「行った」履歴（localStorage、匿名 `guest`） |
+| `src/api.ts` / `src/types.ts` | backend-api 検索クライアントと型（将来の検索 UI 用に保持） |
 | `public/spots/*.png` | カード画像（Figma から取得したデモ写真） |
 
 ---
 
 ## 注意 / 未実装範囲
 
-- **スワイプ候補・おすすめは現状デモデータ**（`src/data/spots.ts`）。backend-api には
-  スワイプ/レコメンド用エンドポイントが未実装のため、将来 `src/api.ts` 経由で
-  目的地に応じたスポット候補を取得して差し替える想定。
+- **スワイプ候補・おすすめは現状デモデータ**（`src/data/spots.ts`）。プラン生成は
+  `backend-api` → `agent` 経由。将来は DB / 検索 API から候補を取得して差し替える想定。
 - **現在地取得（Geolocation）** はブラウザの Geolocation API で実取得し、OpenStreetMap
   Nominatim の逆ジオコーディングでエリア名（市区町村など）へ変換する（`src/lib/geolocation.ts`）。
-  許可拒否・取得失敗時は `WelcomeScreen` にエラーを表示する。
-- **会員登録/ログインはフロント完結のデモ**（`src/auth.ts`）。アカウント・パスワードは
-  localStorage にのみ保存され、サーバーには送らない。backend-api は現状 admin（自治体職員）
-  専用の認証のみ持つため、本実装は将来 user 向け会員 API に差し替える想定。
+- **会員機能なし**。訪問履歴はブラウザ localStorage のみ（ユーザー ID は常に `guest`）。
