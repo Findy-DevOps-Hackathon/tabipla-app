@@ -1,12 +1,13 @@
 import type { SearchMode, SearchResponse } from "./types.ts";
+import { API_BASE } from "./config.ts";
 
 /**
  * backend-api への検索リクエストを担う薄いクライアント。
  *
  * - 開発時は Vite の dev server が `/api` を backend-api へプロキシする（vite.config.ts）。
+ * - 本番は `VITE_API_BASE`（Cloud Run URL）へ直接リクエストする。
  * - フロントは Elasticsearch / search-core に直接触れず、必ずこの HTTP 経由で検索する。
  */
-const API_BASE = "/api";
 
 export type SearchParams = {
   query: string;
