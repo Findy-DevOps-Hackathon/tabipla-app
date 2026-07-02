@@ -2,7 +2,7 @@
   "name": "@tabipla/agent",
   "version": "0.1.0",
   "private": true,
-  "description": "ADKエージェント(推薦/蘊蓄/旅程/パーソナライズ)。@google/adk + Hono。検索は @tabipla/search-core に結線予定。",
+  "description": "ADKエージェント(推薦/旅程/パーソナライズ/Web収集)。@google/adk + Hono。検索は @tabipla/search-core に結線予定。",
   "type": "module",
   "main": "./dist/server.js",
   "scripts": {

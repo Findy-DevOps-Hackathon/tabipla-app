@@ -1,11 +1,15 @@
+import { InMemoryRunner, stringifyContent } from "@google/adk";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { analyzeFeedback } from "./agents/feedback.js";
-import { askIntroduce } from "./agents/introduce.js";
+
+
+import { cors } from "hono/cors";
+import { collectAgent, parseCollectResult } from "./agents/collect.js";
+
+
 import { personalizedPlan } from "./agents/personalized.js";
 import { recommendAgent } from "./agents/recommend.js";
 import { ask } from "./agents/run.js";
-import { story } from "./agents/unchiku.js";
 import { KOMORO_SPOTS, SPOT_IMAGES, SPOT_TAGS } from "./fixtures/spots.js";
 import { summarizeProfile, userProfiles } from "./personalize.js";
 import { sceneSvg } from "./sceneSvg.js";
@@ -13,11 +17,18 @@ import { toolCallStorage } from "./tools/tracker.js";
 
 const app = new Hono();
 
-app.use("*", async (c, next) => {
-  return toolCallStorage.run({ count: 0 }, next);
-});
+// admin-web(5174) からのクロスオリジン呼び出しを許可（ローカル開発用）
+app.use("/v1/*", cors())
 
-app.get("/healthz", (c) => c.json({ ok: true }));
+// スワイプUI(主役)。開発用パネルは /dev。
+app.get("/", (c) => c.html(swipePageHtml));
+app.get("/dev", (c) => c.html(pageHtml));
+
+app.get("/healthz", (c) => c.json(
+{
+  ok: true;
+}
+))
 
 // カード用の生成SVG風景（デモ用。後で実写真URLに差し替え可）
 app.get("/img/:id", (c) => {
@@ -60,17 +71,9 @@ app.post("/v1/recommendations", async (c) => {
   }
 });
 
-// A6: 蘊蓄
-app.post("/v1/spots/:id/story", async (c) => {
-  try {
-    return c.json({ story: await story(c.req.param("id")) });
-  } catch (e) {
-    return c.json({ story: friendly(e) });
-  }
-});
-
-// パーソナライズ: スワイプ→好み学習→エージェント間のディベートを経てプラン提案
-app.post("/v1/personalized/plan", async (c) => {
+// パーソナライズ: スワイプ→好み学習→推薦エージェントが「あなた向けのおすすめ」を返す
+app.post("/v1/personalized/plan", async (c) =>
+{
   const {
     likes = [],
     nopes = [],
@@ -93,131 +96,122 @@ app.post("/v1/personalized/plan", async (c) => {
     console.error(e);
     return c.json({ error: friendly(e) });
   }
-});
+}
+)
 
-// スポットのGood/Badフィードバック
-app.post("/v1/personalized/feedback/spot", async (c) => {
+// スポット名の照合用に表記ゆれを吸収する（空白・括弧書きの差を無視）
+function normalizeSpotName(name: string): string {
+  return name
+    .replace(/[（(].*?[）)]/g, "")
+    .replace(/[\s　]+/g, "")
+    .trim();
+}
+
+// ネットワーク瞬断など、リトライで回復し得る一過性エラーか判定する。
+function isTransientError(msg: string): boolean {
+  return /fetch failed|UNKNOWN_ERROR|ECONNRESET|ETIMEDOUT|socket hang up|EAI_AGAIN|network|50[234]/i.test(
+    msg,
+  );
+}
+
+// 収集エージェントを1回実行し、最終出力とエラーメッセージを返す。
+async function runCollectOnce(prompt: string): Promise<{ final: string; errMsg: string }> {
+  const runner = new InMemoryRunner({ agent: collectAgent });
+  const session = await runner.sessionService.createSession({
+    appName: runner.appName,
+    userId: "admin",
+  });
+
+  let final = "";
+  let errMsg = "";
+  for await (const event of runner.runAsync({
+    userId: "admin",
+    sessionId: session.id,
+    newMessage: { role: "user", parts: [{ text: prompt }] },
+  })) {
+    const e = event as { errorCode?: string; errorMessage?: string };
+    if (e.errorCode) errMsg = `[${e.errorCode}] ${e.errorMessage ?? ""}`;
+    const t = stringifyContent(event).trim();
+    if (t) final = t;
+  }
+  return { final, errMsg };
+}
+
+// 観光データ収集
+app.post("/v1/collect-spots", async (c) => {
   const {
-    userId = "demo",
-    spotId,
-    rating,
+    municipality,
+    prefecture,
+    targetCount = 100,
+    theme = "",
+    excludeNames = [],
   } = await c.req.json<{
-    userId?: string;
-    spotId: string;
-    rating: "good" | "bad";
+    municipality: string;
+    prefecture: string;
+    targetCount?: number;
+    /** 担当エリア内での絞り込みテーマ・観点（任意。例: 紅葉、神社仏閣、子連れ向け）。 */
+    theme?: string;
+    /** 既に登録済みのスポット名。収集結果から除外する。 */
+    excludeNames?: string[];
   }>();
+  if (!municipality || !prefecture) {
+    return c.json({ error: "municipality と prefecture は必須です" }, 400);
+  }
 
   try {
-    const profile = userProfiles.get(userId);
-    if (!profile) {
-      return c.json({ error: "プロフィールが見つかりません" }, 400);
+    const excludeBlock =
+      excludeNames.length > 0
+        ? `\n\n【除外リスト】以下のスポットは既に登録済みなので、出力に含めないこと:\n${excludeNames.map((n) => `- ${n}`).join("\n")}`
+        : "";
+
+    // テーマ指定があれば、その観点で担当エリア内を重点収集し、紹介文もその観点中心に書かせる
+    // （無指定なら従来どおり満遍なく収集し、紹介文も一般的な観点で書く）。
+    const focusBlock = theme.trim()
+      ? `特に「${theme.trim()}」というテーマ・観点に合う観光地を重点的に集めてください。テーマに合わない場所は無理に含めないこと。
+各スポットの紹介文（description）は、まず「それが何か」を一言で示したうえで、「${theme.trim()}」の観点での見どころ（例えば見頃の時期・種類・眺め方・具体的な特徴など）を中心に構成してください。ただし検索結果で実際に確認できた事実だけを使い、創作・誇張はしないこと。テーマに関する情報が見つからないスポットは、無理にそのテーマで書かず除外してください。`
+      : "カテゴリ（観光・自然・歴史）をバランスよく、有名観光地だけでなく穴場も集めてください。";
+
+    const prompt = `${prefecture}${municipality}の観光地を${targetCount}件を目標に収集してください。
+${focusBlock}${excludeBlock}`;
+
+    // 収集は数分に及ぶ長時間リクエストのため、ネットワーク瞬断などの一過性エラーは自動リトライする。
+    const MAX_ATTEMPTS = 3;
+    let final = "";
+    let errMsg = "";
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const res = await runCollectOnce(prompt);
+      final = res.final;
+      errMsg = res.errMsg;
+      if (final) break; // 成功
+      if (!isTransientError(errMsg)) break; // リトライ不可なエラー
+      if (attempt < MAX_ATTEMPTS) {
+        console.warn(`[collect] 一過性エラーのため再試行します (${attempt}/${MAX_ATTEMPTS}): ${errMsg}`);
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+      }
     }
 
-    const result = await analyzeFeedback(
-      {
-        currentFeedbackNotes: profile.feedbackNotes,
-        currentIntroStyle: profile.introStyle,
-        spotFeedbacks: [{ spotId, rating }],
-      },
-      userId,
-    );
-
-    profile.feedbackNotes = result.feedbackNotes;
-    profile.introStyle = result.introStyle;
-    userProfiles.set(userId, profile);
-
-    return c.json({
-      success: true,
-      feedbackNotes: profile.feedbackNotes,
-      introStyle: profile.introStyle,
-    });
-  } catch (e) {
-    console.error(e);
-    return c.json({ error: friendly(e) }, 500);
-  }
-});
-
-// 旅行終了後のフィードバック
-app.post("/v1/personalized/feedback/trip", async (c) => {
-  const {
-    userId = "demo",
-    rating,
-    comment,
-    spotFeedbacks = [],
-  } = await c.req.json<{
-    userId?: string;
-    rating: number;
-    comment: string;
-    spotFeedbacks?: { spotId: string; rating: "good" | "bad" }[];
-  }>();
-
-  try {
-    const profile = userProfiles.get(userId);
-    if (!profile) {
-      return c.json({ error: "プロフィールが見つかりません" }, 400);
+    if (!final) {
+      const message = isTransientError(errMsg)
+        ? "⚠️ ネットワークエラーで収集に失敗しました。通信状況を確認して、もう一度お試しください。"
+        : errMsg || "エージェントから空の応答が返りました";
+      return c.json({ error: message }, 500);
     }
 
-    const result = await analyzeFeedback(
-      {
-        currentFeedbackNotes: profile.feedbackNotes,
-        currentIntroStyle: profile.introStyle,
-        spotFeedbacks,
-        tripFeedback: { rating, comment },
-      },
-      userId,
-    );
-
-    profile.feedbackNotes = result.feedbackNotes;
-    profile.introStyle = result.introStyle;
-    userProfiles.set(userId, profile);
-
+    const result = parseCollectResult(final);
+    // プロンプトの除外指示が無視された場合の保険（出口側でも機械的に除外）
+    const excludeSet = new Set(excludeNames.map(normalizeSpotName));
+    const spots = result.spots.filter((s) => !excludeSet.has(normalizeSpotName(s.name)));
     return c.json({
-      success: true,
-      feedbackNotes: profile.feedbackNotes,
-      introStyle: profile.introStyle,
+      municipality,
+      prefecture,
+      count: spots.length,
+      spots,
     });
   } catch (e) {
-    console.error(e);
-    return c.json({ error: friendly(e) }, 500);
-  }
-});
-
-// 紹介エージェントへのマルチモーダルな質問
-app.post("/v1/spots/:id/ask", async (c) => {
-  const spotId = c.req.param("id");
-  const {
-    text,
-    image,
-    audio,
-    userId = "demo",
-  } = await c.req.json<{
-    text?: string;
-    image?: { mimeType: string; data: string };
-    audio?: { mimeType: string; data: string };
-    userId?: string;
-  }>();
-
-  try {
-    const profile = userProfiles.get(userId);
-    const profileSummary = profile ? summarizeProfile(profile) : "";
-    const introStyle = profile ? profile.introStyle : "";
-
-    const answer = await askIntroduce(
-      {
-        spotId,
-        text,
-        image,
-        audio,
-        introStyle,
-        userProfileSummary: profileSummary,
-      },
-      userId,
+    return c.json(
+      { error: e instanceof Error ? e.message : String(e) },
+      500,
     );
-
-    return c.json({ answer });
-  } catch (e) {
-    console.error(e);
-    return c.json({ answer: friendly(e) });
   }
 });
 

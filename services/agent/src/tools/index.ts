@@ -1,7 +1,7 @@
 import { FunctionTool } from "@google/adk";
 import { z } from "zod";
-import { getUnchikuSource, search, travelTimes } from "./dataSources.js";
-import { checkToolLoop } from "./tracker.js";
+
+import { search, travelTimes } from "./dataSources.js";
 
 // FunctionTool は Zod スキーマでツールを宣言。
 // execute はデータ層(dataSources)を呼ぶだけ。mock↔本物の切替はそちらで吸収される。
@@ -42,16 +42,5 @@ export const travelTimesTool = new FunctionTool({
     const loopError = checkToolLoop("travel_times", args);
     if (loopError) return loopError;
     return { status: "success", times: await travelTimes(args) };
-  },
-});
-
-export const getUnchikuSourceTool = new FunctionTool({
-  name: "get_unchiku_source",
-  description: "スポットの確かな出典facts。これ以外の事実は語らないこと。",
-  parameters: z.object({ spotId: z.string() }),
-  execute: async (args) => {
-    const loopError = checkToolLoop("get_unchiku_source", args);
-    if (loopError) return loopError;
-    return await getUnchikuSource(args);
   },
 });

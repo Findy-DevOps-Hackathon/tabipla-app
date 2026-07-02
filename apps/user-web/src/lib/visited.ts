@@ -61,7 +61,7 @@ export function isVisited(userId: string, spotId: string): boolean {
 /**
  * 「行った」マークを必ず付ける（追加専用）。
  *
- * クーポン利用など「行ったことが確定する操作」で使う。既に記録済みの場合は
+ * 「行ったことが確定する操作」で使う。既に記録済みの場合は
  * 何もしない（重複追加や削除はしない）。戻り値は新規に追加したかどうか。
  */
 export function markVisited(userId: string, spot: VisitableSpot): boolean {

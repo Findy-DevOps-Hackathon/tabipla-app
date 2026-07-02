@@ -30,7 +30,7 @@ import {
 } from "@tabipla/search-core";
 import Fastify, { type FastifyInstance } from "fastify";
 import { extractBearerToken, isAdminApiPath, issueAdminToken, verifyAdminToken } from "./auth.js";
-import { embedText } from "./embedding.js";
+import { buildSpotEmbedText, embedText } from "./embedding.js";
 import { patchSpotInElasticsearch, upsertSpotInElasticsearch } from "./esSync.js";
 import { geocodeAddressQuery } from "./geocode.js";
 import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./mapper.js";
@@ -150,14 +150,19 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     });
   }
 
-  // user-web（Firebase Hosting）など別オリジンからの API 呼び出し用
-  const corsOrigin = process.env.CORS_ORIGIN ?? "*";
-  app.addHook("onRequest", async (req, reply) => {
-    reply.header("Access-Control-Allow-Origin", corsOrigin);
-    reply.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    reply.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept");
-    if (req.method === "OPTIONS") {
-      return reply.code(204).send();
+  // 起動時に検索インデックス（dense_vector マッピング込み）を用意する。
+  // 登録経路（/spots, /spots/bulk）が embedding を書き込むため、最初の書き込み前に
+  // 正しいマッピングが存在することを保証する（無ければ作成、既存なら何もしない）。
+  // これが無いと、embedding 配列を空マッピングの index に書いた際に ES の動的マッピングが
+  // 数値型を long と誤推論し、"cannot be changed from [long] to [float]" で失敗する。
+  app.addHook("onReady", async () => {
+    try {
+      const { index, created } = await ensureIndex(client);
+      app.log.info(
+        `検索インデックス "${index}" を確認しました（${created ? "新規作成" : "既存"}）。`,
+      );
+    } catch (error) {
+      app.log.error({ err: error }, "検索インデックスの初期化に失敗しました");
     }
   });
 
@@ -169,6 +174,24 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       return reply.code(401).send({ error: "認証が必要です" });
     }
   });
+
+  // 収集直後のスポットも即セマンティック検索の対象にするため、ES 反映前に embedding を生成して付与する。
+  // 生成に失敗しても登録自体は止めない（キーワード検索は embedding なしでも機能するため、ベストエフォート）。
+  // 既存ドキュメントに embedding があれば upsertSpotInElasticsearch 側が優先保持する（無駄な再計算はしない）。
+  async function attachEmbedding(document: SpotDocument): Promise<SpotDocument> {
+    try {
+      const embedding = await embedText(buildSpotEmbedText(document), {
+        taskType: "RETRIEVAL_DOCUMENT",
+      });
+      return { ...document, embedding };
+    } catch (error) {
+      app.log.warn(
+        { err: error, spotId: document.id },
+        "embedding 生成に失敗したため embedding なしで登録します",
+      );
+      return document;
+    }
+  }
 
   // ---- ヘルスチェック ------------------------------------------------------
   const checkHealth = async (req: any, reply: any) => {
@@ -373,7 +396,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       const refresh = req.query.refresh === "true";
       const row = await upsertSpot(db, toNewSpotRow(req.body));
       const document = toSpotDocument(row);
-      await upsertSpotInElasticsearch(client, document, { refresh });
+      await upsertSpotInElasticsearch(client, await attachEmbedding(document), { refresh });
       return document;
     },
   );
@@ -406,12 +429,13 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       const refresh = req.query.refresh === "true";
       const rows = await upsertSpots(db, req.body.spots.map(toNewSpotRow));
       const documents = rows.map(toSpotDocument);
-      for (const document of documents) {
-        await upsertSpotInElasticsearch(client, document, { refresh: false });
-      }
-      const lastDocument = documents.at(-1);
-      if (refresh && lastDocument) {
-        await upsertSpotInElasticsearch(client, lastDocument, { refresh: true });
+      // 各ドキュメントを1回だけ embedding 付与して upsert する。
+      // refresh は最後の1件だけ true にして、まとめて可視化する（従来の挙動を踏襲）。
+      for (const [i, document] of documents.entries()) {
+        const isLast = i === documents.length - 1;
+        await upsertSpotInElasticsearch(client, await attachEmbedding(document), {
+          refresh: refresh && isLast,
+        });
       }
       return { count: documents.length, spots: documents };
     },

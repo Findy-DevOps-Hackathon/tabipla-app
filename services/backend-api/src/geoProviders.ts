@@ -81,8 +81,22 @@ export async function geocodeViaGoogle(
   if (!res.ok) return null;
 
   const data = (await res.json()) as {
+    status?: string;
+    error_message?: string;
     results?: Array<{ geometry?: { location?: { lat?: number; lng?: number } } }>;
   };
+
+  // Google は HTTP 200 でも status で失敗を返す（REQUEST_DENIED / OVER_QUERY_LIMIT 等）。
+  // 黙って Nominatim にフォールバックすると設定ミス（キー制限・API未有効化・課金未設定）に
+  // 気づけないため、ZERO_RESULTS 以外の異常系は警告ログを出す。
+  if (data.status && data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+    console.warn(
+      `[geocode] Google Geocoding が失敗しました: ${data.status}${
+        data.error_message ? ` - ${data.error_message}` : ""
+      }`,
+    );
+    return null;
+  }
 
   const lat = data.results?.[0]?.geometry?.location?.lat;
   const lon = data.results?.[0]?.geometry?.location?.lng;
