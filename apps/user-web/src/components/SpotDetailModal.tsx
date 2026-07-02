@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { getSpotTrivia, type Recommendation } from "../data/spots.ts";
 import { copyToClipboard } from "../lib/clipboard.ts";
 import { buildSpotShareUrl } from "../lib/spotLink.ts";
+import { useAutoResizeTextarea } from "../lib/useAutoResizeTextarea.ts";
 import { useLockBodyScroll } from "../lib/useLockBodyScroll.ts";
+import { useSpeechRecognition } from "../lib/useSpeechRecognition.ts";
 import { useVisualViewport } from "../lib/useVisualViewport.ts";
 import {
   CheckIcon,
@@ -12,7 +14,9 @@ import {
   MicIcon,
   SendIcon,
   ShareIcon,
+  StopIcon,
 } from "./icons.tsx";
+import { VoiceWaveform } from "./VoiceWaveform.tsx";
 
 type ChatMessage = {
   role: "user" | "ai";
@@ -56,14 +60,32 @@ export function SpotDetailModal({
 
   // チャット用のローカルステート
   const [textInput, setTextInput] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
   const [nameCopied, setNameCopied] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shareResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const textInputRef = useRef(textInput);
+  textInputRef.current = textInput;
+
+  const {
+    supported: speechSupported,
+    listening,
+    audioLevels,
+    start: startSpeech,
+    stop: stopSpeech,
+  } = useSpeechRecognition({
+    getBaseText: () => textInputRef.current,
+    onTranscript: (text) => {
+      setTextInput(text);
+      setSpeechError(null);
+    },
+    onError: (message) => setSpeechError(message),
+  });
+
+  const chatInputRef = useAutoResizeTextarea({ minHeight: 24, maxHeight: 120 });
 
   // 新しいメッセージが追加されたら、モーダル全体を最下部までスクロールして最新の発言を表示する。
   // 初回表示（履歴なし）では勝手にスクロールしないよう、履歴があるときだけ実行する。
@@ -108,48 +130,6 @@ export function SpotDetailModal({
       shareResetTimerRef.current = setTimeout(() => setShareCopied(false), 2000);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
-    }
-  }
-
-  // --- 音声録音処理 --------------------------------------------------------
-  async function handleMicToggle() {
-    if (!isRecording) {
-      try {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error("このブラウザ・環境では録音機能がサポートされていません。");
-        }
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-        audioChunksRef.current = [];
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) audioChunksRef.current.push(event.data);
-        };
-
-        mediaRecorder.onstop = () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64data = (reader.result as string).split(",")[1] || "";
-            onSendChat("", null, { mimeType: "audio/webm", data: base64data });
-          };
-          reader.readAsDataURL(audioBlob);
-          stream.getTracks().forEach((track) => {
-            track.stop();
-          });
-        };
-
-        mediaRecorderRef.current = mediaRecorder;
-        mediaRecorder.start();
-        setIsRecording(true);
-      } catch (err: unknown) {
-        alert(err instanceof Error ? err.message : "マイクのアクセスに失敗しました。");
-      }
-    } else {
-      if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stop();
-      }
-      setIsRecording(false);
     }
   }
 
@@ -312,37 +292,73 @@ export function SpotDetailModal({
 
         {/* 入力バー（スクロール領域の外に固定し、メッセージ件数やキーボードに関わらず常に操作可能にする） */}
         <div className="shrink-0 border-t border-[#e2e8f0] bg-white p-3">
-          <div className="flex items-center gap-2 text-[13px]">
-            <button
-              type="button"
-              onClick={handleMicToggle}
-              aria-label={isRecording ? "録音を停止して送信" : "音声で話す"}
-              className={`flex size-10 shrink-0 items-center justify-center rounded-full border transition active:scale-95 ${
-                isRecording
-                  ? "animate-pulse border-rose-500 bg-rose-500 text-white"
-                  : "border-[#e2e8f0] bg-white text-[#475569] hover:bg-(--page)"
-              }`}
-            >
-              <MicIcon className="size-5" />
-            </button>
+          {speechError && (
+            <p className="mb-2 whitespace-pre-line rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] text-rose-600">
+              {speechError}
+            </p>
+          )}
+          <div className="flex items-end gap-2 text-[13px]">
+            {speechSupported &&
+              (listening ? (
+                <button
+                  type="button"
+                  onClick={stopSpeech}
+                  aria-label="停止"
+                  className="mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rose-500 bg-rose-500 text-white transition active:scale-95"
+                >
+                  <StopIcon className="size-8" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={startSpeech}
+                  aria-label="音声で入力"
+                  className="mb-0.5 flex size-10 shrink-0 items-center justify-center rounded-full border border-[#e2e8f0] bg-white text-[#475569] transition hover:bg-(--page) active:scale-95"
+                >
+                  <MicIcon className="size-5" />
+                </button>
+              ))}
 
             {/* テキスト入力 */}
-            <input
-              type="text"
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSendText();
-              }}
-              placeholder="知りたいことを質問..."
-              className="min-w-0 flex-1 rounded-full border border-[#e2e8f0] bg-white px-3.5 py-2 text-[16px] text-[#0f172a] placeholder:text-[#94a3b8] focus:border-(--brand) focus:outline-none"
-            />
+            <div className="relative min-w-0 flex-1">
+              {listening && (
+                <div
+                  className="flex min-h-[36px] items-center gap-2.5 rounded-2xl border border-(--brand)/30 bg-[#f0fdfa] px-3.5 py-2"
+                  aria-live="polite"
+                >
+                  <VoiceWaveform levels={audioLevels} />
+                  <span className="text-[14px] text-[#64748b]">聞いています…</span>
+                </div>
+              )}
+              <textarea
+                ref={chatInputRef}
+                rows={1}
+                value={textInput}
+                onChange={(e) => {
+                  setTextInput(e.target.value);
+                  setSpeechError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendText();
+                  }
+                }}
+                placeholder={listening ? "話しかけてください…" : "知りたいことを質問..."}
+                disabled={listening}
+                aria-hidden={listening}
+                tabIndex={listening ? -1 : 0}
+                className={`w-full resize-none overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white px-3.5 py-2 text-[16px] leading-[1.4] text-[#0f172a] placeholder:text-[#94a3b8] focus:border-(--brand) focus:outline-none ${
+                  listening ? "pointer-events-none absolute inset-0 opacity-0" : ""
+                }`}
+              />
+            </div>
 
             <button
               type="button"
               onClick={handleSendText}
               aria-label="送信"
-              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-(--brand) text-white transition hover:opacity-90 active:scale-95"
+              className="mb-0.5 flex size-10 shrink-0 items-center justify-center rounded-full bg-(--brand) text-white transition hover:opacity-90 active:scale-95"
             >
               <SendIcon className="size-5 -ml-0.5 -mb-0.5" />
             </button>

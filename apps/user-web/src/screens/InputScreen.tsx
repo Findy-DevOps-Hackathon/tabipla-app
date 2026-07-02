@@ -3,12 +3,17 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   MapPinIcon,
+  MicIcon,
+  StopIcon,
   SearchIcon,
   XCircleIcon,
 } from "../components/icons.tsx";
 import { searchPlaces } from "../data/places.ts";
 import { coordsToLocation, requestCurrentCoordinates } from "../lib/geolocation.ts";
+import { useAutoResizeTextarea } from "../lib/useAutoResizeTextarea.ts";
+import { useSpeechRecognition } from "../lib/useSpeechRecognition.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
+import { VoiceWaveform } from "../components/VoiceWaveform.tsx";
 
 type InputScreenProps = {
   /** 好み診断の後に表示する場合。見出し・説明文を切り替える。 */
@@ -24,6 +29,7 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
   const [value, setValue] = useState("");
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [speechError, setSpeechError] = useState<string | null>(null);
   /** 入力値が現在地取得（逆ジオコーディング）で自動入力されたか。 */
   const [fromCurrentLocation, setFromCurrentLocation] = useState(false);
   const location = value.trim();
@@ -68,6 +74,21 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
     }
   }, []);
 
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  const { supported: speechSupported, listening, audioLevels, start: startSpeech, stop: stopSpeech } =
+    useSpeechRecognition({
+    getBaseText: () => valueRef.current,
+    onTranscript: (text) => {
+      setValue(text);
+      setFromCurrentLocation(false);
+      setSpeechError(null);
+      setLocationError(null);
+    },
+    onError: (message) => setSpeechError(message),
+  });
+
   // 「目的地を選ぶ」画面（好み診断後）に来たら、ボタン操作を待たずに
   // 最初から現在地取得（＝許可ダイアログ）を自動で出す。StrictMode の二重実行や
   // 再レンダリングで何度も発火しないよう、ref で初回の一度だけに限定する。
@@ -79,6 +100,8 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
     // 自動取得では許可拒否などのエラーを表示しない（タップ時のみ表示する）。
     handleUseCurrentLocation(false);
   }, [afterDiagnosis, handleUseCurrentLocation]);
+
+  const inputRef = useAutoResizeTextarea({ minHeight: 24, maxHeight: 160 });
 
   return (
     <div className="flex flex-1 flex-col justify-between">
@@ -113,19 +136,68 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
           </div>
 
           <div className="flex flex-col gap-4">
-            <div className="flex h-[52px] items-center gap-2.5 rounded-xl border-[1.5px] border-(--brand-from)/30 bg-white px-3 shadow-[0_2px_4px_rgba(10,161,155,0.03)]">
-              <SearchIcon className="size-5 shrink-0 text-(--brand)" />
-              <input
-                value={value}
-                onChange={(e) => {
-                  setValue(e.target.value);
-                  setFromCurrentLocation(false);
-                  setLocationError(null);
-                }}
-                placeholder={locating ? "現在地を取得中…" : "旅先を入力"}
-                disabled={locating}
-                className="min-w-0 flex-1 bg-transparent text-[16px] text-[#0f172a] outline-none placeholder:text-[#94a3b8] disabled:opacity-60"
-              />
+            <div className="flex min-h-[52px] items-end gap-2.5 rounded-xl border-[1.5px] border-(--brand-from)/30 bg-white px-3 py-2.5 shadow-[0_2px_4px_rgba(10,161,155,0.03)]">
+              <SearchIcon className="mb-1.5 size-5 shrink-0 text-(--brand)" />
+              <div className="relative min-w-0 flex-1">
+                {listening && (
+                  <div
+                    className="flex min-h-[28px] items-center gap-2.5 py-0.5"
+                    aria-live="polite"
+                  >
+                    <VoiceWaveform levels={audioLevels} maxHeight={24} />
+                    <span className="text-[14px] text-[#94a3b8]">聞いています…</span>
+                  </div>
+                )}
+                <textarea
+                  ref={inputRef}
+                  rows={1}
+                  value={value}
+                  onChange={(e) => {
+                    setValue(e.target.value);
+                    setFromCurrentLocation(false);
+                    setLocationError(null);
+                    setSpeechError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (canSearch) onSearch(location);
+                    }
+                  }}
+                  placeholder={
+                    locating ? "現在地を取得中…" : listening ? "話しかけてください…" : "旅先を入力"
+                  }
+                  disabled={locating || listening}
+                  aria-hidden={listening}
+                  tabIndex={listening ? -1 : 0}
+                  className={`w-full resize-none overflow-hidden bg-transparent py-0.5 text-[16px] leading-[1.4] text-[#0f172a] outline-none placeholder:text-[#94a3b8] disabled:opacity-60 ${
+                    listening ? "pointer-events-none absolute inset-0 opacity-0" : ""
+                  }`}
+                />
+              </div>
+              <div className="flex shrink-0 items-center gap-1 pb-0.5">
+              {speechSupported &&
+                (listening ? (
+                  <button
+                    type="button"
+                    onClick={stopSpeech}
+                    aria-label="停止"
+                    className="flex h-8 shrink-0 items-center justify-center gap-1 rounded-full bg-rose-500 px-2.5 text-white transition active:opacity-80"
+                  >
+                    <StopIcon className="size-3.5" />
+                    <span className="text-[12px] font-semibold">停止</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startSpeech}
+                    disabled={locating}
+                    aria-label="音声で入力"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full text-[#94a3b8] transition active:opacity-60 disabled:opacity-40"
+                  >
+                    <MicIcon className="size-4" />
+                  </button>
+                ))}
               {value.length > 0 && (
                 <button
                   type="button"
@@ -139,7 +211,13 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
                   <XCircleIcon className="size-5" />
                 </button>
               )}
+              </div>
             </div>
+            {speechError && (
+              <p className="whitespace-pre-line rounded-xl bg-[#ecececb0] px-3 py-2 text-[13px] text-[#64748b]">
+                {speechError}
+              </p>
+            )}
             {afterDiagnosis && (
               <button
                 type="button"
