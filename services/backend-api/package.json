@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "reindex": "tsx --env-file-if-exists=.env src/reindex.ts",
     "embed-spots": "tsx --env-file-if-exists=.env src/embed-spots.ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "deploy": "bash scripts/deploy.sh"
   },
   "engines": {
     "node": ">=22"

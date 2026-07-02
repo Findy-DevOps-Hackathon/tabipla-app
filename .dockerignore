@@ -7,9 +7,8 @@
 .github
 **/*.md
 !services/agent/README.md
+!services/backend-api/README.md
 apps
-packages
-services/backend-api
 infra
 docs
 scripts

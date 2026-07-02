@@ -145,7 +145,7 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
                 type="button"
                 onClick={() => handleUseCurrentLocation(true)}
                 disabled={locating}
-                className="flex h-12 items-center justify-center gap-2 rounded-full border border-[#94a3b8] bg-white text-[14px] font-semibold text-[#94a3b8] transition active:bg-[#f1f5f9] disabled:opacity-60 shadow-[0_3px_6px_rgba(10,161,155,0.03)]"
+                className="flex h-12 items-center justify-center gap-2 rounded-full border-[1.5px] border-(--brand-from)/30 bg-white text-[14px] font-semibold text-[#94a3b8] transition active:bg-[#f1f5f9] disabled:opacity-60 shadow-[0_3px_6px_rgba(10,161,155,0.03)]"
               >
                 <MapPinIcon className="size-5 shrink-0 text-[#94a3b8]" />
                 {locating ? "現在地を取得中…" : "現在地から探す"}

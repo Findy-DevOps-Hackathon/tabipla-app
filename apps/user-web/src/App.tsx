@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
+import { API_BASE } from "./config.ts";
 import {
   type Recommendation,
   type SpotCategory,
@@ -328,7 +329,7 @@ export default function App() {
 
     async function fetchPlan() {
       try {
-        const res = await fetch("/api/v1/personalized/plan", {
+        const res = await fetch(`${API_BASE}/v1/personalized/plan`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -359,7 +360,7 @@ export default function App() {
 
         const getSpotImage = (id: string): string => {
           const s = findSpot(id);
-          return s ? s.image : `/api/img/${id}`;
+          return s ? s.image : `${API_BASE}/img/${id}`;
         };
 
         const mapped: Recommendation[] = (data.recommendations ?? []).map((r) => ({
@@ -435,7 +436,7 @@ export default function App() {
       }));
 
       try {
-        const res = await fetch(`/api/v1/spots/${spotId}/ask`, {
+        const res = await fetch(`${API_BASE}/v1/spots/${spotId}/ask`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({

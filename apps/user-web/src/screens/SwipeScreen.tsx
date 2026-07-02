@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UndoIcon } from "../components/icons.tsx";
 import type { SwipeSpot } from "../data/spots.ts";
-import { categoryBadgeClass } from "../lib/category.ts";
 
 type SwipeScreenProps = {
   spots: SwipeSpot[];
@@ -93,11 +92,7 @@ function ComparisonCard({
           className="pointer-events-none absolute inset-0 size-full object-cover"
         />
         <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/10 from-30% to-black/80" />
-        <span
-          className={`absolute left-3 top-3 inline-block rounded-md px-2.5 py-1 text-[12px] font-bold ${categoryBadgeClass(
-            spot.category,
-          )}`}
-        >
+        <span className="absolute left-3 top-3 inline-block rounded-md bg-slate-600/90 px-2.5 py-1 text-[12px] font-bold text-white">
           {spot.category}
         </span>
         <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 px-4 pb-4">

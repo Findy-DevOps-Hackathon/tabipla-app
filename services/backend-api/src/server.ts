@@ -150,6 +150,17 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     });
   }
 
+  // user-web（Firebase Hosting）など別オリジンからの API 呼び出し用
+  const corsOrigin = process.env.CORS_ORIGIN ?? "*";
+  app.addHook("onRequest", async (req, reply) => {
+    reply.header("Access-Control-Allow-Origin", corsOrigin);
+    reply.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    reply.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept");
+    if (req.method === "OPTIONS") {
+      return reply.code(204).send();
+    }
+  });
+
   app.addHook("onRequest", async (req, reply) => {
     if (!isAdminApiPath(req.url)) return;
 

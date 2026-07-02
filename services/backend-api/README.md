@@ -61,6 +61,42 @@ pnpm -C services/backend-api start
 
 ---
 
+## デプロイ（Cloud Run / GCP）
+
+`@tabipla/agent` と同様、**Cloud Run** に載せます。workspace 依存（`@tabipla/db` / `@tabipla/search-core` / `@tabipla/maps-core`）を含めてビルドします。
+
+### 前提
+
+- 課金有効な GCP プロジェクト（例: `tabipla-user-web`）
+- Cloud Run / Cloud Build API が有効
+- **PostgreSQL**（Cloud SQL 等）の `DATABASE_URL` が Cloud Run から到達可能
+- Elasticsearch を使う場合は `ES_NODE` 等（search-core 参照）
+- `tabipla-agent` を先にデプロイしておくと `AGENT_API_URL` を自動取得
+
+### 手順
+
+```bash
+# 1. 環境変数を用意（ローカル .env でも可）
+cp services/backend-api/.env.example services/backend-api/.env
+# DATABASE_URL 等を本番値に編集
+
+# 2. デプロイ
+pnpm --filter @tabipla/backend-api run deploy
+```
+
+`GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` は環境変数で上書きできます。
+`pnpm run deploy` は `package.json` の `deploy`（= `bash scripts/deploy.sh`）です。
+`run` を省いた `pnpm deploy` は pnpm の組み込みコマンドと衝突するため、必ず `pnpm run deploy` を使う。
+
+### user-web との接続
+
+Firebase Hosting から `/api/*` で呼ぶには、以下いずれかが必要です。
+
+- `firebase.json` に `/api/**` → Cloud Run への rewrite を追加
+- または `apps/user-web/src/api.ts` の `API_BASE` を Cloud Run URL に変更（CORS 設定も必要）
+
+---
+
 ## エンドポイント
 
 検索およびAIエージェント関連のAPIを提供します。
