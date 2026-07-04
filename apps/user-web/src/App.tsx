@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
 import { API_BASE } from "./config.ts";
@@ -117,15 +118,11 @@ type ViewSnapshot = {
   swipeDeck: typeof SWIPE_SPOTS;
   runId: number;
   detailRec: Recommendation | null;
-}
+};
 
 /** 「画面（ステップ）＋開いているモーダル」を表す識別キー。 */
 function viewKey(s: ViewSnapshot): string {
-  <<<<<<< HEAD
   return [s.step, s.detailRec?.id ?? ""].join("|");
-  =======
-  return [s.step, s.detailRec?.id ?? "", s.authPrompt ? "auth" : ""].join("|");
-  >>>>>>> 9f35312 ( # attachEmbedding を追加。生成失敗時は embedding なしで登録を続行する)
 }
 
 /** history.state 内に画面スナップショットを格納するためのキー。 */
