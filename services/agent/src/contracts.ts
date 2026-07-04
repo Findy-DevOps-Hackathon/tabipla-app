@@ -36,3 +36,10 @@ export interface TravelTimesInput {
 export type TravelTimesFn = (
   i: TravelTimesInput,
 ) => Promise<{ destId: string; durationSec: number }[]>;
+
+// ③ 蘊蓄ソース取得（本データは B2 リポジトリ）
+export interface UnchikuSource {
+  spotId: string;
+  facts: string[];
+}
+export type GetUnchikuSourceFn = (i: { spotId: string }) => Promise<UnchikuSource>;
