@@ -30,11 +30,16 @@ apps/user-web  ──▶ backend-api ──▶ agent / search-core
 
 自治体職員向けの観光地管理画面。**Firebase Hosting** で公開しています。
 
-| 項目 | 内容 |
+**本番ログイン**
+
+1. Cloud SQL に seed: `bash infra/cloud-sql/seed.sh`
+2. backend-api に CORS 設定 + 再デプロイ
+3. admin-web を `VITE_API_BASE` 付きで再デプロイ
+
+| 項目 | 値 |
 |---|---|
 | URL | https://tabipla-admin-web.web.app |
-| Firebase プロジェクト | `tabipla-admin-web` |
-| デプロイ | `pnpm -C apps/admin-web run deploy` |
+| ログイン | `admin@example.com` / `test-admin-password`（seed 後） |
 
 **主な機能**
 

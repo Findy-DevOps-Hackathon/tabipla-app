@@ -14,6 +14,7 @@ REGION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
 SERVICE="${CLOUD_RUN_SERVICE:-tabipla-backend-api}"
 IMAGE="gcr.io/${PROJECT}/${SERVICE}"
 ENV_FILE="$ROOT/services/backend-api/.env"
+CREDS_FILE="$ROOT/infra/cloud-sql/.credentials"
 
 if [[ -f "$ENV_FILE" ]]; then
   set -a
@@ -22,10 +23,19 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-CREDS_FILE="$ROOT/infra/cloud-sql/.credentials"
-if [[ -f "$CREDS_FILE" && -z "${CLOUD_SQL_INSTANCE:-}" ]]; then
+if [[ -f "$CREDS_FILE" ]]; then
+  set -a
   # shellcheck disable=SC1090
   source "$CREDS_FILE"
+  set +a
+  # 本番デプロイでは Cloud SQL 接続を優先（.env の localhost Docker 用 URL を上書き）
+  if [[ -n "${DATABASE_URL_CLOUD_RUN:-}" ]]; then
+    DATABASE_URL="$DATABASE_URL_CLOUD_RUN"
+  fi
+fi
+
+if [[ -z "${CORS_ORIGINS:-}" ]]; then
+  CORS_ORIGINS="https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com"
 fi
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
@@ -57,6 +67,7 @@ trap 'rm -f "$ENV_VARS_FILE"' EXIT
   [[ -n "${GOOGLE_MAPS_API_KEY:-}" ]] && echo "GOOGLE_MAPS_API_KEY: \"${GOOGLE_MAPS_API_KEY}\""
   [[ -n "${ADMIN_JWT_SECRET:-}" ]] && echo "ADMIN_JWT_SECRET: \"${ADMIN_JWT_SECRET}\""
   [[ -n "${USER_JWT_SECRET:-}" ]] && echo "USER_JWT_SECRET: \"${USER_JWT_SECRET}\""
+  [[ -n "${CORS_ORIGINS:-}" ]] && echo "CORS_ORIGINS: \"${CORS_ORIGINS}\""
 } >"$ENV_VARS_FILE"
 
 echo "Building ${IMAGE} with Cloud Build..."

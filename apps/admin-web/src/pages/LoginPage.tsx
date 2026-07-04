@@ -26,8 +26,13 @@ export default function LoginPage() {
         setAuthSession(res.token);
         navigate("/spots");
       })
-      .catch(() => {
-        setError("メールアドレスまたはパスワードが正しくありません");
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : "";
+        setError(
+          message.includes("API に接続")
+            ? message
+            : "メールアドレスまたはパスワードが正しくありません",
+        );
       })
       .finally(() => setSubmitting(false));
   };

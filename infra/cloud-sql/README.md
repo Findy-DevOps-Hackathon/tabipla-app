@@ -90,6 +90,12 @@ pnpm -C packages/db seed
 pnpm -C services/backend-api reindex
 ```
 
+または:
+
+```bash
+bash infra/cloud-sql/seed.sh
+```
+
 ---
 
 ## 環境変数（setup.sh 上書き）
