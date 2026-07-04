@@ -2,7 +2,7 @@ import { InMemoryRunner, stringifyContent } from "@google/adk";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { collectAgent, parseCollectResult } from "./agents/collect.js";
+import { collectAgent, COLLECT_CATEGORIES, parseCollectResult } from "./agents/collect.js";
 import { analyzeFeedback } from "./agents/feedback.js";
 import { askIntroduce } from "./agents/introduce.js";
 import { personalizedPlan } from "./agents/personalized.js";
@@ -276,19 +276,27 @@ app.post("/v1/collect-spots", async (c) => {
     municipality,
     prefecture,
     targetCount = 100,
-    theme = "",
+    categories = [],
     excludeNames = [],
   } = await c.req.json<{
     municipality: string;
     prefecture: string;
     targetCount?: number;
-    /** 担当エリア内での絞り込みテーマ・観点（任意。例: 紅葉、神社仏閣、子連れ向け）。 */
-    theme?: string;
+    /** 収集対象カテゴリ（1件以上必須）。 */
+    categories?: string[];
     /** 既に登録済みのスポット名。収集結果から除外する。 */
     excludeNames?: string[];
   }>();
   if (!municipality || !prefecture) {
     return c.json({ error: "municipality と prefecture は必須です" }, 400);
+  }
+  if (!Array.isArray(categories) || categories.length === 0) {
+    return c.json({ error: "categories は1件以上必須です" }, 400);
+  }
+  const allowed = new Set<string>(COLLECT_CATEGORIES);
+  const invalid = categories.filter((cat) => !allowed.has(cat));
+  if (invalid.length > 0) {
+    return c.json({ error: `不正なカテゴリ: ${invalid.join(", ")}` }, 400);
   }
 
   try {
@@ -297,10 +305,25 @@ app.post("/v1/collect-spots", async (c) => {
         ? `\n\n【除外リスト】以下のスポットは既に登録済みなので、出力に含めないこと:\n${excludeNames.map((n) => `- ${n}`).join("\n")}`
         : "";
 
-    const focusBlock = theme.trim()
-      ? `特に「${theme.trim()}」というテーマ・観点に合う観光地を重点的に集めてください。テーマに合わない場所は無理に含めないこと。
-各スポットの紹介文（description）は、まず「それが何か」を一言で示したうえで、「${theme.trim()}」の観点での見どころ（例えば見頃の時期・種類・眺め方・具体的な特徴など）を中心に構成してください。ただし検索結果で実際に確認できた事実だけを使い、創作・誇張はしないこと。テーマに関する情報が見つからないスポットは、無理にそのテーマで書かず除外してください。`
-      : "カテゴリ（観光・自然・歴史）をバランスよく、有名観光地だけでなく穴場も集めてください。";
+    const categoryList = categories.map((cat) => `- ${cat}`).join("\n");
+    const focusBlock = `以下のカテゴリに該当する観光地のみを収集してください。各スポットには最も適切なカテゴリを1つだけ付与すること（次のいずれかのみ）:
+${categoryList}
+
+カテゴリの目安:
+- 自然: 公園、滝、山、高原、渓谷、ビューポイントなど
+- 歴史・文化: 城跡、史跡、伝統文化、郷土資料館など
+- 都市: 街並み、都市景観、ランドマーク建築など
+- 芸術: 美術館、博物館、ギャラリー、文化施設など
+- 食: 郷土料理・食文化が主役の観光スポット（単独の飲食店は除く）
+- 産業: 工場見学、醸造・ワイナリー、産業遺産など
+- 宗教: 神社、寺院、教会など
+- 農山漁村: 直売所、棚田、漁港、農村景観など
+- レジャー・スポーツ: スキー場、サイクリング、屋外アクティビティ施設など
+- イベント: 祭り、花火大会、季節イベントの名所など
+- ウェルネス: 温泉、スパ、癒やし系の観光施設など
+- ショッピング: 商店街、道の駅、特産品市場など
+
+選択されたカテゴリ全体からバランスよく収集し、該当しないカテゴリのスポットは無理に含めないこと。`;
 
     const prompt = `${prefecture}${municipality}の観光地を${targetCount}件を目標に収集してください。
 ${focusBlock}${excludeBlock}`;

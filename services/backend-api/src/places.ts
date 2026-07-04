@@ -24,19 +24,26 @@ function mapGoogleTypesToCategory(types: string[] = []): string | undefined {
     set.has("meal_takeaway") ||
     set.has("food")
   ) {
-    return "グルメ";
+    return "食";
   }
-  if (set.has("lodging") || set.has("hotel")) return "宿泊";
   if (set.has("park") || set.has("natural_feature") || set.has("campground")) return "自然";
+  if (set.has("museum") || set.has("art_gallery")) return "芸術";
   if (
-    set.has("museum") ||
     set.has("church") ||
-    set.has("historical_landmark") ||
-    set.has("tourist_attraction") ||
-    set.has("point_of_interest")
+    set.has("hindu_temple") ||
+    set.has("mosque") ||
+    set.has("synagogue") ||
+    set.has("place_of_worship")
   ) {
-    return "観光";
+    return "宗教";
   }
+  if (set.has("historical_landmark") || set.has("monument")) return "歴史・文化";
+  if (set.has("shopping_mall") || set.has("department_store") || set.has("store")) {
+    return "ショッピング";
+  }
+  if (set.has("spa")) return "ウェルネス";
+  if (set.has("stadium") || set.has("amusement_park")) return "レジャー・スポーツ";
+  if (set.has("tourist_attraction") || set.has("locality")) return "都市";
   return undefined;
 }
 
@@ -270,10 +277,13 @@ function formatNominatimAddress(
 }
 
 function mapOsmTypeToCategory(osmClass?: string, osmType?: string): string | undefined {
-  if (osmClass === "amenity" && (osmType === "restaurant" || osmType === "cafe")) return "グルメ";
-  if (osmClass === "tourism") return "観光";
+  if (osmClass === "amenity" && (osmType === "restaurant" || osmType === "cafe")) return "食";
+  if (osmClass === "amenity" && osmType === "place_of_worship") return "宗教";
+  if (osmClass === "tourism" && osmType === "museum") return "芸術";
+  if (osmClass === "tourism") return "都市";
   if (osmClass === "leisure" || osmClass === "natural") return "自然";
-  if (osmClass === "historic") return "歴史";
+  if (osmClass === "historic") return "歴史・文化";
+  if (osmClass === "shop") return "ショッピング";
   return undefined;
 }
 

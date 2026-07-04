@@ -1,4 +1,5 @@
 import { Loader2, Upload } from "lucide-react";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { bulkImportSpots } from "../api.ts";
@@ -6,7 +7,7 @@ import { AdminShell } from "../components/layout/AdminShell.tsx";
 import { Button } from "../components/ui/Button.tsx";
 import { Toast } from "../components/ui/Modal.tsx";
 import { extractAreaFromAddress } from "../lib/address.ts";
-import { parseCategories } from "../lib/categories.ts";
+import { isSpotCategory, parseCategories, SPOT_CATEGORIES } from "../lib/categories.ts";
 import { parseCsvLine, stripBom } from "../lib/csv.ts";
 import { CSV_HEADER } from "../lib/format.ts";
 import { getFixedPrefecture } from "../master/index.ts";
@@ -39,7 +40,15 @@ function parseCsv(text: string): ParsedRow[] {
       row.error = "name / description は必須です";
       return row;
     }
-    if (category?.trim()) row.category = parseCategories(category);
+    if (category?.trim()) {
+      const cats = parseCategories(category);
+      const invalid = cats.filter((c) => !isSpotCategory(c));
+      if (invalid.length > 0) {
+        row.error = `不正なカテゴリ: ${invalid.join(", ")}（${SPOT_CATEGORIES.join(" / ")} のみ）`;
+        return row;
+      }
+      row.category = cats;
+    }
     const fixedPrefecture = getFixedPrefecture();
     if (prefecture?.trim() && prefecture.trim() !== fixedPrefecture) {
       row.error = `都道府県は ${fixedPrefecture} のみ取り込み可能です`;
@@ -58,7 +67,7 @@ function parseCsv(text: string): ParsedRow[] {
   });
 }
 
-export default function BulkImportPage() {
+export default function BulkImportPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>(1);
   const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -100,7 +109,7 @@ export default function BulkImportPage() {
 
   const downloadTemplate = () => {
     const prefecture = getFixedPrefecture();
-    const sample = `${CSV_HEADER}\n"懐古園","小諸城址の公園。紅葉の名所。","観光;歴史","小諸市","${prefecture}","長野県小諸市中央1丁目","36.325","138.425","0"\n`;
+    const sample = `${CSV_HEADER}\n"懐古園","小諸城址の公園。紅葉の名所。","歴史・文化;自然","小諸市","${prefecture}","長野県小諸市中央1丁目","36.325","138.425","0"\n`;
     const blob = new Blob([sample], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -110,12 +119,15 @@ export default function BulkImportPage() {
     URL.revokeObjectURL(url);
   };
 
-  return (
-    <AdminShell title="スポット管理">
-      <div className="mx-auto max-w-[960px] p-8">
-        <p className="mb-6 text-sm text-[#64748b]">スポット管理 / 一括取り込み</p>
+  const wrap = (children: ReactNode) =>
+    embedded ? children : <AdminShell title="一括取り込み">{children}</AdminShell>;
 
-        <div className="mb-8 flex gap-4">
+  return wrap(
+    <>
+      <div className="px-8">
+        {!embedded && <p className="mb-6 text-sm text-[#64748b]">観光地管理 / 一括取り込み</p>}
+
+        <div className="mb-8 flex items-center justify-center gap-4">
           {[1, 2, 3].map((n) => (
             <div key={n} className="flex items-center gap-2">
               <span
@@ -143,8 +155,8 @@ export default function BulkImportPage() {
         </div>
 
         {step === 1 && (
-          <div className="rounded-xl border border-[#e2e8f0] bg-white p-8">
-            <label className="flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed border-[#cbd5e1] bg-[#f8fafc] px-6 py-16 transition hover:border-[#2563eb]">
+          <div className="mx-auto w-full pb-8">
+            <label className="flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed border-[#cbd5e1] bg-white/20 px-6 py-16 transition hover:border-[#2563eb]">
               <Upload className="mb-4 size-10 text-[#94a3b8]" />
               <p className="font-medium text-[#0f172a]">
                 ファイルをドラッグ＆ドロップ、またはクリックして選択
@@ -175,7 +187,7 @@ export default function BulkImportPage() {
             <Loader2 className="mx-auto size-10 animate-spin text-[#2563eb]" aria-hidden />
             <p className="mt-4 text-lg font-bold text-[#0f172a]">取り込み中…</p>
             <p className="mt-2 text-sm text-[#64748b]">
-              {validRows.length} 件のスポットを登録しています。しばらくお待ちください。
+              {validRows.length} 件の観光地を登録しています。しばらくお待ちください。
             </p>
           </div>
         )}
@@ -187,7 +199,7 @@ export default function BulkImportPage() {
             </p>
             <div className="max-h-96 overflow-auto rounded-lg border border-[#e2e8f0]">
               <table className="w-full text-left text-sm">
-                <thead className="bg-[#f8fafc] text-[13px] font-bold text-[#475569]">
+                <thead className="bg-[#f1f6fb] text-[13px] font-bold text-[#475569]">
                   <tr>
                     <th className="px-4 py-2">行</th>
                     <th className="px-4 py-2">名前</th>
@@ -229,12 +241,12 @@ export default function BulkImportPage() {
               成功 {result.ok} 件 / 失敗 {result.ng} 件
             </p>
             <Button className="mt-6" onClick={() => navigate("/spots")}>
-              スポット一覧へ
+              観光地管理へ
             </Button>
           </div>
         )}
       </div>
       {toast && <Toast message={toast} variant="error" />}
-    </AdminShell>
+    </>,
   );
 }

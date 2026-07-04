@@ -114,7 +114,7 @@ export function MapPreview({ lat, lon, onLocationSelect, className = "" }: Props
     <div className={`relative overflow-hidden rounded-lg border border-[#e2e8f0] ${className}`}>
       <div ref={containerRef} className="h-[220px] w-full bg-[#e2e8f0]" />
       {loadError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#f8fafc] p-4 text-center text-xs text-[#64748b]">
+        <div className="absolute inset-0 flex items-center justify-center bg-[#f1f6fb] p-4 text-center text-xs text-[#64748b]">
           {loadError}
           <br />
           Maps JavaScript API を有効化し、apps/admin-web/.env にキーを設定してください。
@@ -130,7 +130,7 @@ export function MapPreview({ lat, lon, onLocationSelect, className = "" }: Props
         </div>
       )}
       {!loadError && hasLocation && onLocationSelect && (
-        <p className="border-t border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-xs text-[#64748b]">
+        <p className="border-t border-[#e2e8f0] bg-[#f1f6fb] px-3 py-2 text-xs text-[#64748b]">
           地図をクリックすると緯度・経度を更新できます。
         </p>
       )}

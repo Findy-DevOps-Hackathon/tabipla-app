@@ -23,7 +23,7 @@ const geoPointSchema = {
 /** SpotDocument の任意フィールド（id を除く）。登録・更新で共有する。 */
 const spotOptionalProps = {
   name: { type: "string", minLength: 1, maxLength: 512 },
-  description: { type: "string", minLength: 1 },
+  description: { type: "string", minLength: 1, maxLength: 200 },
   category: {
     oneOf: [
       { type: "string", maxLength: 128 },

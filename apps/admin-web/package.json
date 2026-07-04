@@ -2,7 +2,7 @@
   "name": "@tabipla/admin-web",
   "version": "0.1.0",
   "private": true,
-  "description": "tabipla 自治体向け管理画面。backend-api 経由でスポット CRUD を行う。",
+  "description": "tabipla 自治体向け管理画面。backend-api 経由で観光地 CRUD を行う。",
   "type": "module",
   "scripts": {
     "dev": "vite",
