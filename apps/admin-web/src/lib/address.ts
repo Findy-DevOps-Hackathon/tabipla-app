@@ -1,12 +1,15 @@
-import { MUNICIPALITY } from "../master/index.ts";
+import { MUNICIPALITY, type Prefecture } from "../master/index.ts";
 
 /**
  * 住所文字列から市区町村（エリア）を抽出する。
  * 例: "長野県小諸市中央1丁目" → "小諸市"
+ *
+ * prefecture は全国どの都道府県でも受け付ける（Web収集は全国対応のため、
+ * デフォルト値からの型推論に頼らず Prefecture で明示する）。
  */
 export function extractAreaFromAddress(
   address: string,
-  prefecture = MUNICIPALITY.prefecture,
+  prefecture: Prefecture = MUNICIPALITY.prefecture,
 ): string {
   const trimmed = address.trim();
   if (!trimmed) return "";

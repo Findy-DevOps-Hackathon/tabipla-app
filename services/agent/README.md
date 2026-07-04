@@ -1,7 +1,7 @@
 # @tabipla/agent
 
 ADKエージェント層。`@google/adk`（LlmAgent + FunctionTool + InMemoryRunner）で
-推薦 / 蘊蓄 / 旅程 / パーソナライズ(スワイプ→制約推論) のエージェントを提供し、Honoで公開する。
+推薦 / 旅程 / パーソナライズ(スワイプ→制約推論) / Web収集 のエージェントを提供し、Honoで公開する。
 
 ## 構成
 

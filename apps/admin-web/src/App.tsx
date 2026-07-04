@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { isAuthenticated } from "./auth.ts";
 import BulkImportPage from "./pages/BulkImportPage.tsx";
+import CollectPage from "./pages/CollectPage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
-import PlaceholderPage from "./pages/PlaceholderPage.tsx";
 import SpotFormPage from "./pages/SpotFormPage.tsx";
 import SpotListPage from "./pages/SpotListPage.tsx";
 
@@ -49,6 +49,14 @@ export default function App() {
         }
       />
       <Route
+        path="/spots/collect"
+        element={
+          <RequireAuth>
+            <CollectPage />
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/spots/:id/edit"
         element={
           <RequireAuth>
@@ -56,15 +64,6 @@ export default function App() {
           </RequireAuth>
         }
       />
-      <Route
-        path="/unchiku"
-        element={
-          <RequireAuth>
-            <PlaceholderPage title="蘊蓄ファクト" />
-          </RequireAuth>
-        }
-      />
-
       <Route path="*" element={<Navigate to="/spots" replace />} />
     </Routes>
   );

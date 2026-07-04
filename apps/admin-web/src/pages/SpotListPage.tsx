@@ -20,7 +20,7 @@ import { Button } from "../components/ui/Button.tsx";
 import { Modal, Toast } from "../components/ui/Modal.tsx";
 import { normalizeCategories } from "../lib/categories.ts";
 import { CSV_HEADER, formatDateTime, spotToCsvRow } from "../lib/format.ts";
-import { getFixedPrefecture } from "../master/index.ts";
+import { getFixedPrefecture, PREFECTURES } from "../master/index.ts";
 import { PAGE_SIZE, type Spot } from "../types.ts";
 
 type Status = "loading" | "success" | "empty" | "error";
@@ -36,7 +36,8 @@ export default function SpotListPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [q, setQ] = useState("");
-  const fixedPrefecture = getFixedPrefecture();
+  // 既定はログイン自治体の都道府県。Web収集は全国対応のため「すべて」も選べる（"" = 全都道府県）。
+  const [prefFilter, setPrefFilter] = useState<string>(getFixedPrefecture());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [menuId, setMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -50,7 +51,7 @@ export default function SpotListPage() {
     try {
       const res = await listSpots({
         q: q.trim() || undefined,
-        prefecture: fixedPrefecture,
+        prefecture: prefFilter || undefined,
         offset: (page - 1) * PAGE_SIZE,
         limit: PAGE_SIZE,
       });
@@ -62,7 +63,7 @@ export default function SpotListPage() {
       setTotal(0);
       setStatus("error");
     }
-  }, [q, fixedPrefecture, page]);
+  }, [q, prefFilter, page]);
 
   useEffect(() => {
     void load();
@@ -93,7 +94,7 @@ export default function SpotListPage() {
   const handleExport = async () => {
     if (selected.size === 0) return;
     try {
-      const res = await listSpots({ limit: 1000, prefecture: fixedPrefecture });
+      const res = await listSpots({ limit: 1000, prefecture: prefFilter || undefined });
       const exportSpots = res.spots.filter((spot) => selected.has(spot.id));
       if (exportSpots.length === 0) {
         setToast("選択したスポットが見つかりませんでした");
@@ -153,18 +154,36 @@ export default function SpotListPage() {
     <AdminShell title="スポット管理">
       <div className="border-b border-[#e2e8f0] bg-white p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex h-10 w-full max-w-xs items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3">
-            <Search className="size-4 text-[#94a3b8]" />
-            <input
-              type="search"
-              value={q}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex h-10 w-full max-w-xs items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3">
+              <Search className="size-4 text-[#94a3b8]" />
+              <input
+                type="search"
+                value={q}
+                onChange={(e) => {
+                  setPage(1);
+                  setQ(e.target.value);
+                }}
+                placeholder="スポット名・住所で検索"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-[#94a3b8]"
+              />
+            </div>
+            <select
+              value={prefFilter}
               onChange={(e) => {
                 setPage(1);
-                setQ(e.target.value);
+                setPrefFilter(e.target.value);
               }}
-              placeholder="スポット名・住所で検索"
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-[#94a3b8]"
-            />
+              aria-label="都道府県で絞り込み"
+              className="h-10 cursor-pointer rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2 text-sm text-[#475569] outline-none"
+            >
+              <option value="">全都道府県</option>
+              {PREFECTURES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex flex-wrap gap-3">
             {selected.size > 0 && (
