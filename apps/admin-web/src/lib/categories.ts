@@ -7,12 +7,8 @@ export const SPOT_CATEGORIES = [
   "都市",
   "芸術",
   "食",
-  "産業",
-  "宗教",
-  "農山漁村",
   "レジャー・スポーツ",
   "イベント",
-  "ウェルネス",
   "ショッピング",
 ] as const;
 
@@ -24,12 +20,8 @@ const CATEGORY_STYLE_MAP: Record<SpotCategory, string> = {
   都市: "bg-slate-100 text-slate-800",
   芸術: "bg-purple-100 text-purple-800",
   食: "bg-orange-100 text-orange-800",
-  産業: "bg-stone-100 text-stone-800",
-  宗教: "bg-indigo-100 text-indigo-800",
-  農山漁村: "bg-lime-100 text-lime-800",
   "レジャー・スポーツ": "bg-sky-100 text-sky-800",
   イベント: "bg-pink-100 text-pink-800",
-  ウェルネス: "bg-teal-100 text-teal-800",
   ショッピング: "bg-rose-100 text-rose-800",
 };
 

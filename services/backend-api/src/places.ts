@@ -35,13 +35,12 @@ function mapGoogleTypesToCategory(types: string[] = []): string | undefined {
     set.has("synagogue") ||
     set.has("place_of_worship")
   ) {
-    return "宗教";
+    return "歴史・文化";
   }
   if (set.has("historical_landmark") || set.has("monument")) return "歴史・文化";
   if (set.has("shopping_mall") || set.has("department_store") || set.has("store")) {
     return "ショッピング";
   }
-  if (set.has("spa")) return "ウェルネス";
   if (set.has("stadium") || set.has("amusement_park")) return "レジャー・スポーツ";
   if (set.has("tourist_attraction") || set.has("locality")) return "都市";
   return undefined;
@@ -278,7 +277,7 @@ function formatNominatimAddress(
 
 function mapOsmTypeToCategory(osmClass?: string, osmType?: string): string | undefined {
   if (osmClass === "amenity" && (osmType === "restaurant" || osmType === "cafe")) return "食";
-  if (osmClass === "amenity" && osmType === "place_of_worship") return "宗教";
+  if (osmClass === "amenity" && osmType === "place_of_worship") return "歴史・文化";
   if (osmClass === "tourism" && osmType === "museum") return "芸術";
   if (osmClass === "tourism") return "都市";
   if (osmClass === "leisure" || osmClass === "natural") return "自然";
