@@ -35,7 +35,7 @@ if [[ -f "$CREDS_FILE" ]]; then
 fi
 
 if [[ -z "${CORS_ORIGINS:-}" ]]; then
-  CORS_ORIGINS="https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com"
+  CORS_ORIGINS="https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com"
 fi
 
 if [[ -z "${DATABASE_URL:-}" ]]; then

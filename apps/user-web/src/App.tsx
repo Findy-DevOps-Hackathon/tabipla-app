@@ -16,7 +16,12 @@ import {
   markDetailedDiagnosisComplete,
   markDiagnosisComplete,
 } from "./lib/diagnosis.ts";
-import { loadExploreSpots, loadSwipeCatalog, planItemToRecommendation, resolveSpotById } from "./lib/spotCatalog.ts";
+import {
+  loadSpotCatalogBundle,
+  planItemToRecommendation,
+  refreshRecommendationImages,
+  resolveSpotById,
+} from "./lib/spotCatalog.ts";
 import {
   readSpotIdFromLocation,
   setSpotIdInLocation,
@@ -171,18 +176,15 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    (async () => {
-      const [swipeDocs, explore] = await Promise.all([
-        loadSwipeCatalog(30),
-        loadExploreSpots(30),
-      ]);
+    void loadSpotCatalogBundle(30).then(({ docs, swipeSpots, exploreSpots }) => {
       if (!active) return;
-      if (swipeDocs.length > 0) {
-        setCatalog(swipeDocs);
-        setRefineCatalog(swipeDocs);
+      if (swipeSpots.length > 0) {
+        setCatalog(swipeSpots);
+        setRefineCatalog(swipeSpots);
       }
-      setExploreSpots(explore);
-    })();
+      setExploreSpots(exploreSpots);
+      setRecommendations((prev) => refreshRecommendationImages(prev, docs));
+    });
     return () => {
       active = false;
     };
