@@ -11,45 +11,52 @@ body {
   color: #0f172a;
 }
 
-/*
- * @layer 外に置くことで Tailwind utilities より優先。
- * inherit ではなく子要素へ直接 pointer を指定し、Lucide SVG path 上でも揺れないようにする。
- */
-button:enabled,
-[type="button"]:enabled,
-[type="submit"]:enabled,
+/* transition から pointer-events を除外（ホバー時のカーソル揺れ防止） */
+button:not(:disabled),
 a[href],
-select:enabled,
-input[type="checkbox"]:enabled,
-input[type="radio"]:enabled,
-input[type="file"]:enabled,
-label:has(input[type="file"]:enabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]),
+label:has(input[type="file"]:not(:disabled)) {
+  transition-property: color, background-color, border-color, opacity, box-shadow, fill,
+    stroke !important;
+}
+
+button:not(:disabled),
+[type="button"]:not(:disabled),
+[type="submit"]:not(:disabled),
+[type="reset"]:not(:disabled),
+a[href],
+select:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="file"]:not(:disabled),
+label:has(input[type="file"]:not(:disabled)),
+[role="button"]:not([aria-disabled="true"]),
 [role="tab"]:not([aria-disabled="true"]) {
-  cursor: pointer;
+  cursor: pointer !important;
+}
+
+button:not(:disabled) *,
+[type="button"]:not(:disabled) *,
+[type="submit"]:not(:disabled) *,
+[type="reset"]:not(:disabled) *,
+a[href] *,
+[role="button"]:not([aria-disabled="true"]) *,
+[role="tab"]:not([aria-disabled="true"]) *,
+label:has(input[type="file"]:not(:disabled)) * {
+  cursor: pointer !important;
 }
 
 button:disabled,
 select:disabled,
-input:disabled {
-  cursor: not-allowed;
-}
-
-button:enabled *,
-[type="button"]:enabled *,
-[type="submit"]:enabled *,
-a[href] *,
-[role="tab"]:not([aria-disabled="true"]) *,
-label:has(input[type="file"]:enabled) * {
-  cursor: pointer;
+input:disabled,
+[role="button"][aria-disabled="true"],
+[role="tab"][aria-disabled="true"] {
+  cursor: not-allowed !important;
 }
 
 button:disabled *,
-select:disabled *,
-input:disabled * {
-  cursor: not-allowed;
-}
-
-button:enabled *:not(input):not(select):not(textarea),
-a[href] *:not(input):not(select):not(textarea) {
-  pointer-events: none;
+[role="button"][aria-disabled="true"] *,
+[role="tab"][aria-disabled="true"] * {
+  cursor: not-allowed !important;
 }

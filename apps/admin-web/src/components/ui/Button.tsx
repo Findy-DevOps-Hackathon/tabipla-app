@@ -31,7 +31,7 @@ export function Button({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex cursor-pointer items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 [&_*]:pointer-events-none ${variantClass[variant]} ${className}`}
+      className={`inline-flex cursor-pointer items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${variantClass[variant]} ${className}`}
     >
       {children}
     </button>

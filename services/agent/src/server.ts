@@ -1,8 +1,9 @@
-import { InMemoryRunner, stringifyContent } from "@google/adk";
+import { InMemoryRunner, stringifyContent, type LlmAgent } from "@google/adk";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { collectAgent, COLLECT_CATEGORIES, parseCollectResult } from "./agents/collect.js";
+import { describeAgent, describeSpot } from "./agents/describe.js";
 import { analyzeFeedback } from "./agents/feedback.js";
 import { askIntroduce } from "./agents/introduce.js";
 import { personalizedPlan } from "./agents/personalized.js";
@@ -247,9 +248,12 @@ function isTransientError(msg: string): boolean {
   );
 }
 
-// 収集エージェントを1回実行し、最終出力とエラーメッセージを返す。
-async function runCollectOnce(prompt: string): Promise<{ final: string; errMsg: string }> {
-  const runner = new InMemoryRunner({ agent: collectAgent });
+// エージェントを1回実行し、最終出力とエラーメッセージを返す。
+async function runAgentOnce(
+  agent: LlmAgent,
+  prompt: string,
+): Promise<{ final: string; errMsg: string }> {
+  const runner = new InMemoryRunner({ agent });
   const session = await runner.sessionService.createSession({
     appName: runner.appName,
     userId: "admin",
@@ -328,7 +332,7 @@ ${focusBlock}${excludeBlock}`;
     let final = "";
     let errMsg = "";
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const res = await runCollectOnce(prompt);
+      const res = await runAgentOnce(collectAgent, prompt);
       final = res.final;
       errMsg = res.errMsg;
       if (final) break;
@@ -355,6 +359,64 @@ ${focusBlock}${excludeBlock}`;
       count: spots.length,
       spots,
     });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
+  }
+});
+
+// 個別登録向け: 指定自治体内の観光地1件について紹介文を生成
+app.post("/v1/describe-spot", async (c) => {
+  const { name, municipality, prefecture, address } = await c.req.json<{
+    name: string;
+    municipality: string;
+    prefecture: string;
+    address?: string;
+  }>();
+
+  const trimmedName = name?.trim();
+  if (!trimmedName || !municipality || !prefecture) {
+    return c.json({ error: "name, municipality, prefecture は必須です" }, 400);
+  }
+
+  try {
+    const MAX_ATTEMPTS = 3;
+    let result: Awaited<ReturnType<typeof describeSpot>> | null = null;
+    let errMsg = "";
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        result = await describeSpot(
+          { name: trimmedName, municipality, prefecture, address },
+          (prompt) => runAgentOnce(describeAgent, prompt),
+        );
+        break;
+      } catch (e) {
+        errMsg = e instanceof Error ? e.message : String(e);
+        if (!isTransientError(errMsg) || attempt >= MAX_ATTEMPTS) break;
+        console.warn(
+          `[describe] 一過性エラーのため再試行します (${attempt}/${MAX_ATTEMPTS}): ${errMsg}`,
+        );
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+      }
+    }
+
+    if (!result) {
+      const message = isTransientError(errMsg)
+        ? "⚠️ ネットワークエラーで紹介文の生成に失敗しました。通信状況を確認して、もう一度お試しください。"
+        : errMsg || "紹介文の生成に失敗しました";
+      return c.json({ error: message }, 500);
+    }
+
+    if (!result.description) {
+      return c.json(
+        {
+          error: `${prefecture}${municipality}内で「${trimmedName}」の観光情報が見つかりませんでした。`,
+        },
+        404,
+      );
+    }
+
+    return c.json(result);
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

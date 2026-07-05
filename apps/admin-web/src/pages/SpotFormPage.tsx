@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   createSpot,
   deleteSpot,
+  generateSpotDescription,
   geocodeAddress,
   getSpot,
   lookupPlaceByName,
@@ -11,7 +12,7 @@ import {
 } from "../api.ts";
 import { AdminShell } from "../components/layout/AdminShell.tsx";
 import { Button } from "../components/ui/Button.tsx";
-import { Input, Textarea } from "../components/ui/Input.tsx";
+import { Input } from "../components/ui/Input.tsx";
 import { Modal, Toast } from "../components/ui/Modal.tsx";
 import { extractAreaFromAddress } from "../lib/address.ts";
 import {
@@ -20,7 +21,7 @@ import {
   SPOT_CATEGORIES,
   type SpotCategory,
 } from "../lib/categories.ts";
-import { formatDateTime, MAX_SPOT_DESCRIPTION_LENGTH } from "../lib/format.ts";
+import { formatDateTime, MAX_SPOT_DESCRIPTION_LENGTH, trimSpotDescription } from "../lib/format.ts";
 import { getFixedPrefecture, MUNICIPALITY } from "../master/index.ts";
 import type { Spot } from "../types.ts";
 
@@ -61,6 +62,8 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const [showDelete, setShowDelete] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [lookingUpPlace, setLookingUpPlace] = useState(false);
+  const [generatingDescription, setGeneratingDescription] = useState(false);
+  const [descriptionGenerateMiss, setDescriptionGenerateMiss] = useState(false);
   const [placeLookupMiss, setPlaceLookupMiss] = useState(false);
   const coordsManualRef = useRef(false);
   const nameLookupSkipRef = useRef(isEdit);
@@ -152,9 +155,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                     ]),
                   }
                 : {}),
-              ...(result.description && !prev.description.trim()
-                ? { description: result.description.slice(0, MAX_DESCRIPTION_LENGTH) }
-                : {}),
               lat: String(result.lat),
               lon: String(result.lon),
             };
@@ -175,6 +175,41 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     nameLookupSkipRef.current = false;
     setPlaceLookupMiss(false);
     setField("name", value);
+  };
+
+  const handleGenerateDescription = async () => {
+    const name = form.name.trim();
+    if (name.length < 2) {
+      setErrors((prev) => ({ ...prev, name: "観光地名を入力してください" }));
+      return;
+    }
+
+    setGeneratingDescription(true);
+    setDescriptionGenerateMiss(false);
+    setErrors((prev) => ({ ...prev, description: undefined }));
+
+    const described = await generateSpotDescription({
+      name,
+      prefecture: getFixedPrefecture(),
+      municipality: MUNICIPALITY.name,
+      address: form.address.trim() || undefined,
+    });
+
+    if (described?.description) {
+      setForm((prev) => ({
+        ...prev,
+        description: trimSpotDescription(described.description),
+        ...(described.category
+          ? {
+              categories: normalizeCategories([...prev.categories, described.category]),
+            }
+          : {}),
+      }));
+    } else {
+      setDescriptionGenerateMiss(true);
+    }
+
+    setGeneratingDescription(false);
   };
 
   const setAddress = (value: string) => {
@@ -333,16 +368,43 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               className="lg:col-span-2"
             />
             <div className="lg:col-span-2">
-              <Textarea
-                label="紹介文"
+              <div className="mb-2 flex flex-wrap items-center gap-4">
+                <label htmlFor="spot-description" className="text-sm font-medium text-[#0f172a]">
+                  紹介文
+                </label>
+                <button
+                  type="button"
+                  className="cursor-pointer rounded-full px-3 py-1.5 text-xs text-[#475569] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={generatingDescription || form.name.trim().length < 2}
+                  onClick={() => void handleGenerateDescription()}
+                >
+                  {generatingDescription ? "作成中…" : "AIで自動作成する"}
+                </button>
+              </div>
+              <textarea
+                id="spot-description"
                 value={form.description}
-                onChange={(v) => setField("description", v)}
-                error={errors.description}
-                placeholder="例: 小諸城址の公園。紅葉の名所として知られ、春には桜、秋には紅葉が楽しめます。"
-                hint={`最大 ${MAX_DESCRIPTION_LENGTH} 文字（${form.description.length}/${MAX_DESCRIPTION_LENGTH}）`}
+                rows={6}
                 maxLength={MAX_DESCRIPTION_LENGTH}
-                className="bg-white"
+                placeholder="例: 小諸城址の公園。紅葉の名所として知られ、春には桜、秋には紅葉が楽しめます。"
+                onChange={(e) => {
+                  setDescriptionGenerateMiss(false);
+                  setField("description", e.target.value);
+                }}
+                className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30 bg-white ${
+                  errors.description ? "border-[#dc2626]" : "border-[#e2e8f0]"
+                }`}
               />
+              {!errors.description && (
+                <p className="mt-2 text-xs text-[#64748b]">
+                  {descriptionGenerateMiss
+                    ? "紹介文を自動生成できませんでした。手動で入力するか、もう一度お試しください。"
+                    : `最大 ${MAX_DESCRIPTION_LENGTH} 文字（${form.description.length}/${MAX_DESCRIPTION_LENGTH}）`}
+                </p>
+              )}
+              {errors.description && (
+                <p className="mt-2 text-xs text-[#dc2626]">{errors.description}</p>
+              )}
             </div>
             <div className="lg:col-span-2">
               <p className="mb-3 text-sm font-medium text-[#0f172a]">

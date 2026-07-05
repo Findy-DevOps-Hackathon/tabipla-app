@@ -12,6 +12,27 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
+    <style>
+      button:not(:disabled),
+      button:not(:disabled) *,
+      a[href],
+      a[href] *,
+      select:not(:disabled),
+      input[type="checkbox"]:not(:disabled),
+      input[type="radio"]:not(:disabled),
+      input[type="file"]:not(:disabled),
+      label:has(input[type="file"]:not(:disabled)),
+      [role="button"]:not([aria-disabled="true"]),
+      [role="tab"]:not([aria-disabled="true"]) {
+        cursor: pointer !important;
+      }
+      button:disabled,
+      button:disabled *,
+      select:disabled,
+      input:disabled {
+        cursor: not-allowed !important;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
