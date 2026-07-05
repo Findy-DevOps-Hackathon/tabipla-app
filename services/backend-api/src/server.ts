@@ -30,6 +30,7 @@ import {
 } from "@tabipla/search-core";
 import Fastify, { type FastifyInstance } from "fastify";
 import { extractBearerToken, isAdminApiPath, issueAdminToken, verifyAdminToken } from "./auth.js";
+import { registerCors } from "./cors.js";
 import { buildSpotEmbedText, embedText } from "./embedding.js";
 import { patchSpotInElasticsearch, upsertSpotInElasticsearch } from "./esSync.js";
 import { geocodeAddressQuery } from "./geocode.js";
@@ -139,6 +140,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       },
     },
   });
+  registerCors(app);
   const client = options.client ?? createElasticsearchClient();
 
   // 正本 DB（PostgreSQL）。注入が無ければ自前で生成し、その場合は終了時にクローズする。

@@ -40,7 +40,7 @@ export function Input({
         onChange={(e) => onChange(e.target.value)}
         className={`h-11 rounded-lg border px-3 text-sm outline-none transition focus:ring-2 focus:ring-[#2563eb]/30 ${
           readOnly
-            ? "cursor-not-allowed border-[#e2e8f0] bg-[#f8fafc] text-[#64748b]"
+            ? "cursor-not-allowed border-[#e2e8f0] bg-[#f1f6fb] text-[#64748b]"
             : error
               ? "border-[#dc2626] bg-white"
               : "border-[#e2e8f0] bg-white focus:border-[#2563eb]"
@@ -57,8 +57,10 @@ export function Textarea({
   onChange,
   placeholder,
   rows = 6,
+  className = "",
   error,
   hint,
+  maxLength,
   id,
 }: {
   label: string;
@@ -66,8 +68,10 @@ export function Textarea({
   onChange: (value: string) => void;
   placeholder?: string;
   rows?: number;
+  className?: string;
   error?: string;
   hint?: string;
+  maxLength?: number;
   id?: string;
 }) {
   const generatedId = useId();
@@ -82,9 +86,10 @@ export function Textarea({
         id={textareaId}
         value={value}
         rows={rows}
+        maxLength={maxLength}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className={`rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30 ${
+        className={`rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30 ${className} ${
           error ? "border-[#dc2626]" : "border-[#e2e8f0]"
         }`}
       />

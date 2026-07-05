@@ -101,7 +101,7 @@ corepack pnpm dev
 
 1. `http://localhost:8080/healthz` → `{"ok":true}`
 2. `http://localhost:3001/health` → OK
-3. `http://localhost:5174` を開きログイン（開発用: `taro.yamada@test.com` / `test-admin-password`）
+3. `http://localhost:5174` を開きログイン（開発用: `admin@example.com` / `test-admin-password`）
 4. サイドバー「**Web収集**」→ 市区町村「小諸市」・目標件数10 →「収集開始」
 5. 1〜2分でプレビュー一覧が出る → チェックして「登録」
 6. スポット管理一覧に増えていれば成功（ES にも自動同期される）

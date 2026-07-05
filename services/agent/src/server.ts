@@ -1,8 +1,9 @@
-import { InMemoryRunner, stringifyContent } from "@google/adk";
+import { InMemoryRunner, stringifyContent, type LlmAgent } from "@google/adk";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { collectAgent, parseCollectResult } from "./agents/collect.js";
+import { collectAgent, COLLECT_CATEGORIES, parseCollectResult } from "./agents/collect.js";
+import { describeAgent, describeSpot } from "./agents/describe.js";
 import { analyzeFeedback } from "./agents/feedback.js";
 import { askIntroduce } from "./agents/introduce.js";
 import { personalizedPlan } from "./agents/personalized.js";
@@ -247,9 +248,12 @@ function isTransientError(msg: string): boolean {
   );
 }
 
-// 収集エージェントを1回実行し、最終出力とエラーメッセージを返す。
-async function runCollectOnce(prompt: string): Promise<{ final: string; errMsg: string }> {
-  const runner = new InMemoryRunner({ agent: collectAgent });
+// エージェントを1回実行し、最終出力とエラーメッセージを返す。
+async function runAgentOnce(
+  agent: LlmAgent,
+  prompt: string,
+): Promise<{ final: string; errMsg: string }> {
+  const runner = new InMemoryRunner({ agent });
   const session = await runner.sessionService.createSession({
     appName: runner.appName,
     userId: "admin",
@@ -276,19 +280,27 @@ app.post("/v1/collect-spots", async (c) => {
     municipality,
     prefecture,
     targetCount = 100,
-    theme = "",
+    categories = [],
     excludeNames = [],
   } = await c.req.json<{
     municipality: string;
     prefecture: string;
     targetCount?: number;
-    /** 担当エリア内での絞り込みテーマ・観点（任意。例: 紅葉、神社仏閣、子連れ向け）。 */
-    theme?: string;
+    /** 収集対象カテゴリ（1件以上必須）。 */
+    categories?: string[];
     /** 既に登録済みのスポット名。収集結果から除外する。 */
     excludeNames?: string[];
   }>();
   if (!municipality || !prefecture) {
     return c.json({ error: "municipality と prefecture は必須です" }, 400);
+  }
+  if (!Array.isArray(categories) || categories.length === 0) {
+    return c.json({ error: "categories は1件以上必須です" }, 400);
+  }
+  const allowed = new Set<string>(COLLECT_CATEGORIES);
+  const invalid = categories.filter((cat) => !allowed.has(cat));
+  if (invalid.length > 0) {
+    return c.json({ error: `不正なカテゴリ: ${invalid.join(", ")}` }, 400);
   }
 
   try {
@@ -297,10 +309,21 @@ app.post("/v1/collect-spots", async (c) => {
         ? `\n\n【除外リスト】以下のスポットは既に登録済みなので、出力に含めないこと:\n${excludeNames.map((n) => `- ${n}`).join("\n")}`
         : "";
 
-    const focusBlock = theme.trim()
-      ? `特に「${theme.trim()}」というテーマ・観点に合う観光地を重点的に集めてください。テーマに合わない場所は無理に含めないこと。
-各スポットの紹介文（description）は、まず「それが何か」を一言で示したうえで、「${theme.trim()}」の観点での見どころ（例えば見頃の時期・種類・眺め方・具体的な特徴など）を中心に構成してください。ただし検索結果で実際に確認できた事実だけを使い、創作・誇張はしないこと。テーマに関する情報が見つからないスポットは、無理にそのテーマで書かず除外してください。`
-      : "カテゴリ（観光・自然・歴史）をバランスよく、有名観光地だけでなく穴場も集めてください。";
+    const categoryList = categories.map((cat) => `- ${cat}`).join("\n");
+    const focusBlock = `以下のカテゴリに該当する観光地のみを収集してください。各スポットには最も適切なカテゴリを1つだけ付与すること（次のいずれかのみ）:
+${categoryList}
+
+カテゴリの目安:
+- 自然: 公園、滝、山、高原、渓谷、ビューポイントなど
+- 歴史・文化: 城跡、史跡、伝統文化、郷土資料館など
+- 都市: 街並み、都市景観、ランドマーク建築など
+- 芸術: 美術館、博物館、ギャラリー、文化施設など
+- 食: 郷土料理・食文化が主役の観光スポット（単独の飲食店は除く）
+- レジャー・スポーツ: スキー場、サイクリング、屋外アクティビティ施設など
+- イベント: 祭り、花火大会、季節イベントの名所など
+- ショッピング: 商店街、道の駅、特産品市場など
+
+選択されたカテゴリ全体からバランスよく収集し、該当しないカテゴリのスポットは無理に含めないこと。`;
 
     const prompt = `${prefecture}${municipality}の観光地を${targetCount}件を目標に収集してください。
 ${focusBlock}${excludeBlock}`;
@@ -309,7 +332,7 @@ ${focusBlock}${excludeBlock}`;
     let final = "";
     let errMsg = "";
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const res = await runCollectOnce(prompt);
+      const res = await runAgentOnce(collectAgent, prompt);
       final = res.final;
       errMsg = res.errMsg;
       if (final) break;
@@ -336,6 +359,64 @@ ${focusBlock}${excludeBlock}`;
       count: spots.length,
       spots,
     });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
+  }
+});
+
+// 個別登録向け: 指定自治体内の観光地1件について紹介文を生成
+app.post("/v1/describe-spot", async (c) => {
+  const { name, municipality, prefecture, address } = await c.req.json<{
+    name: string;
+    municipality: string;
+    prefecture: string;
+    address?: string;
+  }>();
+
+  const trimmedName = name?.trim();
+  if (!trimmedName || !municipality || !prefecture) {
+    return c.json({ error: "name, municipality, prefecture は必須です" }, 400);
+  }
+
+  try {
+    const MAX_ATTEMPTS = 3;
+    let result: Awaited<ReturnType<typeof describeSpot>> | null = null;
+    let errMsg = "";
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        result = await describeSpot(
+          { name: trimmedName, municipality, prefecture, address },
+          (prompt) => runAgentOnce(describeAgent, prompt),
+        );
+        break;
+      } catch (e) {
+        errMsg = e instanceof Error ? e.message : String(e);
+        if (!isTransientError(errMsg) || attempt >= MAX_ATTEMPTS) break;
+        console.warn(
+          `[describe] 一過性エラーのため再試行します (${attempt}/${MAX_ATTEMPTS}): ${errMsg}`,
+        );
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+      }
+    }
+
+    if (!result) {
+      const message = isTransientError(errMsg)
+        ? "⚠️ ネットワークエラーで紹介文の生成に失敗しました。通信状況を確認して、もう一度お試しください。"
+        : errMsg || "紹介文の生成に失敗しました";
+      return c.json({ error: message }, 500);
+    }
+
+    if (!result.description) {
+      return c.json(
+        {
+          error: `${prefecture}${municipality}内で「${trimmedName}」の観光情報が見つかりませんでした。`,
+        },
+        404,
+      );
+    }
+
+    return c.json(result);
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

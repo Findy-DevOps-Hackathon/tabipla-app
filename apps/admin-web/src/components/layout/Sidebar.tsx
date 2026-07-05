@@ -1,16 +1,35 @@
-import { Globe, LogOut, MapPin } from "lucide-react";
-import { NavLink, useNavigate } from "react-router-dom";
+import type { LucideIcon } from "lucide-react";
+import { List, LogOut, MapPinPlus } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { logout } from "../../auth.ts";
 import { MUNICIPALITY } from "../../master/index.ts";
 import { AdminLogo } from "../AdminLogo.tsx";
 
-const navItems = [
-  { to: "/spots", label: "スポット管理", icon: MapPin, end: true },
-  { to: "/spots/collect", label: "スポット収集", icon: Globe },
-] as const;
+type NavItem = {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  isActive?: (pathname: string) => boolean;
+};
+
+const navItems: NavItem[] = [
+  {
+    to: "/spots",
+    label: "観光地一覧",
+    icon: List,
+    isActive: (pathname) => pathname === "/spots" || /^\/spots\/[^/]+\/edit$/.test(pathname),
+  },
+  {
+    to: "/spots/new",
+    label: "観光地追加",
+    icon: MapPinPlus,
+    isActive: (pathname) => pathname.startsWith("/spots/new"),
+  },
+];
 
 export function Sidebar() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col justify-between overflow-hidden bg-[#0f172a] p-4 text-white">
@@ -29,21 +48,19 @@ export function Sidebar() {
           <p className="px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-[#94a3b8]">
             Menu
           </p>
-          {navItems.map((item) => {
-            const { to, label, icon: Icon } = item;
-            const end = "end" in item ? item.end : undefined;
+          {navItems.map(({ to, label, icon: Icon, isActive }) => {
+            const active = isActive ? isActive(pathname) : pathname === to;
             return (
               <NavLink
                 key={to}
                 to={to}
-                end={end}
-                className={({ isActive }) =>
-                  `flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-sm transition ${
-                    isActive
-                      ? "bg-white/10 font-medium text-white"
-                      : "text-[#94a3b8] hover:bg-white/5 hover:text-white"
-                  }`
-                }
+                end={to === "/spots"}
+                aria-current={active ? "page" : undefined}
+                className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-sm transition ${
+                  active
+                    ? "bg-white/10 font-medium text-white"
+                    : "text-[#94a3b8] hover:bg-white/5 hover:text-white"
+                }`}
               >
                 <Icon className="size-[18px] shrink-0" strokeWidth={1.75} />
                 {label}
@@ -53,19 +70,17 @@ export function Sidebar() {
         </nav>
       </div>
 
-      <div className="flex flex-col gap-4">
-        <button
-          type="button"
-          onClick={() => {
-            logout();
-            navigate("/login");
-          }}
-          className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-sm text-[#94a3b8] transition hover:bg-white/5 hover:text-white"
-        >
-          <LogOut className="size-[18px]" strokeWidth={1.75} />
-          ログアウト
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => {
+          logout();
+          navigate("/login");
+        }}
+        className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-sm text-[#94a3b8] transition hover:bg-white/5 hover:text-white"
+      >
+        <LogOut className="size-[18px]" strokeWidth={1.75} />
+        ログアウト
+      </button>
     </aside>
   );
 }

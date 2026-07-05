@@ -5,7 +5,7 @@
  * 実運用では API / DB から取得する想定（現状はデモ: 小諸市）。
  */
 
-/** 都道府県マスタ（Web収集は全国対応。スポット手動登録はログイン自治体の都道府県を既定とする） */
+/** 都道府県マスタ（Web収集は全国対応。観光地手動登録はログイン自治体の都道府県を既定とする） */
 export const PREFECTURES = [
   "北海道",
   "青森県",
@@ -69,7 +69,7 @@ export function isValidPrefecture(value: string): value is Prefecture {
   return (PREFECTURES as readonly string[]).includes(value);
 }
 
-/** スポット保存時に使う固定都道府県 */
+/** 観光地保存時に使う固定都道府県 */
 export function getFixedPrefecture(): Prefecture {
   return MUNICIPALITY.prefecture;
 }

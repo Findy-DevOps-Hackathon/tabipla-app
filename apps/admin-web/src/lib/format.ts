@@ -2,6 +2,12 @@ import { getFixedPrefecture } from "../master/index.ts";
 import { extractAreaFromAddress } from "./address.ts";
 import { formatCategories } from "./categories.ts";
 
+export const MAX_SPOT_DESCRIPTION_LENGTH = 200;
+
+export function trimSpotDescription(text: string): string {
+  return text.trim().slice(0, MAX_SPOT_DESCRIPTION_LENGTH);
+}
+
 export function formatDateTime(iso?: string): string {
   if (!iso) return "—";
   const d = new Date(iso);

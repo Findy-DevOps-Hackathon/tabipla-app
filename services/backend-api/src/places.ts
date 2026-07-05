@@ -5,6 +5,17 @@ import {
   searchNominatim,
 } from "./geoProviders.js";
 
+type MunicipalityContext = { prefecture: string; municipality: string };
+
+/** 住所が指定自治体内かどうか（都道府県・市区町村名の両方を含むか）。 */
+function isAddressInMunicipality(address: string | undefined, context: MunicipalityContext): boolean {
+  if (!address?.trim()) return false;
+  const normalized = address.replace(/\s+/g, "");
+  return (
+    normalized.includes(context.prefecture) && normalized.includes(context.municipality)
+  );
+}
+
 /** スポット名検索の結果（管理画面フォーム自動入力用） */
 export type PlaceLookupResult = {
   name?: string;
@@ -24,25 +35,32 @@ function mapGoogleTypesToCategory(types: string[] = []): string | undefined {
     set.has("meal_takeaway") ||
     set.has("food")
   ) {
-    return "グルメ";
+    return "食";
   }
-  if (set.has("lodging") || set.has("hotel")) return "宿泊";
   if (set.has("park") || set.has("natural_feature") || set.has("campground")) return "自然";
+  if (set.has("museum") || set.has("art_gallery")) return "芸術";
   if (
-    set.has("museum") ||
     set.has("church") ||
-    set.has("historical_landmark") ||
-    set.has("tourist_attraction") ||
-    set.has("point_of_interest")
+    set.has("hindu_temple") ||
+    set.has("mosque") ||
+    set.has("synagogue") ||
+    set.has("place_of_worship")
   ) {
-    return "観光";
+    return "歴史・文化";
   }
+  if (set.has("historical_landmark") || set.has("monument")) return "歴史・文化";
+  if (set.has("shopping_mall") || set.has("department_store") || set.has("store")) {
+    return "ショッピング";
+  }
+  if (set.has("stadium") || set.has("amusement_park")) return "レジャー・スポーツ";
+  if (set.has("tourist_attraction") || set.has("locality")) return "都市";
   return undefined;
 }
 
 async function lookupViaPlacesApiNew(
   query: string,
   key: string,
+  context: MunicipalityContext,
 ): Promise<PlaceLookupResult | null> {
   const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
@@ -56,7 +74,7 @@ async function lookupViaPlacesApiNew(
       textQuery: query,
       languageCode: "ja",
       regionCode: "JP",
-      maxResultCount: 1,
+      maxResultCount: 5,
     }),
   });
 
@@ -72,7 +90,9 @@ async function lookupViaPlacesApiNew(
     }>;
   };
 
-  const place = data.places?.[0];
+  const place = data.places?.find((p) =>
+    isAddressInMunicipality(p.formattedAddress, context),
+  );
   if (!place) return null;
 
   const lat = place.location?.latitude;
@@ -91,7 +111,11 @@ async function lookupViaPlacesApiNew(
   };
 }
 
-async function lookupViaFindPlace(query: string, key: string): Promise<PlaceLookupResult | null> {
+async function lookupViaFindPlace(
+  query: string,
+  key: string,
+  context: MunicipalityContext,
+): Promise<PlaceLookupResult | null> {
   const url = new URL("https://maps.googleapis.com/maps/api/place/findplacefromtext/json");
   url.searchParams.set("input", query);
   url.searchParams.set("inputtype", "textquery");
@@ -111,7 +135,9 @@ async function lookupViaFindPlace(query: string, key: string): Promise<PlaceLook
     }>;
   };
 
-  const candidate = data.candidates?.[0];
+  const candidate = data.candidates?.find((c) =>
+    isAddressInMunicipality(c.formatted_address, context),
+  );
   if (!candidate) return null;
 
   const lat = candidate.geometry?.location?.lat;
@@ -129,7 +155,11 @@ async function lookupViaFindPlace(query: string, key: string): Promise<PlaceLook
   };
 }
 
-async function lookupViaGeocoding(query: string, key: string): Promise<PlaceLookupResult | null> {
+async function lookupViaGeocoding(
+  query: string,
+  key: string,
+  context: MunicipalityContext,
+): Promise<PlaceLookupResult | null> {
   const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
   url.searchParams.set("address", query);
   url.searchParams.set("language", "ja");
@@ -147,7 +177,9 @@ async function lookupViaGeocoding(query: string, key: string): Promise<PlaceLook
     }>;
   };
 
-  const result = data.results?.[0];
+  const result = data.results?.find((r) =>
+    isAddressInMunicipality(r.formatted_address, context),
+  );
   if (!result) return null;
 
   const lat = result.geometry?.location?.lat;
@@ -270,10 +302,13 @@ function formatNominatimAddress(
 }
 
 function mapOsmTypeToCategory(osmClass?: string, osmType?: string): string | undefined {
-  if (osmClass === "amenity" && (osmType === "restaurant" || osmType === "cafe")) return "グルメ";
-  if (osmClass === "tourism") return "観光";
+  if (osmClass === "amenity" && (osmType === "restaurant" || osmType === "cafe")) return "食";
+  if (osmClass === "amenity" && osmType === "place_of_worship") return "歴史・文化";
+  if (osmClass === "tourism" && osmType === "museum") return "芸術";
+  if (osmClass === "tourism") return "都市";
   if (osmClass === "leisure" || osmClass === "natural") return "自然";
-  if (osmClass === "historic") return "歴史";
+  if (osmClass === "historic") return "歴史・文化";
+  if (osmClass === "shop") return "ショッピング";
   return undefined;
 }
 
@@ -292,9 +327,9 @@ export async function lookupPlaceByName(
 
   if (key) {
     const googleResult =
-      (await lookupViaPlacesApiNew(query, key)) ??
-      (await lookupViaFindPlace(query, key)) ??
-      (await lookupViaGeocoding(query, key));
+      (await lookupViaPlacesApiNew(query, key, context)) ??
+      (await lookupViaFindPlace(query, key, context)) ??
+      (await lookupViaGeocoding(query, key, context));
     if (googleResult) return googleResult;
   }
 

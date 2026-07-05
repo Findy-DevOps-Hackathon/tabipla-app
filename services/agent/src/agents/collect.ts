@@ -1,5 +1,6 @@
 import { GOOGLE_SEARCH, LlmAgent } from "@google/adk";
 import { z } from "zod";
+import { SPOT_CATEGORIES } from "../categories.js";
 
 // Gemini API の制約:
 //   - outputSchema(JSON強制モード)はツールと併用できない
@@ -9,22 +10,7 @@ import { z } from "zod";
 // モデルは name/description 以外のフィールドを取りこぼすことがある（特に件数が多いと後半で
 // price/sources 等が欠落しやすい）。欠落で収集全体を失敗させないよう、非必須項目には
 // デフォルトを与える。必須は name/description のみ。
-const spotSchema = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().min(1),
-  category: z.string().default("観光"),
-  area: z.string().default(""),
-  prefecture: z.string().default(""),
-  address: z.string().default(""),
-  tags: z.array(z.string()).default([]),
-  price: z.number().nullable().default(null),
-  sources: z.array(z.string()).default([]),
-});
-
-// 著作権ガード（機械的制御）:
-//   説明文は「要約」前提の長さに強制的に丸める。長文の丸写しはこの上限で物理的に通らない。
-//   URLや連続空白も除去し、出典はsources(サイト名)でのみ扱う。
-const DESCRIPTION_MAX = 300;
+const DESCRIPTION_MAX = 200;
 
 function sanitizeSpot(spot: CollectedSpot): CollectedSpot {
   const description = spot.description
@@ -35,12 +21,32 @@ function sanitizeSpot(spot: CollectedSpot): CollectedSpot {
   return { ...spot, description };
 }
 
+const spotSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().min(1),
+  category: z.string().default("自然"),
+  area: z.string().default(""),
+  prefecture: z.string().default(""),
+  address: z.string().default(""),
+  tags: z.array(z.string()).default([]),
+  price: z.number().nullable().default(null),
+  sources: z.array(z.string()).default([]),
+});
+
+// 著作権ガード（機械的制御）:
+//   説明文は200字以内に強制的に丸める。長文の丸写しはこの上限で物理的に通らない。
+//   URLや連続空白も除去し、出典はsources(サイト名)でのみ扱う。
+
 export const collectResultSchema = z.object({
   spots: z.array(spotSchema),
 });
 
 export type CollectedSpot = z.infer<typeof spotSchema>;
 export type CollectResult = z.infer<typeof collectResultSchema>;
+
+export const COLLECT_CATEGORIES = SPOT_CATEGORIES;
+
+export type CollectCategory = (typeof COLLECT_CATEGORIES)[number];
 
 export const collectAgent = new LlmAgent({
   name: "collect_agent",
@@ -50,7 +56,7 @@ export const collectAgent = new LlmAgent({
 指定された市区町村の観光地情報をGoogle検索で収集し、構造化データとして出力します。
 
 【手順】
-1. google_search で「{市区町村名} 観光スポット」「{市区町村名} 観光 名所」「{市区町村名} 自然 絶景」「{市区町村名} 歴史 神社仏閣 城」「{市区町村名} 公園 展望台」「{市区町村名} 穴場 観光」など、切り口を変えて複数回検索する。
+1. google_search で市区町村名とカテゴリに応じたクエリを複数回検索する（例: 「{市区町村名} 自然 絶景」「{市区町村名} 歴史 史跡」「{市区町村名} 神社 仏閣」「{市区町村名} 美術館」「{市区町村名} 温泉」「{市区町村名} 直売所」「{市区町村名} 祭り イベント」など、指定カテゴリに合わせて切り口を変える）。
 2. 検索結果からスポットを抽出し、指定のJSON形式で構造化する。
 3. 同じスポットが複数ソースで言及されている場合は名寄せして1件にまとめる。
 4. 目標件数に近づくよう、検索クエリのバリエーションを増やす。
@@ -69,13 +75,18 @@ export const collectAgent = new LlmAgent({
 - 書く内容の優先順位: ①それが何か（城跡・滝など） ②具体的な特徴（規模・歴史・見られるもの）
   ③楽しみ方や季節の情報（紅葉の時期など）。
 - 文体は「です・ます」調で統一。
-- category: "観光" | "自然" | "歴史" のいずれか
+- category: 次のいずれか1つだけを付与する — ${SPOT_CATEGORIES.map((c) => `"${c}"`).join(" | ")}
 - area: 市区町村名
 - prefecture: 都道府県名
 - address: できるだけ正確な住所。不明なら "{都道府県}{市区町村名}" のみ
 - tags: 特徴を表すタグ（3〜5個）例: ["紅葉","城址","公園"]
 - price: 参考価格（円）。無料なら0、不明ならnull
 - sources: 情報を得たソースのサイト名（URLではなく「じゃらん」「小諸市公式HP」のような名称）
+
+【自治体スコープ（最重要）】
+- 対象はプロンプトで指定された市区町村・都道府県内の観光地のみ。
+- 他市区町村・他都道府県の同名・類似スポットは出力しない。所在地が指定自治体外と判明するものは除外する。
+- area / prefecture / address は必ず指定自治体内の情報だけを書く。
 
 【最重要ルール：創作の絶対禁止】
 - google_search の検索結果で実際に存在が確認できたスポットだけを出力する。
@@ -95,7 +106,7 @@ export const collectAgent = new LlmAgent({
 
 【出力形式】
 前置き・説明・コードフェンスは一切書かず、次の形のJSONだけを出力する:
-{"spots":[{"name":"...","description":"...","category":"観光","area":"...","prefecture":"...","address":"...","tags":["..."],"price":0,"sources":["..."]}]}`,
+{"spots":[{"name":"...","description":"...","category":"自然","area":"...","prefecture":"...","address":"...","tags":["..."],"price":0,"sources":["..."]}]}`,
   tools: [GOOGLE_SEARCH],
   generateContentConfig: {
     thinkingConfig: { thinkingBudget: 1024 },

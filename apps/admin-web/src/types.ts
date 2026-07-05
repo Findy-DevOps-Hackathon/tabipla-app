@@ -26,7 +26,4 @@ export type BulkImportResponse = {
   spots: Spot[];
 };
 
-export const SPOT_CATEGORIES = ["観光", "グルメ", "宿泊", "自然", "歴史"] as const;
-export type SpotCategory = (typeof SPOT_CATEGORIES)[number];
-
 export const PAGE_SIZE = 20;

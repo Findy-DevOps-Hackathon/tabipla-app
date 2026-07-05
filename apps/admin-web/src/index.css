@@ -7,20 +7,56 @@
 body {
   margin: 0;
   font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif;
-  background: #f8fafc;
+  background: #e6edf5;
   color: #0f172a;
 }
 
+/* transition から pointer-events を除外（ホバー時のカーソル揺れ防止） */
 button:not(:disabled),
-a,
-select,
-input[type="checkbox"],
-input[type="radio"],
-input[type="file"],
-label:has(input[type="file"]) {
-  cursor: pointer;
+a[href],
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]),
+label:has(input[type="file"]:not(:disabled)) {
+  transition-property: color, background-color, border-color, opacity, box-shadow, fill,
+    stroke !important;
 }
 
-button:disabled {
-  cursor: not-allowed;
+button:not(:disabled),
+[type="button"]:not(:disabled),
+[type="submit"]:not(:disabled),
+[type="reset"]:not(:disabled),
+a[href],
+select:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="file"]:not(:disabled),
+label:has(input[type="file"]:not(:disabled)),
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]) {
+  cursor: pointer !important;
+}
+
+button:not(:disabled) *,
+[type="button"]:not(:disabled) *,
+[type="submit"]:not(:disabled) *,
+[type="reset"]:not(:disabled) *,
+a[href] *,
+[role="button"]:not([aria-disabled="true"]) *,
+[role="tab"]:not([aria-disabled="true"]) *,
+label:has(input[type="file"]:not(:disabled)) * {
+  cursor: pointer !important;
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+[role="button"][aria-disabled="true"],
+[role="tab"][aria-disabled="true"] {
+  cursor: not-allowed !important;
+}
+
+button:disabled *,
+[role="button"][aria-disabled="true"] *,
+[role="tab"][aria-disabled="true"] * {
+  cursor: not-allowed !important;
 }

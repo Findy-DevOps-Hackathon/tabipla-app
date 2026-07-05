@@ -1,7 +1,8 @@
 import { getAuthToken, logout } from "./auth.ts";
+import { API_BASE } from "./config.ts";
 import type { BulkImportResponse, Spot, SpotListResponse } from "./types.ts";
 
-const BASE = "/api";
+const BASE = API_BASE;
 
 function authHeaders(): HeadersInit {
   const token = getAuthToken();
@@ -45,10 +46,22 @@ export type LoginResponse = {
 };
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
-  return request<LoginResponse>("/auth/login", {
+  const res = await fetch(`${BASE}/auth/login`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
+  const text = await res.text();
+  if (!text.startsWith("{")) {
+    throw new Error(
+      "API に接続できません。ローカル開発では backend-api の起動と seed を確認してください。Firebase 公開版では API 未接続のためログインできません。",
+    );
+  }
+  const body = JSON.parse(text) as LoginResponse | { error?: string };
+  if (!res.ok) {
+    throw new Error(body && "error" in body && body.error ? body.error : `API エラー (${res.status})`);
+  }
+  return body as LoginResponse;
 }
 
 export type ListSpotsParams = {
@@ -142,6 +155,42 @@ export async function geocodeAddress(
   if (!q) return null;
   try {
     return await request<{ lat: number; lon: number }>(`/geocode?${new URLSearchParams({ q })}`);
+  } catch {
+    return null;
+  }
+}
+
+const AGENT_URL = "/agent";
+
+export type DescribeSpotResult = {
+  description: string;
+  category?: string;
+};
+
+/** 個別登録向け: 指定自治体内の観光地について AI で紹介文を生成する。 */
+export async function generateSpotDescription(params: {
+  name: string;
+  prefecture: string;
+  municipality: string;
+  address?: string;
+}): Promise<DescribeSpotResult | null> {
+  const name = params.name.trim();
+  if (!name) return null;
+
+  try {
+    const res = await fetch(`${AGENT_URL}/v1/describe-spot`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        prefecture: params.prefecture,
+        municipality: params.municipality,
+        address: params.address?.trim() || undefined,
+      }),
+    });
+    const body = (await res.json().catch(() => null)) as DescribeSpotResult | { error?: string } | null;
+    if (!res.ok || !body || !("description" in body) || !body.description) return null;
+    return body;
   } catch {
     return null;
   }
