@@ -6,16 +6,14 @@ import { bulkImportSpots } from "../api.ts";
 import { AdminShell } from "../components/layout/AdminShell.tsx";
 import { Button } from "../components/ui/Button.tsx";
 import { Toast } from "../components/ui/Modal.tsx";
+import { type ImportDraft, type ImportRowDraft, useSpotAddDraft } from "../context/SpotAddDraftContext.tsx";
 import { extractAreaFromAddress } from "../lib/address.ts";
 import { isSpotCategory, parseCategories, SPOT_CATEGORIES } from "../lib/categories.ts";
 import { parseCsvLine, stripBom } from "../lib/csv.ts";
 import { CSV_HEADER } from "../lib/format.ts";
 import { getFixedPrefecture } from "../master/index.ts";
-import type { Spot } from "../types.ts";
 
-type Step = 1 | 2 | 3;
-
-type ParsedRow = Omit<Spot, "id"> & { error?: string; line: number };
+type ParsedRow = ImportRowDraft;
 
 function parseCsv(text: string): ParsedRow[] {
   const lines = stripBom(text).trim().split(/\r?\n/);
@@ -69,9 +67,13 @@ function parseCsv(text: string): ParsedRow[] {
 
 export default function BulkImportPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>(1);
-  const [rows, setRows] = useState<ParsedRow[]>([]);
-  const [result, setResult] = useState<{ ok: number; ng: number } | null>(null);
+  const { importDraft, setImportDraft } = useSpotAddDraft();
+  const { step, rows, result } = importDraft;
+
+  const patchImport = (patch: Partial<ImportDraft>) => {
+    setImportDraft((prev) => ({ ...prev, ...patch }));
+  };
+
   const [toast, setToast] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
 
@@ -82,8 +84,7 @@ export default function BulkImportPage({ embedded = false }: { embedded?: boolea
     try {
       const text = await file.text();
       const parsed = parseCsv(text);
-      setRows(parsed);
-      setStep(2);
+      patchImport({ rows: parsed, step: 2 });
     } catch (e) {
       setToast(e instanceof Error ? e.message : "ファイルの読み込みに失敗しました");
     }
@@ -98,8 +99,7 @@ export default function BulkImportPage({ embedded = false }: { embedded?: boolea
           id: crypto.randomUUID(),
         })),
       );
-      setResult({ ok: res.count, ng: errorRows.length });
-      setStep(3);
+      patchImport({ result: { ok: res.count, ng: errorRows.length }, step: 3 });
     } catch {
       setToast("取り込みに失敗しました");
     } finally {
@@ -221,7 +221,7 @@ export default function BulkImportPage({ embedded = false }: { embedded?: boolea
               </table>
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setStep(1)}>
+              <Button variant="secondary" onClick={() => patchImport({ step: 1 })}>
                 戻る
               </Button>
               <Button

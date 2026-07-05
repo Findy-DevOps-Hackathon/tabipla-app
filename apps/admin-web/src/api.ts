@@ -162,18 +162,24 @@ export async function geocodeAddress(
 
 const AGENT_URL = "/agent";
 
+export type DescribeSpotMode = "description" | "highlights";
+
 export type DescribeSpotResult = {
-  description: string;
+  description?: string;
   category?: string;
+  highlights?: string[];
 };
 
-/** 個別登録向け: 指定自治体内の観光地について AI で紹介文を生成する。 */
-export async function generateSpotDescription(params: {
-  name: string;
-  prefecture: string;
-  municipality: string;
-  address?: string;
-}): Promise<DescribeSpotResult | null> {
+/** 個別登録向け: 指定自治体内の観光地について AI で紹介文またはおすすめポイントを生成する。 */
+export async function generateSpotContent(
+  params: {
+    name: string;
+    prefecture: string;
+    municipality: string;
+    address?: string;
+  },
+  mode: DescribeSpotMode,
+): Promise<DescribeSpotResult | null> {
   const name = params.name.trim();
   if (!name) return null;
 
@@ -186,11 +192,14 @@ export async function generateSpotDescription(params: {
         prefecture: params.prefecture,
         municipality: params.municipality,
         address: params.address?.trim() || undefined,
+        mode,
       }),
     });
     const body = (await res.json().catch(() => null)) as DescribeSpotResult | { error?: string } | null;
-    if (!res.ok || !body || !("description" in body) || !body.description) return null;
-    return body;
+    if (!res.ok || !body || "error" in body) return null;
+    if (mode === "description" && !("description" in body && body.description)) return null;
+    if (mode === "highlights" && !("highlights" in body && body.highlights?.length)) return null;
+    return body as DescribeSpotResult;
   } catch {
     return null;
   }

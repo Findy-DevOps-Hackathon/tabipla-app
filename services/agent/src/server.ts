@@ -3,7 +3,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { collectAgent, COLLECT_CATEGORIES, parseCollectResult } from "./agents/collect.js";
-import { describeAgent, describeSpot } from "./agents/describe.js";
+import { describeAgent, describeSpot, type DescribeMode } from "./agents/describe.js";
 import { analyzeFeedback } from "./agents/feedback.js";
 import { askIntroduce } from "./agents/introduce.js";
 import { personalizedPlan } from "./agents/personalized.js";
@@ -364,18 +364,22 @@ ${focusBlock}${excludeBlock}`;
   }
 });
 
-// 個別登録向け: 指定自治体内の観光地1件について紹介文を生成
+// 個別登録向け: 指定自治体内の観光地1件について紹介文またはおすすめポイントを生成
 app.post("/v1/describe-spot", async (c) => {
-  const { name, municipality, prefecture, address } = await c.req.json<{
+  const { name, municipality, prefecture, address, mode = "description" } = await c.req.json<{
     name: string;
     municipality: string;
     prefecture: string;
     address?: string;
+    mode?: DescribeMode;
   }>();
 
   const trimmedName = name?.trim();
   if (!trimmedName || !municipality || !prefecture) {
     return c.json({ error: "name, municipality, prefecture は必須です" }, 400);
+  }
+  if (mode !== "description" && mode !== "highlights") {
+    return c.json({ error: "mode は description または highlights を指定してください" }, 400);
   }
 
   try {
@@ -386,7 +390,7 @@ app.post("/v1/describe-spot", async (c) => {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         result = await describeSpot(
-          { name: trimmedName, municipality, prefecture, address },
+          { name: trimmedName, municipality, prefecture, address, mode },
           (prompt) => runAgentOnce(describeAgent, prompt),
         );
         break;
@@ -401,10 +405,23 @@ app.post("/v1/describe-spot", async (c) => {
     }
 
     if (!result) {
+      const label = mode === "highlights" ? "おすすめポイント" : "紹介文";
       const message = isTransientError(errMsg)
-        ? "⚠️ ネットワークエラーで紹介文の生成に失敗しました。通信状況を確認して、もう一度お試しください。"
-        : errMsg || "紹介文の生成に失敗しました";
+        ? `⚠️ ネットワークエラーで${label}の生成に失敗しました。通信状況を確認して、もう一度お試しください。`
+        : errMsg || `${label}の生成に失敗しました`;
       return c.json({ error: message }, 500);
+    }
+
+    if (mode === "highlights") {
+      if (result.highlights.length === 0) {
+        return c.json(
+          {
+            error: `${prefecture}${municipality}内で「${trimmedName}」のおすすめポイントが見つかりませんでした。`,
+          },
+          404,
+        );
+      }
+      return c.json({ highlights: result.highlights });
     }
 
     if (!result.description) {
@@ -416,7 +433,10 @@ app.post("/v1/describe-spot", async (c) => {
       );
     }
 
-    return c.json(result);
+    return c.json({
+      description: result.description,
+      ...(result.category ? { category: result.category } : {}),
+    });
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

@@ -24,8 +24,9 @@ import { PAGE_SIZE, type Spot } from "../types.ts";
 
 type Status = "loading" | "success" | "empty" | "error";
 
-/** チェックボックス + 観光地名 + カテゴリ + 紹介文 + 操作 */
-const TABLE_GRID_COLS = "grid-cols-[16px_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,2fr)_5rem]";
+/** チェックボックス + 観光地名 + カテゴリ + 紹介文 + おすすめポイント + 操作 */
+const TABLE_GRID_COLS =
+  "grid-cols-[16px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_minmax(0,1.2fr)_5rem]";
 
 export default function SpotListPage() {
   const navigate = useNavigate();
@@ -180,7 +181,7 @@ export default function SpotListPage() {
                 key={i}
                 className={`grid ${TABLE_GRID_COLS} gap-5 border-b border-[#e2e8f0] px-5 py-5 last:border-0`}
               >
-                {[0, 1, 2, 3, 4].map((j) => (
+                {[0, 1, 2, 3, 4, 5].map((j) => (
                   <div key={j} className="h-4 w-full animate-pulse rounded bg-[#e2e8f0]" />
                 ))}
               </div>
@@ -240,13 +241,14 @@ export default function SpotListPage() {
               <span>観光地名</span>
               <span>カテゴリ</span>
               <span>紹介文</span>
+              <span>おすすめポイント</span>
               <span className="text-right">操作</span>
             </div>
 
             {spots.map((spot, idx) => (
               <div
                 key={spot.id}
-                className={`relative grid ${TABLE_GRID_COLS} items-center gap-5 border-b border-[#e2e8f0] px-5 py-4 last:border-0 ${
+                className={`relative grid ${TABLE_GRID_COLS} items-start gap-5 border-b border-[#e2e8f0] px-5 py-4 last:border-0 ${
                   idx % 2 === 1 ? "bg-[#f8fafc]" : "bg-white"
                 }`}
               >
@@ -280,7 +282,8 @@ export default function SpotListPage() {
                 <span className="line-clamp-2 text-[13px] leading-relaxed text-[#64748b]">
                   {spot.description}
                 </span>
-                <div className="flex items-center justify-end gap-1">
+                <SpotHighlights highlights={spot.highlights} />
+                <div className="flex items-center justify-end gap-1 self-center">
                   <button
                     type="button"
                     aria-label={`${spot.name} を編集`}
@@ -362,6 +365,22 @@ export default function SpotListPage() {
 
       {toast && <Toast message={toast} variant={toast.includes("失敗") ? "error" : "success"} />}
     </AdminShell>
+  );
+}
+
+function SpotHighlights({ highlights }: { highlights?: string[] }) {
+  if (!highlights?.length) {
+    return <span className="text-[13px] text-[#94a3b8]">—</span>;
+  }
+
+  return (
+    <ul className="list-disc space-y-1 pl-4 text-[13px] leading-snug text-[#64748b]">
+      {highlights.map((point) => (
+        <li key={point} className="line-clamp-1">
+          {point}
+        </li>
+      ))}
+    </ul>
   );
 }
 

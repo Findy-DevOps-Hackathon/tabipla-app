@@ -6,33 +6,24 @@ import { bulkImportSpots, geocodeAddress, listSpots, lookupPlaceByName } from ".
 import { AdminShell } from "../components/layout/AdminShell.tsx";
 import { Button } from "../components/ui/Button.tsx";
 import { Modal, Toast } from "../components/ui/Modal.tsx";
+import {
+  type CollectedSpotDraft,
+  type CollectDraft,
+  useSpotAddDraft,
+} from "../context/SpotAddDraftContext.tsx";
 import { extractAreaFromAddress } from "../lib/address.ts";
 import { getCategoryStyle, SPOT_CATEGORIES, type SpotCategory } from "../lib/categories.ts";
 import { MAX_SPOT_DESCRIPTION_LENGTH, trimSpotDescription } from "../lib/format.ts";
 import { MUNICIPALITY, type Prefecture } from "../master/index.ts";
 
-type CollectedSpot = {
-  name: string;
-  description: string;
-  category: string;
-  area: string;
-  prefecture: string;
-  address: string;
-  tags: string[];
-  sources: string[];
-  /** 収集直後に lookup / ジオコーディングで補完する緯度経度（取得できなければ undefined）。 */
-  location?: { lat: number; lon: number };
-  selected: boolean;
-};
+type CollectedSpot = CollectedSpotDraft;
 
-type Step = "input" | "collecting" | "preview" | "registering" | "done";
-
-// vite の dev proxy（/agent → agentサービス）経由。同一オリジンなのでCORS不要。
+// vite の dev proxy
 const AGENT_URL = "/agent";
 
-/** チェックボックス + 観光地名 + カテゴリ + 住所 + 紹介文 + 操作 */
+/** チェックボックス + 観光地名 + カテゴリ + 住所 + 紹介文 + おすすめポイント + 操作 */
 const COLLECT_TABLE_GRID_COLS =
-  "grid-cols-[16px_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,2fr)_3rem]";
+  "grid-cols-[16px_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.1fr)_3rem]";
 
 /** 表記ゆれを吸収した名前照合キー（agent側 normalizeSpotName と同じ規則）。 */
 function nameKey(name: string): string {
@@ -63,6 +54,7 @@ async function enrichCollectedSpot(
     return {
       ...spot,
       description,
+      highlights: spot.highlights ?? [],
       address,
       area,
       selected: true,
@@ -77,6 +69,7 @@ async function enrichCollectedSpot(
   return {
     ...spot,
     description,
+    highlights: spot.highlights ?? [],
     selected: true,
     location: location ?? undefined,
   };
@@ -84,20 +77,28 @@ async function enrichCollectedSpot(
 
 export default function CollectPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
+  const { collectDraft, setCollectDraft, resetCollectDraft } = useSpotAddDraft();
+  const { selectedCategories, targetCount, step, spots, categoryFilter, result } = collectDraft;
+
+  const patchCollect = (patch: Partial<CollectDraft>) => {
+    setCollectDraft((prev) => ({ ...prev, ...patch }));
+  };
+
+  const setSpots = (value: CollectedSpot[] | ((prev: CollectedSpot[]) => CollectedSpot[])) => {
+    setCollectDraft((prev) => ({
+      ...prev,
+      spots: typeof value === "function" ? value(prev.spots) : value,
+    }));
+  };
+
   // 担当エリアはログイン自治体に固定（都道府県・市区町村は選ばせない）。
   const prefecture = MUNICIPALITY.prefecture;
   const municipality = MUNICIPALITY.name;
-  const [selectedCategories, setSelectedCategories] = useState<SpotCategory[]>([]);
-  const [targetCount, setTargetCount] = useState(30);
-  const [step, setStep] = useState<Step>("input");
-  const [spots, setSpots] = useState<CollectedSpot[]>([]);
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   // インライン編集中の観光地（spots 配列のインデックス）。null なら非編集。
   const [editing, setEditing] = useState<number | null>(null);
   const [editingBackup, setEditingBackup] = useState<CollectedSpot | null>(null);
   const [abortConfirmOpen, setAbortConfirmOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [result, setResult] = useState<{ ok: number } | null>(null);
 
   const selectedCount = spots.filter((s) => s.selected).length;
 
@@ -151,18 +152,18 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
   };
 
   const abortCollectPreview = () => {
-    setStep("input");
-    setSpots([]);
+    resetCollectDraft();
     setEditing(null);
     setEditingBackup(null);
-    setCategoryFilter(null);
     setAbortConfirmOpen(false);
   };
 
   const toggleCategory = (category: SpotCategory) => {
-    setSelectedCategories((prev) =>
-      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
-    );
+    patchCollect({
+      selectedCategories: selectedCategories.includes(category)
+        ? selectedCategories.filter((c) => c !== category)
+        : [...selectedCategories, category],
+    });
   };
 
   const handleCollect = async () => {
@@ -170,7 +171,7 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
       setToast("カテゴリを1つ以上選択してください");
       return;
     }
-    setStep("collecting");
+    patchCollect({ step: "collecting" });
     try {
       const excludeNames = await fetchExistingNames(municipality);
       const res = await fetch(`${AGENT_URL}/v1/collect-spots`, {
@@ -197,7 +198,7 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
             ? "新しい観光地は見つかりませんでした（登録済みの観光地は除外されます）"
             : "選択したカテゴリに該当する観光地が見つかりませんでした。カテゴリや件数を変えてお試しください",
         );
-        setStep("input");
+        patchCollect({ step: "input" });
         return;
       }
       // 収集直後に Places lookup で住所・座標を補完する（登録時にそのまま使う）。
@@ -205,13 +206,12 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
         data.spots.map((s) => enrichCollectedSpot(s, prefecture, municipality)),
       );
       setSpots(withLocation);
-      setCategoryFilter(null);
+      patchCollect({ categoryFilter: null, step: "preview" });
       setEditing(null);
       setEditingBackup(null);
-      setStep("preview");
     } catch (e) {
       setToast(e instanceof Error ? e.message : "収集に失敗しました");
-      setStep("input");
+      patchCollect({ step: "input" });
     }
   };
 
@@ -221,14 +221,14 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
       setToast("登録する観光地を選択してください");
       return;
     }
-    setStep("registering");
+    patchCollect({ step: "registering" });
     try {
       // 収集中に他の経路で登録された分も含め、直前の最新状態で二重登録を防ぐ
       const existingKeys = new Set((await fetchExistingNames(municipality)).map(nameKey));
       const newSpots = selected.filter((s) => !existingKeys.has(nameKey(s.name)));
       if (newSpots.length === 0) {
         setToast("選択した観光地はすべて登録済みです");
-        setStep("preview");
+        patchCollect({ step: "preview" });
         return;
       }
       // 座標は収集時に付与済み（プレビューで確認・編集された値）をそのまま使う。
@@ -236,6 +236,7 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
         id: crypto.randomUUID(),
         name: s.name,
         description: trimSpotDescription(s.description),
+        ...(s.highlights.length ? { highlights: s.highlights } : {}),
         category: [s.category],
         area: s.area,
         prefecture: s.prefecture,
@@ -244,11 +245,10 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
         ...(s.location ? { location: s.location } : {}),
       }));
       const res = await bulkImportSpots(spotsToImport);
-      setResult({ ok: res.count });
-      setStep("done");
+      patchCollect({ result: { ok: res.count }, step: "done" });
     } catch (e) {
       setToast(e instanceof Error ? e.message : "登録に失敗しました");
-      setStep("preview");
+      patchCollect({ step: "preview" });
     }
   };
 
@@ -302,7 +302,7 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
                     <button
                       key={n}
                       type="button"
-                      onClick={() => setTargetCount(n)}
+                      onClick={() => patchCollect({ targetCount: n })}
                       className={`cursor-pointer rounded-full px-3 py-1.5 text-sm transition ${
                         targetCount === n
                           ? "bg-[#2563eb] font-medium text-white"
@@ -351,7 +351,7 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setCategoryFilter(null)}
+                  onClick={() => patchCollect({ categoryFilter: null })}
                   className={`cursor-pointer rounded-full px-3 py-1 text-[13px] transition ${
                     categoryFilter === null
                       ? "bg-[#2563eb] font-medium text-white"
@@ -364,7 +364,9 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
                   <button
                     key={cat}
                     type="button"
-                    onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
+                    onClick={() =>
+                      patchCollect({ categoryFilter: categoryFilter === cat ? null : cat })
+                    }
                     className={`cursor-pointer rounded-full px-3 py-1 text-[13px] transition ${
                       categoryFilter === cat
                         ? "bg-[#2563eb] font-medium text-white"
@@ -393,6 +395,7 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
                   <span>カテゴリ</span>
                   <span>住所</span>
                   <span>紹介文</span>
+                  <span>おすすめポイント</span>
                   <span className="text-right">操作</span>
                 </div>
 
@@ -453,6 +456,23 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
                           {MAX_SPOT_DESCRIPTION_LENGTH}）
                         </p>
                       </div>
+                      <div>
+                        <textarea
+                          value={spot.highlights.join("\n")}
+                          onChange={(e) =>
+                            updateSpot(index, {
+                              highlights: e.target.value
+                                .split("\n")
+                                .map((line) => line.trim())
+                                .filter(Boolean)
+                                .slice(0, 3),
+                            })
+                          }
+                          placeholder={"おすすめポイント（1行1件・最大3件）"}
+                          rows={3}
+                          className="mt-2 w-full resize-y rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm leading-relaxed"
+                        />
+                      </div>
                       <div className="mt-3 flex justify-end gap-3">
                         <Button variant="secondary" onClick={cancelEditing}>
                           キャンセル
@@ -463,7 +483,7 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
                   ) : (
                     <div
                       key={`row-${index}`}
-                      className={`grid ${COLLECT_TABLE_GRID_COLS} items-center gap-4 border-b border-[#e2e8f0] px-5 py-4 last:border-0 ${
+                      className={`grid ${COLLECT_TABLE_GRID_COLS} items-start gap-4 border-b border-[#e2e8f0] px-5 py-4 last:border-0 ${
                         idx % 2 === 1 ? "bg-[#f8fafc]" : "bg-white"
                       } ${spot.selected ? "" : "opacity-45"}`}
                     >
@@ -490,11 +510,12 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
                       <span className="line-clamp-2 text-[13px] leading-relaxed text-[#64748b]">
                         {spot.description}
                       </span>
+                      <CollectHighlights highlights={spot.highlights} />
                       <button
                         type="button"
                         onClick={() => startEditing(index)}
                         aria-label={`${spot.name} を編集`}
-                        className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-[#94a3b8] transition hover:bg-[#e2e8f0] hover:text-[#2563eb]"
+                        className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center self-center rounded-full text-[#94a3b8] transition hover:bg-[#e2e8f0] hover:text-[#2563eb]"
                       >
                         <Pencil className="size-4" />
                       </button>
@@ -542,11 +563,7 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
             <div className="mt-6 flex justify-center gap-3">
               <Button
                 variant="secondary"
-                onClick={() => {
-                  setStep("input");
-                  setSpots([]);
-                  setResult(null);
-                }}
+                onClick={() => resetCollectDraft()}
               >
                 続けて収集
               </Button>
@@ -575,5 +592,21 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
         </div>
       </Modal>
     </>,
+  );
+}
+
+function CollectHighlights({ highlights }: { highlights: string[] }) {
+  if (highlights.length === 0) {
+    return <span className="text-[13px] text-[#94a3b8]">—</span>;
+  }
+
+  return (
+    <ul className="list-disc space-y-1 pl-4 text-[13px] leading-snug text-[#64748b]">
+      {highlights.map((point) => (
+        <li key={point} className="line-clamp-2">
+          {point}
+        </li>
+      ))}
+    </ul>
   );
 }

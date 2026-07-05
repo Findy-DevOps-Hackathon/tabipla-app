@@ -9,6 +9,7 @@ export type Spot = {
   prefecture?: string;
   address?: string;
   tags?: string[];
+  highlights?: string[];
   location?: GeoPoint;
   price?: number;
   createdAt?: string;

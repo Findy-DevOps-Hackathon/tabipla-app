@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App.tsx";
+import { SpotAddDraftProvider } from "./context/SpotAddDraftContext.tsx";
 import { installPointerCursorFallback } from "./lib/cursor.ts";
 import "./index.css";
 
@@ -15,7 +16,9 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <SpotAddDraftProvider>
+        <App />
+      </SpotAddDraftProvider>
     </BrowserRouter>
   </StrictMode>,
 );

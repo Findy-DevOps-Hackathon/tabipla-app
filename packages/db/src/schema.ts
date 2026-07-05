@@ -62,6 +62,8 @@ export const spots = pgTable(
     address: text("address"),
     /** タグ（例: ["寺", "世界遺産"]）。 */
     tags: text("tags").array(),
+    /** おすすめポイント（例: ["紅葉の名所", "城址散策"]）。 */
+    highlights: text("highlights").array(),
     /** 緯度。 */
     lat: doublePrecision("lat"),
     /** 経度。 */

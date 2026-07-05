@@ -29,6 +29,8 @@ export type SpotDocument = {
   address?: string;
   /** タグ（例: ["寺", "紅葉"]）。 */
   tags?: string[];
+  /** おすすめポイント（例: ["紅葉の名所", "城址散策"]）。 */
+  highlights?: string[];
   /** 緯度経度。geo_point 検索・距離計算に利用する。 */
   location?: GeoPoint;
   /** 参考価格（円）。フィルタ・表示用。 */
