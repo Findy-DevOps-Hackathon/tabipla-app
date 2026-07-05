@@ -17,15 +17,6 @@
     ],
     "headers": [
       {
-        "source": "**",
-        "headers": [
-          {
-            "key": "Permissions-Policy",
-            "value": "geolocation=(self)"
-          }
-        ]
-      },
-      {
         "source": "/assets/**",
         "headers": [
           {

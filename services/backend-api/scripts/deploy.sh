@@ -51,12 +51,21 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
   exit 1
 fi
 
+# .env の localhost 用 AGENT_API_URL は Cloud Run では使えないため本番 URL を自動取得
+if [[ "${AGENT_API_URL:-}" == *localhost* ]] || [[ "${AGENT_API_URL:-}" == *127.0.0.1* ]]; then
+  AGENT_API_URL=""
+fi
 if [[ -z "${AGENT_API_URL:-}" ]]; then
   AGENT_API_URL="$(gcloud run services describe tabipla-agent \
     --project="$PROJECT" \
     --region="$REGION" \
     --format='value(status.url)' 2>/dev/null || true)"
 fi
+if [[ -z "${AGENT_API_URL:-}" ]]; then
+  echo "AGENT_API_URL が取得できません。tabipla-agent を ${REGION} にデプロイしてください。" >&2
+  exit 1
+fi
+echo "  AGENT_API_URL=${AGENT_API_URL}"
 
 ENV_VARS_FILE="$(mktemp)"
 trap 'rm -f "$ENV_VARS_FILE"' EXIT

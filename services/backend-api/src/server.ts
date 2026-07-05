@@ -950,12 +950,19 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     const url = category
       ? `${agentApiUrl}/img/${encodeURIComponent(id)}?category=${encodeURIComponent(category)}`
       : `${agentApiUrl}/img/${encodeURIComponent(id)}`;
-    const res = await fetch(url);
+    let res: Response;
+    try {
+      res = await fetch(url);
+    } catch (error) {
+      req.log.error({ err: error, id, agentApiUrl }, "img: agent への接続に失敗しました");
+      return reply.code(503).send({ error: "画像サービスに接続できません。" });
+    }
     if (!res.ok) {
       return reply.code(res.status).send();
     }
     const buffer = await res.arrayBuffer();
     reply.header("content-type", "image/svg+xml; charset=utf-8");
+    reply.header("cache-control", "public, max-age=86400");
     return reply.send(Buffer.from(buffer));
   });
 
