@@ -42,7 +42,10 @@ export function displayCategoryFromAgent(category?: string): SpotCategory {
   return "観光";
 }
 
-/** スポット画像 URL（DB に画像があればそれを、なければ agent SVG 生成）。 */
+/** 画像未設定時の中立プレースホルダー（実在風景の代用にしない）。 */
+export const SPOT_IMAGE_PLACEHOLDER = "/spots/placeholder.svg";
+
+/** スポット画像 URL（DB に画像があればそれを、なければ中立プレースホルダー）。 */
 export function spotImageUrl(doc: Pick<SpotDocument, "id" | "imageUrl">): string {
   if (doc.imageUrl) {
     if (doc.imageUrl.startsWith("http://") || doc.imageUrl.startsWith("https://")) {
@@ -50,7 +53,7 @@ export function spotImageUrl(doc: Pick<SpotDocument, "id" | "imageUrl">): string
     }
     return `${API_BASE}${doc.imageUrl.startsWith("/") ? doc.imageUrl : `/${doc.imageUrl}`}`;
   }
-  return `${API_BASE}/img/${encodeURIComponent(doc.id)}`;
+  return SPOT_IMAGE_PLACEHOLDER;
 }
 
 /** SpotDocument → スワイプ用スポット。 */

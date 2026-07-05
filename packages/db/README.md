@@ -88,11 +88,29 @@ pnpm -C packages/db db:push
 
 ## シードデータ投入
 
+`packages/db/seed-data/` に、ローカル DB から書き出した小諸市スポット 24 件と画像が入っています。
+
 ```bash
 pnpm -C packages/db seed
 ```
 
-サンプルのスポット（清水寺 など）を冪等に upsert します。
+自治体・管理ユーザー・スポット・クーポン・蘊蓄を冪等に upsert し、`seed-data/images/` の画像を `services/backend-api/data/uploads/spots/` へコピーします。
+
+管理画面ログイン（パスワードは `ADMIN_SEED_PASSWORD`、未設定時 `test-admin-password`）:
+
+- `seed-data/admin-users.json` の email を参照
+
+### ローカル DB から seed-data を更新する
+
+管理画面などでデータを追加・更新したあと、次で `seed-data/` を再生成できます。
+
+```bash
+# 接続先は DATABASE_URL（ローカル PostgreSQL の実ポートに合わせる）
+DATABASE_URL=postgresql://tabipla:tabipla@localhost:5432/tabipla pnpm -C packages/db seed:export
+pnpm -C packages/db seed
+```
+
+`seed:export` は DB の全スポット・自治体・管理ユーザー（メールのみ）・クーポン・蘊蓄と、スポット画像ファイルを `seed-data/` へ書き出します。
 
 ---
 

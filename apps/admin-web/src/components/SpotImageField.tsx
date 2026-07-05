@@ -136,11 +136,11 @@ export function SpotImageField({
               disabled={generating || generateDisabled || zoneDisabled}
               onClick={onGenerate}
             >
-              {generating ? "生成中…" : "AIイラストを生成"}
+              {generating ? "生成中…" : "参考イラストを生成"}
             </button>
             {generateMiss && (
               <p className="text-xs text-[#64748b]">
-                画像を自動生成できませんでした。もう一度お試しください。
+                参考イラストを生成できませんでした。紹介文を入力するか、実際の写真をアップロードしてください。
               </p>
             )}
           </>
@@ -189,7 +189,7 @@ export function SpotImageField({
               />
             )}
             <Loader2 className="relative z-10 size-10 animate-spin text-[#2563eb]" aria-hidden />
-            <p className="relative z-10 mt-4 font-medium text-[#0f172a]">AI イラストを生成中…</p>
+            <p className="relative z-10 mt-4 font-medium text-[#0f172a]">参考イラストを生成中…</p>
           </>
         ) : deleting ? (
           <>
@@ -241,13 +241,8 @@ export function SpotImageField({
             </p>
             <p className="mt-2 text-sm text-[#64748b]">JPEG / PNG / WebP・最大 5MB</p>
             <p className="mt-2 text-xs text-[#94a3b8]">
-              未設定の場合、ユーザー画面では自動生成画像が表示されます
+              正確な表示のため、可能な限り実際の写真をアップロードしてください
             </p>
-            {onGenerate && (
-              <p className="mt-2 text-xs text-[#94a3b8]">
-                「AIイラストを生成」で旅行スケッチブック風の画像を作成できます
-              </p>
-            )}
           </div>
         )}
       </label>

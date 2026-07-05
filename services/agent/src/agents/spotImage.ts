@@ -41,6 +41,10 @@ type ImageBrief = z.infer<typeof imageBriefSchema>;
 const NO_TEXT_SUFFIX_EN =
   "Wordless illustration only. Zero text anywhere: no letters, numbers, kanji, hiragana, katakana, romaji, signage, posters, banners, logos, captions, labels, menus, maps, watermarks, or typography. Blank plain surfaces only.";
 
+/** 入力にない要素の創作・推測を禁止する忠実性サフィックス。 */
+const FIDELITY_SUFFIX_EN =
+  "Depict only real features explicitly supported by the provided spot description, highlights, and tags. Do not invent, guess, embellish, or substitute landmarks, buildings, monuments, terrain, vegetation, food, or cultural elements that are not stated. Stay faithful to the actual place; avoid generic, fictional, or misleading tourist imagery.";
+
 /**
  * 参考画像に合わせた水彩スケッチブック風スタイル（Imagen プロンプトに常に付与）。
  * 穏やかな海岸スケッチのような: 細いインク線、淡い水彩、パステル調、紙の質感、広い空。
@@ -51,7 +55,7 @@ const SKETCHBOOK_STYLE_EN = [
   "Muted pastel palette: pale blue sky, sandy beige, soft grey, earthy tan, natural pine green, gentle turquoise water tones.",
   "Soft diffused daylight like an overcast day, calm peaceful atmosphere, no harsh shadows, no bold saturated colors.",
   "Airy open composition with a wide pale sky, generous negative space, low horizon, hand-drawn imperfect lines.",
-  "Slightly simplified recognizable forms, charming and intimate, not photorealistic, not a photograph, not 3D CGI, not anime.",
+  "Slightly simplified but recognizably faithful forms based on the provided factual description, charming and intimate, not photorealistic, not a photograph, not 3D CGI, not anime.",
   "Optional tiny distant human figures for scale only, no facial detail.",
 ].join(" ");
 
@@ -62,19 +66,25 @@ const spotImageBriefAgent = new LlmAgent({
   instruction: `あなたは観光イラストの描画指示を作るアシスタントです。
 入力された観光スポットについて JSON を返します。
 
+【最重要: 事実に基づく描写】
+- 入力の紹介文・おすすめポイント・タグに書かれた内容**だけ**を描く
+- 入力にない建物・名所・地形・シンボル・料理・文化要素は**追加しない**
+- 推測・創作・一般化で補完しない（別の観光地風の汎用風景も禁止）
+- 不明な部分は省略する。嘘や誇張で埋めない
+
 【参考スタイル（Imagen 側で自動付与するため imagenPrompt に書かない）】
 穏やかな日本の旅行スケッチブック風水彩。細いインク線、淡い透明水彩、色鉛筆、パステル調、紙の質感、広い空、柔らかい光。
 
 【ルール】
 - landmark: スポットの正式名称（入力 name をそのまま・日本語可）
-- visualElements: 描く具体物を日本語で3〜5個（読点区切り）。看板・標識は含めない
-- setting: 場所と雰囲気（日本語1文）
+- visualElements: **入力に根拠のある**具体物を日本語で3〜5個（読点区切り）。看板・標識は含めない
+- setting: 場所と雰囲気（日本語1文）。入力の説明から導ける範囲のみ
 - imagenPrompt: Imagen 用の**被写体描写のみ**（英語・220字以内）
   - **日本語文字（漢字・ひらがな・カタカナ）を一切含めない**
   - スポット名を画像内に描く・綴る指示をしない（名前の文字列をプロンプトに書かない）
   - 場所は英語表記（例: Komoro City, Nagano Prefecture, Japan）
-  - 見た目だけ: 建物の形、門、石垣、滝、庭園、樹木、食べ物など固有物
-  - スタイル・画材・「no text」などは書かない（サーバーが付与する）
+  - 見た目だけ: 入力で言及された建物の形、門、石垣、滝、庭園、樹木、食べ物など**固有物のみ**
+  - スタイル・画材・「no text」・忠実性の注意書きは書かない（サーバーが付与する）
   - 例: "Historic castle gate and mossy stone walls in a hillside park, pine trees and cherry blossoms. Komoro City, Nagano Prefecture, Japan."
 - 入力にない別スポット・別地域の要素は追加しない`,
   outputSchema: imageBriefSchema,
@@ -164,7 +174,9 @@ function buildEnglishSubject(input: SpotImageInput, brief?: Partial<ImageBrief>)
 }
 
 function assembleImagenPrompt(subject: string): string {
-  return ensureNoTextSuffix(`${SKETCHBOOK_STYLE_EN} ${subject.trim()}`);
+  return ensureNoTextSuffix(
+    `${SKETCHBOOK_STYLE_EN} ${subject.trim()} ${FIDELITY_SUFFIX_EN}`,
+  );
 }
 
 function ensureNoTextSuffix(prompt: string): string {
@@ -260,7 +272,14 @@ function getImageModel(): string {
 }
 
 const SPOT_IMAGE_NEGATIVE_PROMPT =
-  "text, letters, words, numbers, typography, captions, labels, signage, signboard, poster, banner, logo, watermark, kanji, hiragana, katakana, writing, menu, map, book, newspaper, speech bubble, subtitle, photorealistic, hyperrealistic, 3d render, cgi, anime, manga, bold saturated colors, harsh shadows, dark moody, oil painting, digital art";
+  "text, letters, words, numbers, typography, captions, labels, signage, signboard, poster, banner, logo, watermark, kanji, hiragana, katakana, writing, menu, map, book, newspaper, speech bubble, subtitle, invented landmark, fictional architecture, wrong building, fantasy castle, generic scenery, unrelated location, made-up monument, inaccurate representation, misleading tourist postcard, photorealistic, hyperrealistic, 3d render, cgi, anime, manga, bold saturated colors, harsh shadows, dark moody, oil painting, digital art";
+
+/** 創作を防ぐため、紹介文またはおすすめポイントが十分あるか確認する。 */
+export function hasFactualImageBasis(input: SpotImageInput): boolean {
+  const description = input.description?.trim() ?? "";
+  if (description.length >= 20) return true;
+  return (input.highlights ?? []).some((item) => item.trim().length >= 5);
+}
 
 async function cropToSpotAspect(imageBytes: Buffer): Promise<Buffer> {
   return sharp(imageBytes)
@@ -311,6 +330,11 @@ export async function generateSpotImage(input: SpotImageInput): Promise<SpotImag
   const name = input.name?.trim();
   if (!name || !input.prefecture?.trim() || !input.municipality?.trim()) {
     throw new Error("name, prefecture, municipality は必須です");
+  }
+  if (!hasFactualImageBasis(input)) {
+    throw new Error(
+      "正確なイラストを生成するため、紹介文（20字以上）またはおすすめポイントを入力してから生成してください。",
+    );
   }
 
   // 旧モック（汎用 SVG）はスポットと無関係なため廃止。Imagen のみ使用。
