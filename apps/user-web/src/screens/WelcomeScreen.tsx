@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { SpotImage } from "../components/SpotImage.tsx";
-import { preloadImage } from "../lib/preloadImage.ts";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
-import { ChevronRightIcon, MapPinIcon } from "../components/icons.tsx";
+import { ChevronRightIcon } from "../components/icons.tsx";
+import { SpotImage } from "../components/SpotImage.tsx";
 import { RECOMMENDATIONS, type Recommendation } from "../data/spots.ts";
+import { preloadImage } from "../lib/preloadImage.ts";
+import { spotPreviewText } from "../lib/spotMapper.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 
+/** 好み診断の比較カードと同じ幅・画像高さ。 */
+const FEATURED_CARD_MAX_W = "max-w-[300px]";
+const FEATURED_CARD_IMAGE_H = "h-[230px]";
+
 /** ホーム中央カードを切り替える間隔（ミリ秒）。 */
-const FEATURED_ROTATE_MS = 4000;
+const FEATURED_ROTATE_MS = 2500;
 
 /** カードの入れ替えアニメーションの長さ（ミリ秒、CSS と一致させる）。 */
 const FEATURED_SWAP_MS = 1100;
@@ -40,29 +45,29 @@ function FeaturedCard({
   lazy?: boolean;
 }) {
   const inner = (
-    <>
+    <div className={`relative ${FEATURED_CARD_IMAGE_H} w-full`}>
       <SpotImage
         src={spot.image}
-        alt={spot.name}
-        className="absolute inset-0 size-full object-cover"
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute inset-0 size-full object-cover"
         priority={priority}
         lazy={lazy}
       />
-      <div className="absolute inset-0 bg-linear-to-t from-black/75 via-black/15 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-3">
-        <p className="flex items-center gap-1 text-[10px] font-medium text-white/85">
-          <MapPinIcon className="size-3" />
-          {spot.prefecture} / {spot.area}
-        </p>
-        <p className="text-[17px] font-extrabold leading-tight text-white drop-shadow-sm">
+      <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/10 from-30% to-black/80" />
+      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 px-4 pb-4">
+        <p className="text-[15px] font-bold leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
           {spot.name}
         </p>
+        <p className="text-[13px] leading-relaxed font-medium text-white/90 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
+          {spotPreviewText(spot)}
+        </p>
       </div>
-    </>
+    </div>
   );
 
   const frameClass =
-    "absolute inset-0 overflow-hidden rounded-[22px] bg-white/85 text-left shadow-[0_18px_48px_-16px_rgba(15,23,42,0.32)] backdrop-blur-xl";
+    "flex w-full touch-manipulation flex-col overflow-hidden rounded-2xl bg-white text-left shadow-[0_12px_32px_rgba(15,23,42,0.1)]";
 
   if (!onClick) {
     return (
@@ -77,7 +82,7 @@ function FeaturedCard({
       type="button"
       onClick={onClick}
       aria-label={`${spot.name} を見る`}
-      className={`group ${frameClass} transition active:scale-[0.99] ${className ?? ""}`}
+      className={`group transition active:scale-[0.99] ${frameClass} ${className ?? ""}`}
     >
       {inner}
     </button>
@@ -165,12 +170,14 @@ export function WelcomeScreen({
         {/* おすすめ観光スポット（中央配置・一定時間ごとに外枠ごと入れ替え） */}
         {featured && (
           <div className="flex flex-1 flex-col items-center justify-center">
-            <div className="animate-float-soft relative aspect-3/4 w-full max-w-[220px]">
+            <div
+              className={`animate-float-soft relative ${FEATURED_CARD_IMAGE_H} w-full ${FEATURED_CARD_MAX_W}`}
+            >
               {leaving && (
                 <FeaturedCard
                   key={`leave-${leaving.id}`}
                   spot={leaving}
-                  className="animate-card-leave"
+                  className="absolute inset-0 animate-card-leave"
                   lazy
                 />
               )}
@@ -178,7 +185,7 @@ export function WelcomeScreen({
                 key={featured.id}
                 spot={featured}
                 onClick={() => onOpenSpot(featured)}
-                className="animate-card-enter"
+                className="absolute inset-0 animate-card-enter"
                 priority
               />
             </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SpotImage } from "../components/SpotImage.tsx";
 import { UndoIcon } from "../components/icons.tsx";
+import { SpotImage } from "../components/SpotImage.tsx";
 import type { SwipeSpot } from "../data/spots.ts";
 import { spotPreviewText } from "../lib/spotMapper.ts";
 
