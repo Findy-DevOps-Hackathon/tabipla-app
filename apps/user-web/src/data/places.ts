@@ -57,3 +57,21 @@ export function searchPlaces(query: string, limit = 8): Place[] {
     })
     .slice(0, limit);
 }
+
+/** 現状対応している旅先（小諸市）のみを返す。 */
+export function searchDestinationPlaces(query: string): Place[] {
+  const komoro: Place = { name: "小諸市", reading: "こもろし", prefecture: "長野県" };
+  const q = query.trim();
+  if (q === "") return [komoro];
+
+  const matchesKomoro =
+    komoro.name.includes(q) ||
+    komoro.reading.includes(q) ||
+    komoro.prefecture?.includes(q) ||
+    q.includes("小諸") ||
+    q.includes("こもろ") ||
+    q.includes("長野") ||
+    q.includes("ながの");
+
+  return matchesKomoro ? [komoro] : [];
+}

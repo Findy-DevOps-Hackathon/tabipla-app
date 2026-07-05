@@ -11,6 +11,7 @@ import { recommendAgent } from "./agents/recommend.js";
 import { ask } from "./agents/run.js";
 import { story } from "./agents/unchiku.js";
 import { KOMORO_SPOTS, SPOT_IMAGES, SPOT_TAGS } from "./fixtures/spots.js";
+import type { Spot } from "./contracts.js";
 import { summarizeProfile, userProfiles } from "./personalize.js";
 import { sceneSvg } from "./sceneSvg.js";
 import { toolCallStorage } from "./tools/tracker.js";
@@ -34,9 +35,11 @@ app.get("/healthz", (c) => c.json({ ok: true }));
 // カード用の生成SVG風景（デモ用。後で実写真URLに差し替え可）
 app.get("/img/:id", (c) => {
   const id = c.req.param("id");
+  const queryCategory = c.req.query("category");
   const spot = KOMORO_SPOTS.find((x) => x.id === id);
+  const category = queryCategory || spot?.category || "nature";
   const seed = id.split("").reduce((a, ch) => a + ch.charCodeAt(0), 0);
-  return c.body(sceneSvg(spot?.category ?? "nature", seed), 200, {
+  return c.body(sceneSvg(category, seed), 200, {
     "content-type": "image/svg+xml; charset=utf-8",
     "cache-control": "public, max-age=86400",
   });
@@ -90,6 +93,7 @@ app.post("/v1/personalized/plan", async (c) => {
     timeBudget = "4時間",
     origin = "小諸駅",
     travelMemory = "",
+    catalog,
   } = await c.req.json<{
     likes?: string[];
     nopes?: string[];
@@ -97,9 +101,18 @@ app.post("/v1/personalized/plan", async (c) => {
     timeBudget?: string;
     origin?: string;
     travelMemory?: string;
+    catalog?: Spot[];
   }>();
   try {
-    const res = await personalizedPlan({ likes, nopes }, userId, timeBudget, origin, travelMemory);
+    const spotCatalog = catalog ?? KOMORO_SPOTS;
+    const res = await personalizedPlan(
+      { likes, nopes },
+      userId,
+      timeBudget,
+      origin,
+      travelMemory,
+      spotCatalog,
+    );
     return c.json(res);
   } catch (e) {
     console.error(e);

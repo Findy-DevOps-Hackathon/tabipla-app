@@ -1,11 +1,13 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { CardsIcon, ChevronRightIcon, MapPinIcon } from "../components/icons.tsx";
-import { EXPLORE_SPOTS, RECOMMENDATIONS_PAGE_SIZE, type Recommendation } from "../data/spots.ts";
+import { RECOMMENDATIONS_PAGE_SIZE, type Recommendation } from "../data/spots.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 import { isVisited } from "../lib/visited.ts";
 
 type RecommendationsScreenProps = {
   recommendations: Recommendation[];
+  /** API から取得した探索用スポット（診断前）。 */
+  exploreSpots?: Recommendation[];
   /** 好み診断を完了済みか。 */
   diagnosisComplete: boolean;
   /** ユーザーの ID。 */
@@ -62,6 +64,7 @@ function buildPreferenceSentence(summary: string): string {
 /** フロー 5: 厳選したおすすめスポット一覧（ai-recommendations）。 */
 export function RecommendationsScreen({
   recommendations,
+  exploreSpots = [],
   diagnosisComplete,
   userId,
   onStartDiagnosis,
@@ -70,7 +73,7 @@ export function RecommendationsScreen({
   onOpenSpot,
   profileSummary = "",
 }: RecommendationsScreenProps) {
-  const listSource = diagnosisComplete ? recommendations : EXPLORE_SPOTS;
+  const listSource = diagnosisComplete ? recommendations : exploreSpots;
   const [initiallyVisitedIds] = useState<Set<string>>(
     () =>
       new Set(

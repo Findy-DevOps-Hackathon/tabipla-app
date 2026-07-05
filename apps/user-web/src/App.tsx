@@ -2,14 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
-import { API_BASE } from "./config.ts";
+import { API_BASE, DESTINATION_AREA, DESTINATION_PREFECTURE } from "./config.ts";
+import { isDestinationSpot } from "./lib/destination.ts";
 import {
   type Recommendation,
-  type SpotCategory,
+  type SwipeSpot,
   SWIPE_LIMIT,
   SWIPE_LIMIT_REFINE,
-  SWIPE_SPOTS,
-  SWIPE_SPOTS_REFINE,
 } from "./data/spots.ts";
 import {
   isDetailedDiagnosisComplete,
@@ -17,8 +16,8 @@ import {
   markDetailedDiagnosisComplete,
   markDiagnosisComplete,
 } from "./lib/diagnosis.ts";
+import { loadExploreSpots, loadSwipeCatalog, planItemToRecommendation, resolveSpotById } from "./lib/spotCatalog.ts";
 import {
-  findRecommendationById,
   readSpotIdFromLocation,
   setSpotIdInLocation,
 } from "./lib/spotLink.ts";
@@ -41,10 +40,15 @@ type PlanApiRecommendation = {
   name: string;
   category?: string;
   description?: string;
+  highlights?: string[];
+  prefecture?: string;
+  area?: string;
   tags?: string[];
   why?: string[];
   score?: number;
   memberOnly?: boolean;
+  image?: string;
+  imageUrl?: string;
 };
 
 type PersonalizedPlanResponse = {
@@ -89,7 +93,8 @@ function readStoredRecommendations(): Recommendation[] {
     const raw = localStorage.getItem(RECOMMENDATIONS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Recommendation[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as Recommendation[]).filter(isDestinationSpot);
   } catch {
     return [];
   }
@@ -104,18 +109,16 @@ function readStoredProfileSummary(): string {
   }
 }
 
-/** URL の ?spot= から詳細表示するスポットを復元する。 */
-function readInitialDetailFromUrl(): Recommendation | null {
-  const spotId = readSpotIdFromLocation();
-  if (!spotId) return null;
-  return findRecommendationById(spotId, readStoredRecommendations());
+/** URL の ?spot= から詳細表示するスポット ID（非同期解決は useEffect で行う）。 */
+function readInitialSpotIdFromUrl(): string | null {
+  return readSpotIdFromLocation();
 }
 
 /** ブラウザ履歴と連動させるための「画面状態」のスナップショット。 */
 type ViewSnapshot = {
   step: Step;
   refining: boolean;
-  swipeDeck: typeof SWIPE_SPOTS;
+  swipeDeck: SwipeSpot[];
   runId: number;
   detailRec: Recommendation | null;
 };
@@ -135,14 +138,15 @@ const HISTORY_STATE_KEY = "tabiplaNav";
  * スワイプ型レコメンド体験をステップ状態機械で制御する（Figma デザイン準拠）。
  */
 export default function App() {
-  const initialDetailRec = readInitialDetailFromUrl();
+  const initialSpotId = readInitialSpotIdFromUrl();
   const [step, setStep] = useState<Step>(readStoredStep);
   const [, setLocation] = useState("");
   const [swipedCount, setSwipedCount] = useState(0);
   const [runId, setRunId] = useState(0);
-  const [swipeDeck, setSwipeDeck] = useState<typeof SWIPE_SPOTS>(() =>
-    SWIPE_SPOTS.slice(0, SWIPE_LIMIT),
-  );
+  const [catalog, setCatalog] = useState<SwipeSpot[]>([]);
+  const [refineCatalog, setRefineCatalog] = useState<SwipeSpot[]>([]);
+  const [exploreSpots, setExploreSpots] = useState<Recommendation[]>([]);
+  const [swipeDeck, setSwipeDeck] = useState<SwipeSpot[]>([]);
   const [refining, setRefining] = useState(false);
   const [diagnosisComplete, setDiagnosisComplete] = useState(isDiagnosisComplete);
   const [, setDetailedComplete] = useState(isDetailedDiagnosisComplete);
@@ -159,11 +163,46 @@ export default function App() {
     Record<string, { role: "user" | "ai"; text: string; isError?: boolean; image?: string }[]>
   >({});
   const [travelMemory, setTravelMemory] = useState("");
-  const [detailRec, setDetailRec] = useState<Recommendation | null>(initialDetailRec);
+  const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
   const detailReturnStepRef = useRef<Step>(
-    initialDetailRec ? readStoredStep() : "recommendations",
+    initialSpotId ? readStoredStep() : "recommendations",
   );
   const shellRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const [swipeDocs, explore] = await Promise.all([
+        loadSwipeCatalog(30),
+        loadExploreSpots(30),
+      ]);
+      if (!active) return;
+      if (swipeDocs.length > 0) {
+        setCatalog(swipeDocs);
+        setRefineCatalog(swipeDocs);
+      }
+      setExploreSpots(explore);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!initialSpotId) return;
+    let active = true;
+    (async () => {
+      const rec = await resolveSpotById(
+        initialSpotId,
+        readStoredRecommendations(),
+        exploreSpots,
+      );
+      if (active && rec) setDetailRec(rec);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [initialSpotId, exploreSpots]);
 
   const navSnapshot: ViewSnapshot = {
     step,
@@ -268,7 +307,7 @@ export default function App() {
   }, [detailRec]);
 
   const beginSwipe = useCallback(() => {
-    setSwipeDeck(SWIPE_SPOTS.slice(0, SWIPE_LIMIT));
+    setSwipeDeck(catalog.slice(0, SWIPE_LIMIT));
     setLikes([]);
     setNopes([]);
     setRecommendations([]);
@@ -276,7 +315,7 @@ export default function App() {
     setRefining(false);
     setRunId((id) => id + 1);
     setStep("swipe");
-  }, []);
+  }, [catalog]);
 
   const selectDestination = useCallback((loc: string) => {
     setLocation(loc);
@@ -284,11 +323,11 @@ export default function App() {
   }, []);
 
   const refinePreferences = useCallback(() => {
-    setSwipeDeck(SWIPE_SPOTS_REFINE.slice(0, SWIPE_LIMIT_REFINE));
+    setSwipeDeck(refineCatalog.slice(0, SWIPE_LIMIT_REFINE));
     setRefining(true);
     setRunId((id) => id + 1);
     setStep("swipe");
-  }, []);
+  }, [refineCatalog]);
 
   const handleSwipeComplete = useCallback(
     (likedIds: string[]) => {
@@ -339,6 +378,8 @@ export default function App() {
             timeBudget: "4時間",
             origin: "小諸駅",
             travelMemory,
+            prefecture: DESTINATION_PREFECTURE,
+            area: DESTINATION_AREA,
           }),
         });
 
@@ -349,33 +390,9 @@ export default function App() {
           throw new Error(data.error || "プランの作成に失敗しました。");
         }
 
-        const categoryMap: Record<string, SpotCategory> = {
-          history: "歴史",
-          nature: "自然",
-          gourmet: "グルメ",
-        };
-
-        const findSpot = (id: string) =>
-          [...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE].find((sp) => sp.id === id);
-
-        const getSpotImage = (id: string): string => {
-          const s = findSpot(id);
-          return s ? s.image : `${API_BASE}/img/${id}`;
-        };
-
-        const mapped: Recommendation[] = (data.recommendations ?? []).map((r) => ({
-          id: r.id,
-          name: r.name,
-          prefecture: "長野県",
-          area: "小諸市",
-          category: categoryMap[r.category ?? ""] ?? "観光",
-          description: r.description || findSpot(r.id)?.description || "",
-          tags: r.tags ?? [],
-          reason: (r.why ?? []).join(" / "),
-          match: Math.round((r.score ?? 0.8) * 100),
-          memberOnly: r.memberOnly ?? false,
-          image: getSpotImage(r.id),
-        }));
+        const mapped: Recommendation[] = (data.recommendations ?? [])
+          .map((r) => planItemToRecommendation(r))
+          .filter((r): r is Recommendation => r !== null);
 
         setRecommendations(mapped);
         setProfileSummary(data.profileSummary ?? "");
@@ -493,7 +510,12 @@ export default function App() {
   return (
     <PhoneShell shellRef={shellRef}>
       {step === "welcome" && (
-        <WelcomeScreen onStartDiagnosis={beginSwipe} onOpenSpot={openSpotDetail} />
+        <WelcomeScreen
+          onStartDiagnosis={beginSwipe}
+          onOpenSpot={openSpotDetail}
+          exploreSpots={exploreSpots}
+          recommendations={recommendations}
+        />
       )}
 
       {step === "input" && (
@@ -541,6 +563,7 @@ export default function App() {
       {step === "recommendations" && (
         <RecommendationsScreen
           recommendations={recommendations}
+          exploreSpots={exploreSpots}
           diagnosisComplete={diagnosisComplete}
           userId={VISITOR_ID}
           onStartDiagnosis={beginSwipe}

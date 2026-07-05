@@ -55,6 +55,7 @@ export const spotMapping: estypes.MappingTypeMapping = {
     address: { type: "text" },
     tags: { type: "keyword" },
     highlights: { type: "text" },
+    imageUrl: { type: "keyword", index: false },
     location: { type: "geo_point" },
     price: { type: "integer" },
     embedding: {

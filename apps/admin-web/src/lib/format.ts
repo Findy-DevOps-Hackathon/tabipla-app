@@ -23,6 +23,25 @@ export function normalizeHighlights(items: string[]): string[] {
     .slice(0, MAX_SPOT_HIGHLIGHT_COUNT);
 }
 
+/** テキストエリア入力中のおすすめポイントを行数・文字数上限内に収める。 */
+export function enforceHighlightsText(text: string): string {
+  return text
+    .split("\n")
+    .slice(0, MAX_SPOT_HIGHLIGHT_COUNT)
+    .map((line) => line.slice(0, MAX_SPOT_HIGHLIGHT_LENGTH))
+    .join("\n");
+}
+
+/** テキストエリアの文字列を正規化して返す（保存・表示用）。 */
+export function parseHighlightsText(text: string): string[] {
+  return normalizeHighlights(text.split("\n"));
+}
+
+/** 正規化済み配列をテキストエリア用の文字列へ。 */
+export function formatHighlightsText(items: string[]): string {
+  return normalizeHighlights(items).join("\n");
+}
+
 export function formatDateTime(iso?: string): string {
   if (!iso) return "—";
   const d = new Date(iso);

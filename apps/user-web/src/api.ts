@@ -1,5 +1,6 @@
-import type { SearchMode, SearchResponse } from "./types.ts";
-import { API_BASE } from "./config.ts";
+import type { SearchMode, SearchResponse, SpotDocument } from "./types.ts";
+import { API_BASE, DESTINATION_AREA, DESTINATION_PREFECTURE } from "./config.ts";
+import { isDestinationSpot } from "./lib/destination.ts";
 
 /**
  * backend-api への検索リクエストを担う薄いクライアント。
@@ -64,4 +65,57 @@ export async function searchSpots(params: SearchParams): Promise<SearchResponse>
 
   if (!res.ok) await parseApiError(res);
   return (await res.json()) as SearchResponse;
+}
+
+export type FetchSpotsParams = {
+  prefecture?: string;
+  area?: string;
+  limit?: number;
+  offset?: number;
+  q?: string;
+  signal?: AbortSignal;
+};
+
+type PublicSpotsResponse = {
+  total: number;
+  count: number;
+  spots: SpotDocument[];
+};
+
+/** ユーザー向け公開スポット一覧（GET /v1/spots）。既定は小諸市のみ。 */
+export async function fetchPublicSpots(params: FetchSpotsParams = {}): Promise<SpotDocument[]> {
+  const search = new URLSearchParams();
+  search.set("prefecture", params.prefecture ?? DESTINATION_PREFECTURE);
+  search.set("area", params.area ?? DESTINATION_AREA);
+  if (params.limit !== undefined) search.set("limit", String(params.limit));
+  if (params.offset !== undefined) search.set("offset", String(params.offset));
+  if (params.q) search.set("q", params.q);
+
+  const res = await fetch(`${API_BASE}/v1/spots?${search.toString()}`, {
+    headers: { accept: "application/json" },
+    signal: params.signal,
+  });
+
+  if (!res.ok) await parseApiError(res);
+  const data = (await res.json()) as PublicSpotsResponse;
+  return (data.spots ?? []).filter(isDestinationSpot);
+}
+
+type SpotDetailResponse = {
+  spot: SpotDocument;
+};
+
+/** スポット1件取得（GET /v1/spots/:id）。 */
+export async function fetchSpotById(id: string, signal?: AbortSignal): Promise<SpotDocument> {
+  const res = await fetch(`${API_BASE}/v1/spots/${encodeURIComponent(id)}`, {
+    headers: { accept: "application/json" },
+    signal,
+  });
+
+  if (!res.ok) await parseApiError(res);
+  const data = (await res.json()) as SpotDetailResponse;
+  if (!isDestinationSpot(data.spot)) {
+    throw new Error("スポットが見つかりません。");
+  }
+  return data.spot;
 }

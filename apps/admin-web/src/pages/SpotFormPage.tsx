@@ -11,6 +11,7 @@ import {
   updateSpot,
 } from "../api.ts";
 import { AdminShell } from "../components/layout/AdminShell.tsx";
+import { SpotImageField, uploadPendingSpotImage } from "../components/SpotImageField.tsx";
 import { Button } from "../components/ui/Button.tsx";
 import { Input } from "../components/ui/Input.tsx";
 import { Modal, Toast } from "../components/ui/Modal.tsx";
@@ -29,8 +30,10 @@ import {
 import {
   formatDateTime,
   MAX_SPOT_DESCRIPTION_LENGTH,
-  normalizeHighlights,
   trimSpotDescription,
+  enforceHighlightsText,
+  formatHighlightsText,
+  parseHighlightsText,
 } from "../lib/format.ts";
 import { getFixedPrefecture, MUNICIPALITY } from "../master/index.ts";
 import type { Spot } from "../types.ts";
@@ -62,6 +65,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const [descriptionGenerateMiss, setDescriptionGenerateMiss] = useState(false);
   const [highlightsGenerateMiss, setHighlightsGenerateMiss] = useState(false);
   const [placeLookupMiss, setPlaceLookupMiss] = useState(false);
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const coordsManualRef = useRef(false);
   const nameLookupSkipRef = useRef(isEdit);
 
@@ -76,7 +80,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
           id: spot.id,
           name: spot.name,
           description: spot.description,
-          highlights: (spot.highlights ?? []).join("\n"),
+          highlights: formatHighlightsText(spot.highlights ?? []),
           categories: normalizeCategories(spot.category),
           address: spot.address ?? "",
           area:
@@ -85,6 +89,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               MUNICIPALITY.defaultArea),
           lat: spot.location?.lat != null ? String(spot.location.lat) : "",
           lon: spot.location?.lon != null ? String(spot.location.lon) : "",
+          imageUrl: spot.imageUrl,
         });
         setUpdatedAt(spot.updatedAt);
       })
@@ -227,7 +232,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     if (described?.highlights?.length) {
       setForm((prev) => ({
         ...prev,
-        highlights: normalizeHighlights(described.highlights ?? []).join("\n"),
+        highlights: formatHighlightsText(described.highlights ?? []),
       }));
     } else {
       setHighlightsGenerateMiss(true);
@@ -254,6 +259,9 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     else if (form.description.length > MAX_DESCRIPTION_LENGTH) {
       next.description = `${MAX_DESCRIPTION_LENGTH}文字以内で入力してください`;
     }
+    if (isEdit && form.categories.length === 0) {
+      next.categories = "1件以上選択してください";
+    }
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -261,12 +269,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const buildSpot = (): Spot => {
     const address = form.address.trim();
     const area = form.area.trim() || MUNICIPALITY.defaultArea;
-    const highlights = normalizeHighlights(
-      form.highlights
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean),
-    );
+    const highlights = parseHighlightsText(form.highlights);
 
     return {
       id: isEdit ? form.id.trim() : crypto.randomUUID(),
@@ -292,8 +295,12 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
         const { id: _id, ...patch } = buildSpot();
         await updateSpot(id, patch);
       } else {
-        await createSpot(buildSpot());
+        const created = await createSpot(buildSpot());
+        if (pendingImageFile) {
+          await uploadPendingSpotImage(created.id, pendingImageFile);
+        }
         if (embedded) resetManualDraft();
+        setPendingImageFile(null);
       }
       setToast("観光地を保存しました。検索インデックスへ反映中…");
       setTimeout(() => navigate("/spots"), 1200);
@@ -399,6 +406,14 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               placeholder="例: 国道沿い1丁目"
               className="lg:col-span-2"
             />
+            <SpotImageField
+              spotId={isEdit ? id : undefined}
+              imageUrl={form.imageUrl}
+              pendingFile={pendingImageFile}
+              onImageUrlChange={(imageUrl) => setField("imageUrl", imageUrl)}
+              onPendingFileChange={setPendingImageFile}
+              disabled={saving}
+            />
             <div className="lg:col-span-2">
               <div className="mb-2 flex flex-wrap items-end gap-4">
                 <label htmlFor="spot-description" className="text-sm font-medium text-[#0f172a]">
@@ -444,7 +459,11 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                   おすすめポイント
                 </label>
 
-                <span className="text-xs text-[#64748b]">1行1件（最大3件・各30文字）</span>
+                <span className="text-xs text-[#64748b]">
+                  {highlightsGenerateMiss
+                    ? "おすすめポイントを自動生成できませんでした。手動で入力するか、もう一度お試しください。"
+                    : "1行1件（最大3件・各30文字）"}
+                </span>
                 <button
                   type="button"
                   className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
@@ -463,7 +482,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 }
                 onChange={(e) => {
                   setHighlightsGenerateMiss(false);
-                  setField("highlights", e.target.value);
+                  setField("highlights", enforceHighlightsText(e.target.value));
                 }}
                 className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30"
               />
@@ -497,6 +516,9 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                   );
                 })}
               </div>
+              {errors.categories && (
+                <p className="mt-2 text-xs text-[#dc2626]">{errors.categories}</p>
+              )}
             </div>
           </div>
 

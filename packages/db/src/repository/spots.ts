@@ -33,6 +33,7 @@ export async function upsertSpot(db: Database, input: NewSpotRow): Promise<SpotR
         lat: sql`excluded.lat`,
         lon: sql`excluded.lon`,
         price: sql`excluded.price`,
+        imageUrl: sql`excluded.image_url`,
         updatedAt: now,
       },
     })
@@ -69,6 +70,7 @@ export async function upsertSpots(db: Database, inputs: NewSpotRow[]): Promise<S
         lat: sql`excluded.lat`,
         lon: sql`excluded.lon`,
         price: sql`excluded.price`,
+        imageUrl: sql`excluded.image_url`,
         updatedAt: now,
       },
     })
@@ -80,6 +82,7 @@ export type ListSpotsOptions = {
   q?: string;
   category?: string;
   prefecture?: string;
+  area?: string;
   offset?: number;
   limit?: number;
   sort?: "updatedAt" | "name";
@@ -97,6 +100,7 @@ export async function listSpots(
     q,
     category,
     prefecture,
+    area,
     offset = 0,
     limit = 20,
     sort = "updatedAt",
@@ -106,6 +110,7 @@ export async function listSpots(
   const conditions = [];
   if (category) conditions.push(arrayContains(spots.category, [category]));
   if (prefecture) conditions.push(eq(spots.prefecture, prefecture));
+  if (area) conditions.push(eq(spots.area, area));
   if (q) {
     const pattern = `%${q}%`;
     conditions.push(

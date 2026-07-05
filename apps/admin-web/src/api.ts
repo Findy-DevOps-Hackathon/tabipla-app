@@ -105,6 +105,43 @@ export async function deleteSpot(id: string): Promise<void> {
   await request(`/spots/${encodeURIComponent(id)}?refresh=true`, { method: "DELETE" });
 }
 
+async function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        reject(new Error("ファイルの読み込みに失敗しました"));
+        return;
+      }
+      const base64 = result.split(",")[1];
+      if (!base64) {
+        reject(new Error("ファイルの読み込みに失敗しました"));
+        return;
+      }
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error("ファイルの読み込みに失敗しました"));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** スポット画像をアップロードする。 */
+export async function uploadSpotImage(spotId: string, file: File): Promise<Spot> {
+  const data = await readFileAsBase64(file);
+  return request<Spot>(`/spots/${encodeURIComponent(spotId)}/image?refresh=true`, {
+    method: "POST",
+    body: JSON.stringify({ mimeType: file.type, data }),
+  });
+}
+
+/** スポット画像を削除する。 */
+export async function deleteSpotImage(spotId: string): Promise<Spot> {
+  return request<Spot>(`/spots/${encodeURIComponent(spotId)}/image?refresh=true`, {
+    method: "DELETE",
+  });
+}
+
 export async function bulkImportSpots(spots: Spot[]): Promise<BulkImportResponse> {
   return request<BulkImportResponse>("/spots/bulk?refresh=true", {
     method: "POST",

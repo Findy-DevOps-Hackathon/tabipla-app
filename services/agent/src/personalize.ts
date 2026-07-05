@@ -7,7 +7,11 @@ import { SPOT_TAGS } from "./fixtures/spots.js";
 // rankSpots() の中身だけ差し替えれば外側(API/UI)は無変更。
 
 const CAT_JP: Record<string, string> = { nature: "自然", gourmet: "グルメ", history: "歴史" };
-const tagsOf = (id: string): string[] => SPOT_TAGS[id] ?? [];
+
+function tagsOf(spot: Spot): string[] {
+  if (spot.tags?.length) return spot.tags;
+  return SPOT_TAGS[spot.id] ?? [];
+}
 
 export interface Swipes {
   likes: string[];
@@ -43,14 +47,14 @@ export function buildProfile(sw: Swipes, catalog: Spot[]): PreferenceProfile {
     const s = byId.get(id);
     if (!s) continue;
     bump(categoryScore, s.category, 1);
-    for (const t of tagsOf(id)) bump(tagScore, t, 1);
+    for (const t of tagsOf(s)) bump(tagScore, t, 1);
     likedPrices.push(s.priceLevel);
   }
   for (const id of sw.nopes) {
     const s = byId.get(id);
     if (!s) continue;
     bump(categoryScore, s.category, -1);
-    for (const t of tagsOf(id)) bump(tagScore, t, -1);
+    for (const t of tagsOf(s)) bump(tagScore, t, -1);
   }
   return {
     categoryScore,
@@ -69,7 +73,7 @@ export function scoreSpot(p: PreferenceProfile, s: Spot): ScoredSpot {
   const cat = p.categoryScore[s.category] ?? 0;
   score += cat;
   if (cat > 0) why.push(`${CAT_JP[s.category] ?? s.category}系が好み`);
-  for (const t of tagsOf(s.id)) {
+  for (const t of tagsOf(s)) {
     const ts = p.tagScore[t] ?? 0;
     score += ts;
     if (ts > 0) why.push(`「${t}」が好み`);

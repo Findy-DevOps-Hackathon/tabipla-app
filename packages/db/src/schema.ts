@@ -70,6 +70,8 @@ export const spots = pgTable(
     lon: doublePrecision("lon"),
     /** 参考価格（円）。 */
     price: integer("price"),
+    /** スポット画像 URL（相対パス `/uploads/spots/...` または外部 URL）。 */
+    imageUrl: text("image_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

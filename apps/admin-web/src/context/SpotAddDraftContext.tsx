@@ -11,7 +11,7 @@ export type CollectedSpotDraft = {
   name: string;
   description: string;
   highlights: string[];
-  category: string;
+  categories: string[];
   area: string;
   prefecture: string;
   address: string;
@@ -30,6 +30,7 @@ export type ManualFormDraft = {
   area: string;
   lat: string;
   lon: string;
+  imageUrl?: string;
 };
 
 export type ImportRowDraft = Omit<Spot, "id"> & { error?: string; line: number };

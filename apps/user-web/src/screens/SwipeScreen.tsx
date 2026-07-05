@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UndoIcon } from "../components/icons.tsx";
 import type { SwipeSpot } from "../data/spots.ts";
+import { spotPreviewText } from "../lib/spotMapper.ts";
 
 type SwipeScreenProps = {
   spots: SwipeSpot[];
@@ -46,11 +47,9 @@ type ComparisonCardProps = {
   onSelect: () => void;
 };
 
-/** 比較カード用：蘊蓄の最初の文（最初の「。」まで）を返す。 */
-function comparisonTrivia(text: string): string {
-  const end = text.indexOf("。");
-  if (end === -1) return text;
-  return text.slice(0, end + 1);
+/** 比較カード用：おすすめポイントまたは紹介文の先頭文。 */
+function comparisonPreview(spot: SwipeSpot): string {
+  return spotPreviewText(spot);
 }
 
 function ComparisonCard({
@@ -100,7 +99,7 @@ function ComparisonCard({
             {spot.name}
           </p>
           <p className="text-[13px] leading-relaxed font-medium text-white/90 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
-            {comparisonTrivia(spot.trivia)}
+            {comparisonPreview(spot)}
           </p>
         </div>
       </div>

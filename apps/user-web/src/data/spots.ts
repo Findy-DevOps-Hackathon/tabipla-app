@@ -17,8 +17,10 @@ export type SwipeSpot = {
   area: string;
   category: SpotCategory;
   description: string;
-  /** 詳細画面「おすすめポイント」用の蘊蓄 */
-  trivia: string;
+  /** DB のおすすめポイント（最大3件） */
+  highlights?: string[];
+  /** デモデータ用の蘊蓄（highlights がない場合のフォールバック） */
+  trivia?: string;
   tags: string[];
   image: string;
 };
@@ -30,6 +32,7 @@ export type Recommendation = {
   area: string;
   category: SpotCategory;
   description: string;
+  highlights?: string[];
   tags: string[];
   reason: string;
   match: number;

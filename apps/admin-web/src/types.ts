@@ -10,6 +10,7 @@ export type Spot = {
   address?: string;
   tags?: string[];
   highlights?: string[];
+  imageUrl?: string;
   location?: GeoPoint;
   price?: number;
   createdAt?: string;

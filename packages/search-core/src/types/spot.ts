@@ -31,6 +31,8 @@ export type SpotDocument = {
   tags?: string[];
   /** おすすめポイント（例: ["紅葉の名所", "城址散策"]）。 */
   highlights?: string[];
+  /** スポット画像 URL。 */
+  imageUrl?: string;
   /** 緯度経度。geo_point 検索・距離計算に利用する。 */
   location?: GeoPoint;
   /** 参考価格（円）。フィルタ・表示用。 */

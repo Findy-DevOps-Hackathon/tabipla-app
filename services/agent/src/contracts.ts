@@ -13,6 +13,7 @@ export interface Spot {
   location: LatLon;
   priceLevel: number; // 0-4
   description?: string;
+  tags?: string[];
 }
 
 // ① 候補検索（本データは @tabipla/search-core searchCandidateSpots）

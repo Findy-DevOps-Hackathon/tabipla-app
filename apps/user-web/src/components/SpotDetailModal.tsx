@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getSpotTrivia, type Recommendation } from "../data/spots.ts";
+import { type Recommendation } from "../data/spots.ts";
 import { copyToClipboard } from "../lib/clipboard.ts";
 import { buildSpotShareUrl } from "../lib/spotLink.ts";
 import { useAutoResizeTextarea } from "../lib/useAutoResizeTextarea.ts";
@@ -56,7 +56,7 @@ export function SpotDetailModal({
   const layoutHeight = typeof window !== "undefined" ? window.innerHeight : viewport.height;
   const keyboardInset = Math.max(0, layoutHeight - viewport.height - viewport.offsetTop);
   const keyboardOpen = keyboardInset > 100;
-  const trivia = getSpotTrivia(rec.id);
+  const highlights = (rec.highlights ?? []).filter(Boolean);
 
   // チャット用のローカルステート
   const [textInput, setTextInput] = useState("");
@@ -211,12 +211,20 @@ export function SpotDetailModal({
               <p className="text-[14px] leading-[1.6] text-[#475569]">{rec.description}</p>
             </section>
 
-            {trivia && (
-              <section className="flex items-start gap-2">
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-[13px] font-bold text-[#0f172a]">おすすめポイント</p>
-                  <p className="text-[13px] leading-normal text-[#475569]">{trivia}</p>
-                </div>
+            {highlights.length > 0 && (
+              <section className="flex flex-col gap-1.5">
+                <p className="text-[13px] font-bold text-[#0f172a]">おすすめポイント</p>
+                <ul className="flex flex-col gap-1.5">
+                  {highlights.map((point) => (
+                    <li
+                      key={point}
+                      className="flex items-start gap-2 text-[13px] leading-normal text-[#475569]"
+                    >
+                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-(--brand)" />
+                      {point}
+                    </li>
+                  ))}
+                </ul>
               </section>
             )}
 
