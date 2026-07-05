@@ -15,6 +15,10 @@ type SpotImageFieldProps = {
   onImageUrlChange: (imageUrl: string | undefined) => void;
   onPendingFileChange: (file: File | null) => void;
   disabled?: boolean;
+  generating?: boolean;
+  onGenerate?: () => void;
+  generateDisabled?: boolean;
+  generateMiss?: boolean;
 };
 
 /** 観光地フォーム用の画像アップロード UI。 */
@@ -25,6 +29,10 @@ export function SpotImageField({
   onImageUrlChange,
   onPendingFileChange,
   disabled = false,
+  generating = false,
+  onGenerate,
+  generateDisabled = false,
+  generateMiss = false,
 }: SpotImageFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -114,11 +122,30 @@ export function SpotImageField({
   }
 
   const hasImage = Boolean(previewUrl);
-  const zoneDisabled = disabled || uploading || deleting;
+  const zoneDisabled = disabled || uploading || deleting || generating;
 
   return (
     <div className="flex flex-col gap-3 lg:col-span-2">
-      <p className="text-sm font-medium text-[#0f172a]">画像</p>
+      <div className="flex flex-wrap items-end gap-4">
+        <p className="text-sm font-medium text-[#0f172a]">画像</p>
+        {onGenerate && (
+          <>
+            <button
+              type="button"
+              className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={generating || generateDisabled || zoneDisabled}
+              onClick={onGenerate}
+            >
+              {generating ? "生成中…" : "AIイラストを生成"}
+            </button>
+            {generateMiss && (
+              <p className="text-xs text-[#64748b]">
+                画像を自動生成できませんでした。もう一度お試しください。
+              </p>
+            )}
+          </>
+        )}
+      </div>
 
       <label
         className={`group relative flex w-full max-w-[500px] ${SPOT_IMAGE_ASPECT} cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed transition ${
@@ -151,15 +178,28 @@ export function SpotImageField({
             <Loader2 className="size-10 animate-spin text-[#2563eb]" aria-hidden />
             <p className="mt-4 font-medium text-[#0f172a]">アップロード中…</p>
           </>
+        ) : generating ? (
+          <>
+            {previewUrl && (
+              <img
+                src={previewUrl}
+                alt=""
+                className="absolute inset-0 size-full object-cover opacity-40"
+                decoding="async"
+              />
+            )}
+            <Loader2 className="relative z-10 size-10 animate-spin text-[#2563eb]" aria-hidden />
+            <p className="relative z-10 mt-4 font-medium text-[#0f172a]">AI イラストを生成中…</p>
+          </>
         ) : deleting ? (
           <>
             {previewUrl && (
-            <img
-              src={previewUrl}
-              alt=""
-              className="absolute inset-0 size-full object-cover opacity-40"
-              decoding="async"
-            />
+              <img
+                src={previewUrl}
+                alt=""
+                className="absolute inset-0 size-full object-cover opacity-40"
+                decoding="async"
+              />
             )}
             <Loader2 className="relative z-10 size-10 animate-spin text-[#2563eb]" aria-hidden />
             <p className="relative z-10 mt-4 font-medium text-[#0f172a]">削除中…</p>
@@ -203,6 +243,11 @@ export function SpotImageField({
             <p className="mt-2 text-xs text-[#94a3b8]">
               未設定の場合、ユーザー画面では自動生成画像が表示されます
             </p>
+            {onGenerate && (
+              <p className="mt-2 text-xs text-[#94a3b8]">
+                「AIイラストを生成」で旅行スケッチブック風の画像を作成できます
+              </p>
+            )}
           </div>
         )}
       </label>

@@ -5,10 +5,13 @@ import {
   createSpot,
   deleteSpot,
   generateSpotContent,
+  generateSpotImage,
   geocodeAddress,
   getSpot,
   lookupPlaceByName,
+  spotImageResultToFile,
   updateSpot,
+  uploadSpotImage,
 } from "../api.ts";
 import { AdminShell } from "../components/layout/AdminShell.tsx";
 import { SpotImageField, uploadPendingSpotImage } from "../components/SpotImageField.tsx";
@@ -28,12 +31,12 @@ import {
   type SpotCategory,
 } from "../lib/categories.ts";
 import {
-  formatDateTime,
-  MAX_SPOT_DESCRIPTION_LENGTH,
-  trimSpotDescription,
   enforceHighlightsText,
+  formatDateTime,
   formatHighlightsText,
+  MAX_SPOT_DESCRIPTION_LENGTH,
   parseHighlightsText,
+  trimSpotDescription,
 } from "../lib/format.ts";
 import { getFixedPrefecture, MUNICIPALITY } from "../master/index.ts";
 import type { Spot } from "../types.ts";
@@ -62,8 +65,10 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const [lookingUpPlace, setLookingUpPlace] = useState(false);
   const [generatingDescription, setGeneratingDescription] = useState(false);
   const [generatingHighlights, setGeneratingHighlights] = useState(false);
+  const [generatingImage, setGeneratingImage] = useState(false);
   const [descriptionGenerateMiss, setDescriptionGenerateMiss] = useState(false);
   const [highlightsGenerateMiss, setHighlightsGenerateMiss] = useState(false);
+  const [imageGenerateMiss, setImageGenerateMiss] = useState(false);
   const [placeLookupMiss, setPlaceLookupMiss] = useState(false);
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const coordsManualRef = useRef(false);
@@ -241,6 +246,39 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     setGeneratingHighlights(false);
   };
 
+  const handleGenerateImage = async () => {
+    const name = form.name.trim();
+    if (name.length < 2) {
+      setErrors((prev) => ({ ...prev, name: "観光地名を入力してください" }));
+      return;
+    }
+
+    setGeneratingImage(true);
+    setImageGenerateMiss(false);
+
+    try {
+      const image = await generateSpotImage({
+        ...spotGenerateParams(),
+        description: form.description.trim() || undefined,
+        highlights: parseHighlightsText(form.highlights),
+        category: form.categories,
+      });
+      const file = spotImageResultToFile(image, name);
+
+      if (isEdit && id) {
+        const spot = await uploadSpotImage(id, file);
+        setField("imageUrl", spot.imageUrl);
+        setPendingImageFile(null);
+      } else {
+        setPendingImageFile(file);
+      }
+    } catch {
+      setImageGenerateMiss(true);
+    } finally {
+      setGeneratingImage(false);
+    }
+  };
+
   const setAddress = (value: string) => {
     coordsManualRef.current = false;
     const derivedArea = extractAreaFromAddress(value, getFixedPrefecture());
@@ -413,6 +451,10 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               onImageUrlChange={(imageUrl) => setField("imageUrl", imageUrl)}
               onPendingFileChange={setPendingImageFile}
               disabled={saving}
+              generating={generatingImage}
+              onGenerate={() => void handleGenerateImage()}
+              generateDisabled={form.name.trim().length < 2}
+              generateMiss={imageGenerateMiss}
             />
             <div className="lg:col-span-2">
               <div className="mb-2 flex flex-wrap items-end gap-4">

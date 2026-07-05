@@ -36,13 +36,27 @@ user-web ──(HTTP /api/v1/*)──▶ backend-api ──▶ services/agent
 # リポジトリルートで依存インストール
 pnpm install
 
-# backend-api + agent を起動しておく（別ターミナル）
-pnpm -C services/backend-api dev
-pnpm -C services/agent dev
+# 一括起動（PostgreSQL + backend-api + agent + user-web）
+pnpm dev:user
+# → http://localhost:5173  スポット詳細 → AIガイド
 
-# フロント開発起動（http://localhost:5173）
-pnpm -C apps/user-web dev
+# 個別起動する場合
+pnpm docker:up
+pnpm -C services/backend-api dev   # :3001
+pnpm -C services/agent dev         # :8080
+pnpm -C apps/user-web dev          # :5173
 ```
+
+### AIガイド（ローカル）
+
+| 設定 | 内容 |
+|------|------|
+| `services/backend-api/.env` | `AGENT_API_URL=http://localhost:8080` |
+| `services/agent/.env` | `BACKEND_API_URL=http://localhost:3001` |
+| `USE_MOCK=1` | DB の紹介文ベースで即応答（Gemini 不要） |
+| `USE_MOCK=0` | Gemini 本番応答（`gcloud auth application-default login` 必須） |
+
+管理画面で登録したスポットがローカル DB にあること。
 
 開発時は Vite dev server が `/api/*` を backend-api へプロキシするため、CORS 設定なしで
 エージェント API を呼び出せます（`vite.config.ts`）。

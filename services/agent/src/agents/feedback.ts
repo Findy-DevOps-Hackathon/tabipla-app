@@ -1,6 +1,7 @@
 import { InMemoryRunner, LlmAgent, stringifyContent } from "@google/adk";
 import { z } from "zod";
 import { KOMORO_SPOTS } from "../fixtures/spots.js";
+import { CHAT_MODEL } from "../modelConfig.js";
 
 const feedbackOutputSchema = z.object({
   feedbackNotes: z.string(),
@@ -10,7 +11,7 @@ const feedbackOutputSchema = z.object({
 // フィードバックエージェント：ユーザーの評価やコメントを分析し、推薦の好みメモや紹介スタイルガイドを更新する。
 export const feedbackAgent = new LlmAgent({
   name: "feedback_agent",
-  model: "gemini-2.5-flash",
+  model: CHAT_MODEL,
   description: "ユーザーフィードバックの分析とプロファイル更新",
   instruction: `あなたは旅行エージェントシステムの学習・フィードバックエンジンです。
 今回の旅行プランに対するユーザーのスポットごとのGood/Bad評価や、終了後の全体評価（星・コメント）を分析し、ユーザーの「推薦に対する好み傾向（feedbackNotes）」および「紹介の解説スタイル（introStyle）」を最新の内容に更新・蓄積してください。

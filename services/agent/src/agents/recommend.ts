@@ -1,10 +1,11 @@
 import { LlmAgent } from "@google/adk";
+import { CHAT_MODEL } from "../modelConfig.js";
 import { searchSpotsTool, travelTimesTool } from "../tools/index.js";
 
 // A5: 推薦エージェント（探索→絞込→理由生成）
 export const recommendAgent = new LlmAgent({
   name: "recommend_agent",
-  model: "gemini-2.5-flash",
+  model: CHAT_MODEL,
   description: "旅行スポットの推薦",
   instruction: `あなたは旅行スポット推薦アシスタント。ユーザーの自然文、旅行の時間猶予、出発地、および過去のフィードバックから好みを考慮して、最適な観光スポット候補をピックアップします。
 必ず search_spots を1回以上呼び出して候補を得てください。
@@ -29,7 +30,7 @@ export const recommendAgent = new LlmAgent({
 - 観光スポットの推薦や旅行計画に関係のない話題（例：プログラミング、一般的な数学/科学/ITの質問、観光に直接関係のない雑談、人生相談、不適切な発言など）が入力された場合は、search_spots や travel_times などのツールを一切呼び出さず、以下のように極めて簡潔（1文程度）に回答を拒否して処理を終了してください。
   - 返答例：「申し訳ありませんが、当システムでは観光スポットの推薦や旅行計画に関するご質問以外にはお答えできません。」`,
   tools: [searchSpotsTool, travelTimesTool],
-  // gemini-2.5-flashの「思考」が出力予算を食い切り、空応答(parts:[])を返すことがあるため抑制。
+  // 思考モードが出力予算を食い切り、空応答(parts:[])を返すことがあるため抑制。
   generateContentConfig: {
     thinkingConfig: { thinkingBudget: 0 },
     maxOutputTokens: 1024,

@@ -121,6 +121,24 @@ body {
   animation: float-soft 4s ease-in-out infinite;
 }
 
+/** AIガイドが話しているときの軽い揺れ */
+@keyframes ai-guide-speak {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  35% {
+    transform: translateY(-2px) scale(1.03);
+  }
+  70% {
+    transform: translateY(1px) scale(0.98);
+  }
+}
+
+.animate-ai-guide-speak {
+  animation: ai-guide-speak 0.9s ease-in-out infinite;
+}
+
 /** カード入れ替え時、新しいカードを右から傾きながら滑り込ませる。 */
 @keyframes card-enter {
   0% {
@@ -157,7 +175,8 @@ body {
   .animate-grid-drift,
   .animate-float-soft,
   .animate-card-enter,
-  .animate-card-leave {
+  .animate-card-leave,
+  .animate-ai-guide-speak {
     animation: none;
   }
 }

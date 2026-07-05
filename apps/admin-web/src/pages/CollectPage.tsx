@@ -3,26 +3,40 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   bulkImportSpots,
+  type CollectedSpotPayload,
   collectSpots,
+  generateSpotImage,
   geocodeAddress,
   listSpots,
   lookupPlaceByName,
-  type CollectedSpotPayload,
+  readSpotImageFile,
+  uploadSpotImageBase64,
 } from "../api.ts";
+import { CollectSpotImageCell } from "../components/CollectSpotImageCell.tsx";
 import { Button } from "../components/ui/Button.tsx";
 import { Modal, Toast } from "../components/ui/Modal.tsx";
 import {
-  type CollectedSpotDraft,
   type CollectDraft,
+  type CollectedSpotDraft,
   useSpotAddDraft,
 } from "../context/SpotAddDraftContext.tsx";
 import { extractAreaFromAddress } from "../lib/address.ts";
-import { getCategoryStyle, MAX_SPOT_CATEGORIES, normalizeCategories, SPOT_CATEGORIES, type SpotCategory } from "../lib/categories.ts";
 import {
-  MAX_SPOT_DESCRIPTION_LENGTH,
-  MAX_SPOT_HIGHLIGHT_LENGTH,
-  MAX_SPOT_HIGHLIGHT_COUNT,
+  COLLECT_TARGET_OPTIONS,
+  MAX_COLLECT_TARGET_COUNT,
+} from "../lib/collect.ts";
+import {
+  getCategoryStyle,
+  MAX_SPOT_CATEGORIES,
+  normalizeCategories,
+  SPOT_CATEGORIES,
+  type SpotCategory,
+} from "../lib/categories.ts";
+import {
   enforceHighlightsText,
+  MAX_SPOT_DESCRIPTION_LENGTH,
+  MAX_SPOT_HIGHLIGHT_COUNT,
+  MAX_SPOT_HIGHLIGHT_LENGTH,
   normalizeHighlights,
   parseHighlightsText,
   trimSpotDescription,
@@ -31,9 +45,9 @@ import { MUNICIPALITY, type Prefecture } from "../master/index.ts";
 
 type CollectedSpot = CollectedSpotDraft;
 
-/** チェックボックス + 観光地名 + カテゴリ + 住所 + 紹介文 + おすすめポイント + 操作 */
+/** チェックボックス + 画像 + 観光地名 + カテゴリ + 住所 + 紹介文 + おすすめポイント + 操作 */
 const COLLECT_TABLE_GRID_COLS =
-  "grid-cols-[16px_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.1fr)_3rem]";
+  "grid-cols-[16px_7rem_minmax(0,1.15fr)_minmax(0,0.75fr)_minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,1fr)_3rem]";
 
 /** 表記ゆれを吸収した名前照合キー（agent側 normalizeSpotName と同じ規則）。 */
 function nameKey(name: string): string {
@@ -120,8 +134,17 @@ export default function CollectPage() {
   const [editingBackup, setEditingBackup] = useState<CollectedSpot | null>(null);
   const [abortConfirmOpen, setAbortConfirmOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [imageBusy, setImageBusy] = useState<{
+    index: number;
+    kind: "generate" | "upload";
+  } | null>(null);
 
   const selectedCount = spots.filter((s) => s.selected).length;
+  const imageReadyCount = spots.filter((s) => s.pendingImage).length;
+  const selectedImageReadyCount = spots.filter((s) => s.selected && s.pendingImage).length;
+  const imageProgressPercent =
+    spots.length > 0 ? Math.round((imageReadyCount / spots.length) * 100) : 0;
+  const isImageBusy = imageBusy !== null;
 
   const categories = useMemo(() => {
     const counts = new Map<string, number>();
@@ -138,7 +161,10 @@ export default function CollectPage() {
     () =>
       spots
         .map((spot, index) => ({ spot, index }))
-        .filter(({ spot }) => !categoryFilter || normalizeCategories(spot.categories).includes(categoryFilter)),
+        .filter(
+          ({ spot }) =>
+            !categoryFilter || normalizeCategories(spot.categories).includes(categoryFilter),
+        ),
     [spots, categoryFilter],
   );
 
@@ -202,7 +228,7 @@ export default function CollectPage() {
       const collected = await collectSpots({
         municipality,
         prefecture,
-        targetCount,
+        targetCount: Math.min(targetCount, MAX_COLLECT_TARGET_COUNT),
         categories: selectedCategories,
         excludeNames,
       });
@@ -229,6 +255,47 @@ export default function CollectPage() {
     }
   };
 
+  const handleGenerateSpotImage = async (index: number) => {
+    const spot = spots[index];
+    if (!spot) return;
+
+    setImageBusy({ index, kind: "generate" });
+    try {
+      const image = await generateSpotImage({
+        name: spot.name,
+        prefecture: spot.prefecture || prefecture,
+        municipality,
+        description: spot.description,
+        highlights: spot.highlights,
+        category: spot.categories,
+        tags: spot.tags,
+      });
+      updateSpot(index, {
+        pendingImage: { mimeType: image.mimeType, data: image.data },
+      });
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "画像の作成に失敗しました");
+    } finally {
+      setImageBusy(null);
+    }
+  };
+
+  const handleUploadSpotImage = async (index: number, file: File) => {
+    setImageBusy({ index, kind: "upload" });
+    try {
+      const pendingImage = await readSpotImageFile(file);
+      updateSpot(index, { pendingImage });
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "画像のアップロードに失敗しました");
+    } finally {
+      setImageBusy(null);
+    }
+  };
+
+  const handleRemoveSpotImage = (index: number) => {
+    updateSpot(index, { pendingImage: undefined });
+  };
+
   const handleRegister = async () => {
     const selected = spots.filter((s) => s.selected);
     if (selected.length === 0) {
@@ -237,6 +304,10 @@ export default function CollectPage() {
     }
     if (selected.some((s) => normalizeCategories(s.categories).length === 0)) {
       setToast("カテゴリ未設定の観光地があります。編集して1件以上選択してください");
+      return;
+    }
+    if (selected.length > MAX_COLLECT_TARGET_COUNT) {
+      setToast(`一度に登録できるのは最大 ${MAX_COLLECT_TARGET_COUNT} 件です`);
       return;
     }
     patchCollect({ step: "registering" });
@@ -265,7 +336,28 @@ export default function CollectPage() {
         ...(s.location ? { location: s.location } : {}),
       }));
       const res = await bulkImportSpots(spotsToImport);
-      patchCollect({ result: { ok: res.count }, step: "done" });
+
+      const sourceByName = new Map(newSpots.map((s) => [nameKey(s.name), s]));
+      let imageOk = 0;
+      for (const imported of res.spots) {
+        const source = sourceByName.get(nameKey(imported.name));
+        if (!source?.pendingImage) continue;
+        try {
+          await uploadSpotImageBase64(
+            imported.id,
+            source.pendingImage.mimeType,
+            source.pendingImage.data,
+          );
+          imageOk += 1;
+        } catch {
+          // 登録は成功しているので画像だけ失敗
+        }
+      }
+
+      patchCollect({
+        result: imageOk > 0 ? { ok: res.count, imageOk } : { ok: res.count },
+        step: "done",
+      });
     } catch (e) {
       setToast(e instanceof Error ? e.message : "登録に失敗しました");
       patchCollect({ step: "preview" });
@@ -325,9 +417,14 @@ export default function CollectPage() {
                 </div>
               </div>
               <div>
-                <p className="mb-3 text-sm font-medium text-[#0f172a]">目標件数</p>
+                <p className="mb-3 text-sm font-medium text-[#0f172a]">
+                  目標件数{" "}
+                  <span className="text-xs font-normal text-[#64748b]">
+                    （最大 {MAX_COLLECT_TARGET_COUNT} 件）
+                  </span>
+                </p>
                 <div className="flex flex-wrap gap-2">
-                  {[10, 30, 50, 100].map((n) => (
+                  {COLLECT_TARGET_OPTIONS.map((n) => (
                     <button
                       key={n}
                       type="button"
@@ -372,10 +469,6 @@ export default function CollectPage() {
       {(step === "preview" || step === "registering") && (
         <div className={pageShell}>
           <div className={cardShell}>
-            <p className="text-[13px] text-[#64748b]">
-              {prefecture}
-              {municipality} — {spots.length} 件（登録済み観光地は除外済み）
-            </p>
             <div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
@@ -420,6 +513,7 @@ export default function CollectPage() {
                     onChange={toggleAll}
                     className="size-4 rounded border-[#e2e8f0]"
                   />
+                  <span className="text-[12px]">画像</span>
                   <span>観光地名</span>
                   <span>カテゴリ</span>
                   <span>住所</span>
@@ -447,6 +541,17 @@ export default function CollectPage() {
                           onChange={(e) => updateSpot(index, { name: e.target.value })}
                           placeholder="例: 道の駅 〇〇"
                           className="min-w-[200px] flex-1 rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm font-medium"
+                        />
+                      </div>
+                      <div className="mt-3 max-w-28">
+                        <p className="mb-2 text-xs font-medium text-[#475569]">画像</p>
+                        <CollectSpotImageCell
+                          spot={spot}
+                          busy={imageBusy?.index === index ? imageBusy.kind : null}
+                          disabled={step === "registering" || isImageBusy}
+                          onGenerate={() => void handleGenerateSpotImage(index)}
+                          onUpload={(file) => void handleUploadSpotImage(index, file)}
+                          onRemove={() => handleRemoveSpotImage(index)}
                         />
                       </div>
                       <div className="mt-3">
@@ -511,7 +616,9 @@ export default function CollectPage() {
                           value={spot.highlights.join("\n")}
                           onChange={(e) =>
                             updateSpot(index, {
-                              highlights: parseHighlightsText(enforceHighlightsText(e.target.value)),
+                              highlights: parseHighlightsText(
+                                enforceHighlightsText(e.target.value),
+                              ),
                             })
                           }
                           placeholder={`例: 地元野菜の直売所が充実している（1行1件・最大${MAX_SPOT_HIGHLIGHT_COUNT}件・各${MAX_SPOT_HIGHLIGHT_LENGTH}文字）`}
@@ -540,13 +647,19 @@ export default function CollectPage() {
                         aria-label={spot.selected ? "選択を外す" : "選択する"}
                         className="size-4 rounded mt-0.5 border-[#e2e8f0]"
                       />
-                      <button
-                        type="button"
-                        onClick={() => toggleOne(index)}
-                        className="cursor-pointer truncate text-left text-sm font-medium text-[#2563eb] hover:underline"
-                      >
+                      <CollectSpotImageCell
+                        spot={spot}
+                        busy={imageBusy?.index === index ? imageBusy.kind : null}
+                        disabled={step === "registering" || isImageBusy}
+                        onGenerate={() => void handleGenerateSpotImage(index)}
+                        onUpload={(file) => void handleUploadSpotImage(index, file)}
+                        onRemove={() => handleRemoveSpotImage(index)}
+                      />
+
+                      <span className="truncate text-sm font-medium text-[#475569]">
                         {spot.name}
-                      </button>
+                      </span>
+
                       <span className="inline-flex flex-wrap gap-1">
                         {normalizeCategories(spot.categories).map((cat) => (
                           <span
@@ -577,18 +690,25 @@ export default function CollectPage() {
             </div>
           </div>
 
-          <div className="my-8 mb-16 rounded-full shadow border-t border-[#e2e8f0] bg-white/95 px-8 py-3 backdrop-blur">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-[#475569]">
-                <span className="font-bold text-[#0f172a]">{selectedCount}</span> / {spots.length}{" "}
-                件を選択中
-              </p>
+          <div className="my-8 mb-16 rounded-2xl border border-[#e2e8f0] bg-white/95 px-6 py-4 shadow-sm backdrop-blur">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-1 text-sm text-[#475569]">
+                <p>
+                  <span className="font-bold text-[#0f172a]">{selectedCount}</span> / {spots.length}{" "}
+                  件を選択中
+                </p>
+                {selectedCount > 0 && (
+                  <p className="text-xs text-[#64748b]">
+                    選択中の画像設定: {selectedImageReadyCount} / {selectedCount} 件
+                  </p>
+                )}
+              </div>
               <div className="flex gap-6">
                 <Button variant="secondary" onClick={() => setAbortConfirmOpen(true)}>
                   キャンセル
                 </Button>
                 <Button
-                  disabled={selectedCount === 0 || step === "registering"}
+                  disabled={selectedCount === 0 || step === "registering" || isImageBusy}
                   onClick={() => void handleRegister()}
                 >
                   {step === "registering" ? (
@@ -611,11 +731,13 @@ export default function CollectPage() {
           <div className={`${cardShell} flex flex-col items-center py-20 text-center`}>
             <p className="text-lg font-bold text-[#0f172a]">登録完了</p>
             <p className="mt-2 text-sm text-[#475569]">{result.ok} 件の観光地を登録しました</p>
+            {result.imageOk != null && (
+              <p className="mt-1 text-sm text-[#64748b]">
+                画像付き登録: {result.imageOk} / {result.ok} 件
+              </p>
+            )}
             <div className="mt-6 flex justify-center gap-3">
-              <Button
-                variant="secondary"
-                onClick={() => resetCollectDraft()}
-              >
+              <Button variant="secondary" onClick={() => resetCollectDraft()}>
                 続けて収集
               </Button>
               <Button onClick={() => (window.location.href = "/spots")}>観光地管理へ</Button>

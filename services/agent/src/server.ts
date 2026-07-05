@@ -2,8 +2,14 @@ import { InMemoryRunner, stringifyContent, type LlmAgent } from "@google/adk";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { collectAgent, COLLECT_CATEGORIES, resolveCollectResult } from "./agents/collect.js";
+import {
+  collectAgent,
+  COLLECT_CATEGORIES,
+  MAX_COLLECT_TARGET_COUNT,
+  resolveCollectResult,
+} from "./agents/collect.js";
 import { describeAgent, describeSpot, type DescribeMode } from "./agents/describe.js";
+import { generateSpotImage } from "./agents/spotImage.js";
 import { analyzeFeedback } from "./agents/feedback.js";
 import { askIntroduce } from "./agents/introduce.js";
 import { personalizedPlan } from "./agents/personalized.js";
@@ -224,11 +230,23 @@ app.post("/v1/spots/:id/ask", async (c) => {
     image,
     audio,
     userId = "demo",
+    spot,
+    facts,
   } = await c.req.json<{
     text?: string;
     image?: { mimeType: string; data: string };
     audio?: { mimeType: string; data: string };
     userId?: string;
+    spot?: {
+      name: string;
+      description?: string;
+      highlights?: string[];
+      tags?: string[];
+      area?: string;
+      prefecture?: string;
+      address?: string;
+    };
+    facts?: string[];
   }>();
 
   try {
@@ -244,6 +262,8 @@ app.post("/v1/spots/:id/ask", async (c) => {
         audio,
         introStyle,
         userProfileSummary: profileSummary,
+        spot,
+        facts,
       },
       userId,
     );
@@ -301,7 +321,7 @@ app.post("/v1/collect-spots", async (c) => {
   const {
     municipality,
     prefecture,
-    targetCount = 100,
+    targetCount = MAX_COLLECT_TARGET_COUNT,
     categories = [],
     excludeNames = [],
   } = await c.req.json<{
@@ -324,6 +344,10 @@ app.post("/v1/collect-spots", async (c) => {
   if (invalid.length > 0) {
     return c.json({ error: `不正なカテゴリ: ${invalid.join(", ")}` }, 400);
   }
+  const effectiveTargetCount = Math.min(
+    MAX_COLLECT_TARGET_COUNT,
+    Math.max(1, Math.floor(Number(targetCount) || MAX_COLLECT_TARGET_COUNT)),
+  );
 
   try {
     const excludeBlock =
@@ -347,7 +371,7 @@ ${categoryList}
 
 選択されたカテゴリ全体からバランスよく収集し、該当しないカテゴリのスポットは無理に含めないこと。`;
 
-    const prompt = `${prefecture}${municipality}の観光地を${targetCount}件を目標に収集してください。
+    const prompt = `${prefecture}${municipality}の観光地を${effectiveTargetCount}件を目標に収集してください。
 ${focusBlock}${excludeBlock}
 
 【出力の再確認】Markdown・見出し・箇条書き・説明文は禁止。{"spots":[{"name":"...","description":"...","highlights":["...","...","..."],"category":"自然","area":"...","prefecture":"...","address":"...","tags":["..."],"sources":["..."]}]} 形式のJSONだけを出力すること。`;
@@ -380,7 +404,9 @@ ${focusBlock}${excludeBlock}
 
     const result = await resolveCollectResult(final, { prefecture, municipality }, runAgentOnce);
     const excludeSet = new Set(excludeNames.map(normalizeSpotName));
-    const spots = result.spots.filter((s) => !excludeSet.has(normalizeSpotName(s.name)));
+    const spots = result.spots
+      .filter((s) => !excludeSet.has(normalizeSpotName(s.name)))
+      .slice(0, effectiveTargetCount);
     return c.json({
       municipality,
       prefecture,
@@ -467,6 +493,49 @@ app.post("/v1/describe-spot", async (c) => {
     });
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
+  }
+});
+
+// スポット用スケッチ風イラスト生成（Imagen → 16:11 WebP）
+app.post("/v1/generate-spot-image", async (c) => {
+  const { name, municipality, prefecture, description, highlights, category, tags } =
+    await c.req.json<{
+      name: string;
+      municipality: string;
+      prefecture: string;
+      description?: string;
+      highlights?: string[];
+      category?: string | string[];
+      tags?: string[];
+    }>();
+
+  const trimmedName = name?.trim();
+  if (!trimmedName || !municipality?.trim() || !prefecture?.trim()) {
+    return c.json({ error: "name, municipality, prefecture は必須です" }, 400);
+  }
+
+  try {
+    const result = await generateSpotImage({
+      name: trimmedName,
+      municipality: municipality.trim(),
+      prefecture: prefecture.trim(),
+      description: description?.trim() || undefined,
+      highlights: Array.isArray(highlights)
+        ? highlights.map((s) => String(s).trim()).filter(Boolean)
+        : undefined,
+      category,
+      tags: Array.isArray(tags) ? tags.map((s) => String(s).trim()).filter(Boolean) : undefined,
+    });
+    return c.json(result);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/429|quota|rate/i.test(msg)) {
+      return c.json(
+        { error: "⚠️ レート制限に達しました。1分ほど待って再試行してください。" },
+        429,
+      );
+    }
+    return c.json({ error: msg || "画像の生成に失敗しました" }, 500);
   }
 });
 

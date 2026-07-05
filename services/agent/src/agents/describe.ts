@@ -1,6 +1,7 @@
 import { GOOGLE_SEARCH, LlmAgent } from "@google/adk";
 import { z } from "zod";
 import { SPOT_CATEGORIES } from "../categories.js";
+import { CHAT_MODEL } from "../modelConfig.js";
 
 const DESCRIPTION_MAX = 200;
 const HIGHLIGHT_MAX = 30;
@@ -26,7 +27,7 @@ export type DescribeSpotInput = {
 
 export const describeAgent = new LlmAgent({
   name: "describe_agent",
-  model: "gemini-2.5-flash",
+  model: CHAT_MODEL,
   description: "指定自治体内の観光地1件について紹介文またはおすすめポイントを生成する",
   instruction: `あなたは観光地の紹介文とおすすめポイントを書くエージェントです。
 指定された観光地名について、Google検索で情報を収集し、依頼された項目だけを作成します。

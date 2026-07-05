@@ -1,6 +1,7 @@
 import { InMemoryRunner, LlmAgent, stringifyContent } from "@google/adk";
 import { z } from "zod";
 import { KOMORO_SPOTS, SPOT_HOURS, SPOT_TAGS } from "../fixtures/spots.js";
+import { CHAT_MODEL } from "../modelConfig.js";
 
 const debateOutputSchema = z.object({
   debate: z.array(
@@ -25,7 +26,7 @@ const debateOutputSchema = z.object({
 // ディベートエージェント：推薦・ルート・紹介のエージェント間ディベートを生成し、合意されたプランを決定する。
 export const debateAgent = new LlmAgent({
   name: "debate_agent",
-  model: "gemini-2.5-flash",
+  model: CHAT_MODEL,
   description: "旅行プランのディベート・合意形成",
   instruction: `あなたは旅行プランナーの対話（ディベート）を生成するコーディネーターです。
 ユーザーの好み、旅行の時間猶予、出発地、過去のフィードバック、およびスポット情報に基づき、3名のエージェントになりきって議論（ディベート）を行ってください。

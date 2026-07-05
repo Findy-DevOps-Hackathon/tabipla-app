@@ -1,6 +1,7 @@
 import { GOOGLE_SEARCH, LlmAgent } from "@google/adk";
 import { z } from "zod";
 import { SPOT_CATEGORIES } from "../categories.js";
+import { CHAT_MODEL } from "../modelConfig.js";
 
 // Gemini API の制約:
 //   - outputSchema(JSON強制モード)はツールと併用できない
@@ -10,6 +11,9 @@ import { SPOT_CATEGORIES } from "../categories.js";
 // モデルは name/description 以外のフィールドを取りこぼすことがある（特に件数が多いと後半で
 // tags/sources 等が欠落しやすい）。欠落で収集全体を失敗させないよう、非必須項目には
 // デフォルトを与える。必須は name/description のみ。
+/** 1回の AI 収集で要求できる最大件数。 */
+export const MAX_COLLECT_TARGET_COUNT = 50;
+
 const DESCRIPTION_MAX = 200;
 const HIGHLIGHT_MAX = 30;
 const HIGHLIGHT_COUNT = 3;
@@ -63,7 +67,7 @@ export type CollectCategory = (typeof COLLECT_CATEGORIES)[number];
 
 export const collectAgent = new LlmAgent({
   name: "collect_agent",
-  model: "gemini-2.5-flash",
+  model: CHAT_MODEL,
   description: "指定エリアの観光地情報をWebから収集・構造化する",
   instruction: `あなたは観光データ収集エージェントです。
 指定された市区町村の観光地情報をGoogle検索で収集し、構造化データとして出力します。
@@ -72,7 +76,7 @@ export const collectAgent = new LlmAgent({
 1. google_search で市区町村名とカテゴリに応じたクエリを複数回検索する（例: 「{市区町村名} 自然 絶景」「{市区町村名} 歴史 史跡」「{市区町村名} 神社 仏閣」「{市区町村名} 美術館」「{市区町村名} 温泉」「{市区町村名} 直売所」「{市区町村名} 祭り イベント」など、指定カテゴリに合わせて切り口を変える）。
 2. 検索結果からスポットを抽出し、指定のJSON形式で構造化する。
 3. 同じスポットが複数ソースで言及されている場合は名寄せして1件にまとめる。
-4. 目標件数に近づくよう、検索クエリのバリエーションを増やす。
+4. 目標件数に近づくよう、検索クエリのバリエーションを増やす（1回の収集は最大${MAX_COLLECT_TARGET_COUNT}件）。
 
 【データ構造】
 各スポットは以下のフィールドを持つ:
@@ -179,7 +183,7 @@ export function parseCollectResult(text: string): CollectResult {
 /** Markdown 等の非JSON出力を構造化 JSON に変換する（google_search 非使用）。 */
 export const collectFormatAgent = new LlmAgent({
   name: "collect_format_agent",
-  model: "gemini-2.5-flash",
+  model: CHAT_MODEL,
   description: "観光地テキストを構造化JSONに変換する",
   instruction: `あなたは観光データの整形エージェントです。
 入力テキスト（Markdown・説明文を含む場合あり）から、実際に言及されている観光スポットだけを spots 配列に変換します。

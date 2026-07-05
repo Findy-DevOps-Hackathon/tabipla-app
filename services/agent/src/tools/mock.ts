@@ -1,4 +1,5 @@
 import type { GetUnchikuSourceFn, SearchFn, TravelTimesFn } from "../contracts.js";
+import { fetchSpotFactsFromBackend } from "./spotFacts.js";
 import { KOMORO_SPOTS } from "../fixtures/spots.js";
 
 // 本物(A3)と同じ型シグネチャ。fixtureを絞って返すだけ。
@@ -30,9 +31,9 @@ export const travelTimesMock: TravelTimesFn = async (i) => {
   });
 };
 
-// 本物(B2)まではダミーの確かなfacts。
+// 本物(B2)までは fixture + backend-api フォールバック。
 export const getUnchikuSourceMock: GetUnchikuSourceFn = async ({ spotId }) => {
-  const facts: Record<string, string[]> = {
+  const fixtureFacts: Record<string, string[]> = {
     s1: [
       "小諸城は城下町より低い位置にある「穴城」として知られる。",
       "島崎藤村が小諸義塾で教鞭をとった。",
@@ -44,5 +45,10 @@ export const getUnchikuSourceMock: GetUnchikuSourceFn = async ({ spotId }) => {
     s5: ["信州そばは長野県を代表する郷土料理として知られる。"],
     s6: ["中棚荘は文豪・島崎藤村ゆかりの宿として知られる。"],
   };
-  return { spotId, facts: facts[spotId] ?? [] };
+  if (fixtureFacts[spotId]) {
+    return { spotId, facts: fixtureFacts[spotId] };
+  }
+
+  const facts = await fetchSpotFactsFromBackend(spotId);
+  return { spotId, facts };
 };

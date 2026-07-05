@@ -1,4 +1,5 @@
 import { LlmAgent } from "@google/adk";
+import { CHAT_MODEL } from "../modelConfig.js";
 import { getUnchikuSource } from "../tools/dataSources.js";
 import { getUnchikuSourceTool } from "../tools/index.js";
 import { ask } from "./run.js";
@@ -6,7 +7,7 @@ import { ask } from "./run.js";
 // A6: 蘊蓄エージェント。factsの外を語らせない抑制ガード付き。
 export const unchikuAgent = new LlmAgent({
   name: "unchiku_agent",
-  model: "gemini-2.5-flash",
+  model: CHAT_MODEL,
   description: "観光蘊蓄の生成",
   instruction: `あなたは観光案内人。必ず get_unchiku_source を呼び、
 返ってきた facts に書かれている内容【のみ】を使って蘊蓄を書く。

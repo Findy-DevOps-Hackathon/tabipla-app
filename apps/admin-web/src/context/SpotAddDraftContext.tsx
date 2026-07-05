@@ -18,6 +18,8 @@ export type CollectedSpotDraft = {
   tags: string[];
   location?: { lat: number; lon: number };
   selected: boolean;
+  /** プレビュー段階で生成した画像（登録時にアップロード）。 */
+  pendingImage?: { mimeType: string; data: string };
 };
 
 export type ManualFormDraft = {
@@ -41,7 +43,7 @@ export type CollectDraft = {
   step: CollectStep;
   spots: CollectedSpotDraft[];
   categoryFilter: string | null;
-  result: { ok: number } | null;
+  result: { ok: number; imageOk?: number } | null;
 };
 
 export type ImportDraft = {
@@ -67,7 +69,7 @@ export function emptyManualFormDraft(): ManualFormDraft {
 export function initialCollectDraft(): CollectDraft {
   return {
     selectedCategories: [],
-    targetCount: 10,
+    targetCount: 5,
     step: "input",
     spots: [],
     categoryFilter: null,

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
 import { API_BASE, DESTINATION_AREA, DESTINATION_PREFECTURE } from "./config.ts";
+import { AI_GUIDE_LOADING_TEXT, formatAiGuideAnswer, isAiGuideLoadingMessage } from "./lib/aiGuide.ts";
 import { isDestinationSpot } from "./lib/destination.ts";
 import {
   type Recommendation,
@@ -425,11 +426,12 @@ export default function App() {
 
   const handleSendChat = useCallback(
     async (
-      spotId: string,
+      rec: Recommendation,
       text: string,
       img?: { mimeType: string; data: string } | null,
       audio?: { mimeType: string; data: string } | null,
     ) => {
+      const spotId = rec.id;
       const userMsgText = audio ? "🎙️ 音声質問を送信しました" : text;
       const userMsg = {
         role: "user" as const,
@@ -450,7 +452,7 @@ export default function App() {
         ],
       }));
 
-      const loadingMsg = { role: "ai" as const, text: "💬 AIガイドが回答を作成中…" };
+      const loadingMsg = { role: "ai" as const, text: AI_GUIDE_LOADING_TEXT };
       setChatThreads((prev) => ({
         ...prev,
         [spotId]: [...(prev[spotId] || []), loadingMsg],
@@ -465,26 +467,38 @@ export default function App() {
             text: text || "写真を解析して解説してください",
             image: img ? { mimeType: img.mimeType, data: img.data } : undefined,
             audio: audio ? { mimeType: audio.mimeType, data: audio.data } : undefined,
+            spot: {
+              name: rec.name,
+              description: rec.description,
+              highlights: rec.highlights ?? [],
+              tags: rec.tags,
+              area: rec.area,
+              prefecture: rec.prefecture,
+            },
           }),
         });
 
-        const data = await res.json();
+        const data = (await res.json()) as { answer?: string; error?: string };
+
+        if (!res.ok) {
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
 
         setChatThreads((prev) => {
           const thread = [...(prev[spotId] || [])];
-          const nextThread = thread.filter((m) => m.text !== "💬 AIガイドが回答を作成中…");
+          const nextThread = thread.filter((m) => !isAiGuideLoadingMessage(m.text));
           return {
             ...prev,
             [spotId]: [
               ...nextThread,
-              { role: "ai" as const, text: data.answer || "回答が得られませんでした。" },
+              { role: "ai" as const, text: formatAiGuideAnswer(data.answer || "回答が得られませんでした。") },
             ],
           };
         });
       } catch (e: unknown) {
         setChatThreads((prev) => {
           const thread = [...(prev[spotId] || [])];
-          const nextThread = thread.filter((m) => m.text !== "💬 AIガイドが回答を作成中…");
+          const nextThread = thread.filter((m) => !isAiGuideLoadingMessage(m.text));
           return {
             ...prev,
             [spotId]: [
@@ -582,7 +596,7 @@ export default function App() {
         <SpotDetailModal
           recommendation={detailRec}
           chatHistory={chatThreads[detailRec.id] || []}
-          onSendChat={(text, img, audio) => handleSendChat(detailRec.id, text, img, audio)}
+          onSendChat={(text, img, audio) => handleSendChat(detailRec, text, img, audio)}
           onClose={() => goBack(detailReturnStepRef.current)}
         />
       )}

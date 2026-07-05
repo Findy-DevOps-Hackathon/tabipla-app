@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { SpotImage } from "./SpotImage.tsx";
-import { type Recommendation } from "../data/spots.ts";
+import type { Recommendation } from "../data/spots.ts";
+import { AI_GUIDE_LOADING_TEXT, formatAiGuideAnswer, isAiGuideLoadingMessage } from "../lib/aiGuide.ts";
 import { copyToClipboard } from "../lib/clipboard.ts";
 import { buildSpotShareUrl } from "../lib/spotLink.ts";
 import { useAutoResizeTextarea } from "../lib/useAutoResizeTextarea.ts";
 import { useLockBodyScroll } from "../lib/useLockBodyScroll.ts";
 import { useSpeechRecognition } from "../lib/useSpeechRecognition.ts";
 import { useVisualViewport } from "../lib/useVisualViewport.ts";
+import { AiGuideAvatar } from "./AiGuideAvatar.tsx";
+import { AiGuideSpeechBubble } from "./AiGuideSpeechBubble.tsx";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -17,6 +19,7 @@ import {
   ShareIcon,
   StopIcon,
 } from "./icons.tsx";
+import { SpotImage } from "./SpotImage.tsx";
 import { VoiceWaveform } from "./VoiceWaveform.tsx";
 
 type ChatMessage = {
@@ -249,19 +252,20 @@ export function SpotDetailModal({
               <span className="text-[11px] font-medium text-(--brand)">地図を見る</span>
             </a>
 
-            {/* AIチャットセクション（個別画面内に移植） */}
+            {/* チャットセクション（個別画面内に移植） */}
             <section className="flex flex-col gap-3">
-              <div>
-                <p className="flex items-center gap-1.5 text-[13px] font-bold text-[#0f172a]">
-                  AIガイドに質問する
-                </p>
-                <p className="text-[11px] text-[#7788a0]">
-                  正確な情報は公式サイトをご確認ください。
-                </p>
+              <div className="flex items-center gap-2.5">
+                <AiGuideAvatar size={44} />
+                <div>
+                  <p className="text-[13px] font-bold text-[#0f172a]">ガイドに質問する</p>
+                  <p className="text-[11px] text-[#7788a0]">
+                    正確な情報は公式サイトをご確認ください。
+                  </p>
+                </div>
               </div>
-              <div className="flex flex-col gap-3 rounded-xl border border-[#e2e8f0] bg-white p-3">
+              <div className="flex flex-col gap-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3">
                 {/* メッセージ履歴（モーダル全体で1つのスクロールにするため内部スクロールはしない） */}
-                <div className="flex flex-col gap-2.5 pr-1 text-[13px]">
+                <div className="flex flex-col gap-3 pr-1 text-[13px]">
                   {(chatHistory.length > 0
                     ? chatHistory
                     : [
@@ -272,27 +276,60 @@ export function SpotDetailModal({
                       ]
                   ).map((m) => {
                     const isUser = m.role === "user";
+                    const isLoading = !isUser && isAiGuideLoadingMessage(m.text);
+                    const displayText = isLoading
+                      ? AI_GUIDE_LOADING_TEXT
+                      : isUser
+                        ? m.text
+                        : formatAiGuideAnswer(m.text);
+                    const messageKey = `${m.role}-${m.text}-${m.image ?? ""}`;
+
+                    if (isUser) {
+                      return (
+                        <div
+                          key={messageKey}
+                          className="flex max-w-[85%] flex-col gap-1.5 self-end whitespace-pre-wrap rounded-xl rounded-tr-none bg-(--brand) px-3 py-2 leading-relaxed text-white"
+                        >
+                          {m.image && (
+                            <img
+                              src={m.image}
+                              alt="添付画像"
+                              className="max-h-40 w-full rounded-lg object-cover"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          )}
+                          {displayText && <span>{displayText}</span>}
+                        </div>
+                      );
+                    }
+
                     return (
-                      <div
-                        key={`${m.role}-${m.text}-${m.image ?? ""}`}
-                        className={`flex max-w-[85%] flex-col gap-1.5 whitespace-pre-wrap rounded-xl px-3 py-2 leading-relaxed ${
-                          isUser
-                            ? "self-end rounded-tr-none bg-(--brand) text-white"
-                            : m.isError
-                              ? "self-start rounded-tl-none border border-rose-100 bg-rose-50 text-rose-600"
-                              : "self-start rounded-tl-none bg-(--ai-bg) text-(--ai-fg)"
-                        }`}
-                      >
-                        {m.image && (
-                          <img
-                            src={m.image}
-                            alt="添付画像"
-                            className="max-h-40 w-full rounded-lg object-cover"
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        )}
-                        {m.text && <span>{m.text}</span>}
+                      <div key={messageKey} className="flex max-w-[92%] items-end gap-1 self-start">
+                        <AiGuideAvatar speaking={isLoading} size={36} className="shrink-0" />
+                        <AiGuideSpeechBubble variant={m.isError ? "error" : "default"}>
+                          {m.image && (
+                            <img
+                              src={m.image}
+                              alt="添付画像"
+                              className="max-h-40 w-full rounded-lg object-cover"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          )}
+                          {displayText && (
+                            <span className={isLoading ? "text-[#64748b]" : undefined}>
+                              {displayText}
+                              {isLoading && (
+                                <span className="inline-flex gap-0.5 pl-1 align-middle" aria-hidden>
+                                  <span className="animate-bounce [animation-delay:0ms]">.</span>
+                                  <span className="animate-bounce [animation-delay:150ms]">.</span>
+                                  <span className="animate-bounce [animation-delay:300ms]">.</span>
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </AiGuideSpeechBubble>
                       </div>
                     );
                   })}
@@ -351,10 +388,29 @@ export function SpotDetailModal({
                   setSpeechError(null);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
+                  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+
+                  const el = e.currentTarget;
+                  const { selectionStart, selectionEnd, value } = el;
+                  const atEnd =
+                    selectionStart === value.length && selectionEnd === value.length;
+
+                  e.preventDefault();
+
+                  // 末尾で Enter 2 回目 → 送信（1 回目は改行）
+                  if (atEnd && value.endsWith("\n")) {
                     handleSendText();
+                    return;
                   }
+
+                  const before = value.slice(0, selectionStart);
+                  const after = value.slice(selectionEnd);
+                  const next = `${before}\n${after}`;
+                  const cursor = selectionStart + 1;
+                  setTextInput(next);
+                  requestAnimationFrame(() => {
+                    chatInputRef.current?.setSelectionRange(cursor, cursor);
+                  });
                 }}
                 placeholder={listening ? "話しかけてください…" : "知りたいことを質問..."}
                 disabled={listening}

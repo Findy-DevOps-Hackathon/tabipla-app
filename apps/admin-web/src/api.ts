@@ -126,6 +126,23 @@ async function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
+export const SPOT_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
+export const SPOT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+/** スポット画像ファイルを pendingImage 用の Base64 に変換する。 */
+export async function readSpotImageFile(
+  file: File,
+): Promise<{ mimeType: string; data: string }> {
+  if (!SPOT_IMAGE_ACCEPT.split(",").includes(file.type)) {
+    throw new Error("JPEG / PNG / WebP のみアップロードできます。");
+  }
+  if (file.size > SPOT_IMAGE_MAX_BYTES) {
+    throw new Error("画像サイズは 5MB 以下にしてください。");
+  }
+  const data = await readFileAsBase64(file);
+  return { mimeType: file.type, data };
+}
+
 /** スポット画像をアップロードする。 */
 export async function uploadSpotImage(spotId: string, file: File): Promise<Spot> {
   const data = await readFileAsBase64(file);
@@ -230,6 +247,79 @@ export type DescribeSpotResult = {
   category?: string;
   highlights?: string[];
 };
+
+export type GenerateSpotImageParams = {
+  name: string;
+  prefecture: string;
+  municipality: string;
+  description?: string;
+  highlights?: string[];
+  category?: string | string[];
+  tags?: string[];
+};
+
+export type GenerateSpotImageResult = {
+  mimeType: string;
+  data: string;
+  prompt?: string;
+};
+
+function base64ToFile(base64: string, mimeType: string, filename: string): File {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], filename, { type: mimeType });
+}
+
+/** Base64 画像をスポットにアップロードする。 */
+export async function uploadSpotImageBase64(
+  spotId: string,
+  mimeType: string,
+  data: string,
+): Promise<Spot> {
+  return request<Spot>(`/spots/${encodeURIComponent(spotId)}/image?refresh=true`, {
+    method: "POST",
+    body: JSON.stringify({ mimeType, data }),
+  });
+}
+
+/** スケッチ風観光イラストを agent 経由で生成する（16:11 WebP）。 */
+export async function generateSpotImage(
+  params: GenerateSpotImageParams,
+): Promise<GenerateSpotImageResult> {
+  const name = params.name.trim();
+  if (!name) throw new Error("観光地名を入力してください");
+
+  const res = await fetch(`${AGENT_BASE}/v1/generate-spot-image`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      prefecture: params.prefecture,
+      municipality: params.municipality,
+      description: params.description?.trim() || undefined,
+      highlights: params.highlights,
+      category: params.category,
+      tags: params.tags,
+    }),
+  });
+  const body = (await res.json().catch(() => null)) as
+    | GenerateSpotImageResult
+    | { error?: string }
+    | null;
+  if (!res.ok || !body || !("mimeType" in body) || !body.mimeType || !body.data) {
+    throw new Error(
+      body && "error" in body && body.error ? body.error : `HTTP ${res.status}`,
+    );
+  }
+  return body;
+}
+
+/** 生成画像を File に変換する。 */
+export function spotImageResultToFile(result: GenerateSpotImageResult, spotName: string): File {
+  const ext = result.mimeType === "image/webp" ? "webp" : result.mimeType === "image/png" ? "png" : "jpg";
+  return base64ToFile(result.data, result.mimeType, `${spotName}.${ext}`);
+}
 
 /** 個別登録向け: 指定自治体内の観光地について AI で紹介文またはおすすめポイントを生成する。 */
 export async function generateSpotContent(

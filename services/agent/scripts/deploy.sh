@@ -14,6 +14,11 @@ fi
 REGION="${GOOGLE_CLOUD_LOCATION:-asia-northeast1}"
 SERVICE="${CLOUD_RUN_SERVICE:-tabipla-agent}"
 USE_MOCK="${USE_MOCK:-1}"
+BACKEND_API_URL="${BACKEND_API_URL:-}"
+ENV_VARS="GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT},GOOGLE_CLOUD_LOCATION=${REGION},USE_MOCK=${USE_MOCK}"
+if [[ -n "$BACKEND_API_URL" ]]; then
+  ENV_VARS="${ENV_VARS},BACKEND_API_URL=${BACKEND_API_URL}"
+fi
 IMAGE="gcr.io/${PROJECT}/${SERVICE}"
 
 echo "Building ${IMAGE} with Cloud Build (${REGION})..."
@@ -35,7 +40,7 @@ gcloud run deploy "$SERVICE" \
   --timeout=300 \
   --min-instances=0 \
   --max-instances=5 \
-  --set-env-vars="GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT},GOOGLE_CLOUD_LOCATION=${REGION},USE_MOCK=${USE_MOCK}"
+  --set-env-vars="${ENV_VARS}"
 
 URL="$(gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format='value(status.url)')"
 echo ""

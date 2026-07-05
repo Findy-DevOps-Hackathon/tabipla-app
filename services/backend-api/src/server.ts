@@ -8,6 +8,7 @@ import {
   getAdminUserByEmail,
   getCouponsBySpotId,
   getSpotById,
+  getUnchikuFactsBySpotId,
   getUserByEmail,
   hashPassword,
   listSpots,
@@ -36,6 +37,7 @@ import { buildSpotEmbedText, embedText } from "./embedding.js";
 import { patchSpotInElasticsearch, upsertSpotInElasticsearch } from "./esSync.js";
 import { geocodeAddressQuery } from "./geocode.js";
 import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./mapper.js";
+import { buildAskFacts, buildAskFactsFromClient, type AskSpotPayload } from "./spotAskFacts.js";
 import { lookupPlaceByName } from "./places.js";
 import { enrichRecommendation, toAgentCatalogSpot } from "./spotCatalog.js";
 import {
@@ -852,11 +854,57 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   // エージェントプロキシ：チャット質問への回答
   app.post("/v1/spots/:spotId/ask", async (req, reply) => {
     const { spotId } = req.params as { spotId: string };
-    const res = await fetch(`${agentApiUrl}/v1/spots/${spotId}/ask`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(req.body),
-    });
+    const body = req.body as {
+      text?: string;
+      image?: { mimeType: string; data: string };
+      audio?: { mimeType: string; data: string };
+      userId?: string;
+      spot?: AskSpotPayload;
+    };
+
+    const dbSpot = await getSpotById(db, spotId);
+    let facts: string[];
+    let spotForAgent: AskSpotPayload;
+
+    if (dbSpot) {
+      const unchikuRows = await getUnchikuFactsBySpotId(db, spotId);
+      facts = buildAskFacts(dbSpot, unchikuRows);
+      spotForAgent = {
+        name: dbSpot.name,
+        description: dbSpot.description,
+        highlights: dbSpot.highlights ?? [],
+        tags: dbSpot.tags ?? [],
+        area: dbSpot.area ?? undefined,
+        prefecture: dbSpot.prefecture ?? undefined,
+        address: dbSpot.address ?? undefined,
+      };
+    } else if (body.spot?.name?.trim()) {
+      spotForAgent = body.spot;
+      facts = buildAskFactsFromClient(body.spot);
+      req.log.warn({ spotId }, "ask: DB に無い spotId のためクライアント情報で応答します");
+    } else {
+      return reply.code(404).send({ error: `スポットが見つかりません: ${spotId}` });
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(`${agentApiUrl}/v1/spots/${spotId}/ask`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...body,
+          spot: spotForAgent,
+          facts,
+        }),
+      });
+    } catch (error) {
+      req.log.error({ err: error, spotId }, "ask: agent への接続に失敗しました");
+      return reply.code(503).send({
+        error:
+          "AIガイドサービスに接続できません。services/agent (8080) が起動しているか確認してください。",
+      });
+    }
+
     const data = await res.json();
     if (!res.ok) {
       return reply.code(res.status).send(data);
