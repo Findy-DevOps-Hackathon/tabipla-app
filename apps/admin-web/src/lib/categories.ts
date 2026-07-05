@@ -47,15 +47,6 @@ export function formatCategories(value?: string | string[]): string {
   return normalizeCategories(value).join(";");
 }
 
-/** 既存カテゴリに1件追加（最大3件・重複なし）。 */
-export function addCategory(existing: string[], incoming: string): string[] {
-  const trimmed = incoming.trim();
-  if (!trimmed || existing.includes(trimmed) || existing.length >= MAX_SPOT_CATEGORIES) {
-    return existing;
-  }
-  return [...existing, trimmed];
-}
-
 /** CSV 等のセミコロン区切り文字列を配列へ。 */
 export function parseCategories(value: string): string[] {
   return normalizeCategories(value.split(";"));

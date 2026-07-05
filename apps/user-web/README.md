@@ -93,15 +93,10 @@ pnpm run deploy
 
 ## デプロイ時の注意事項
 
-- **エージェント API（`/api/v1/*`）は本番では未接続**。`/api` のプロキシは開発サーバ（`vite.config.ts`）
-  限定のため、Firebase Hosting 単体では `backend-api` / `agent` に到達できず**プラン生成・AI チャットは動きません**。
-  画面遷移・スワイプ等のデモ動作は問題なく確認できます。
-- **本番でエージェントを繋ぐ場合**は、`backend-api` と `agent` を別 URL（例: Cloud Run）へデプロイし、
-  `firebase.json` の `rewrites` に `/api/**` → そのバックエンドへの転送（`run` 連携 or リバースプロキシ）
-  を追加する。`src/api.ts` の `API_BASE` 切り替えでも対応可能。
+- **本番 API / 画像**は `firebase.json` の `/api/**` rewrite で **同一オリジン**（`tabipla-user-web.web.app/api/...`）経由で Cloud Run `tabipla-backend-api` に転送されます。`VITE_API_BASE` は **設定不要**（既定 `/api` のままデプロイ）。
+- **前提**: `tabipla-backend-api` が Firebase プロジェクト `tabipla-user-web` と **同一 GCP プロジェクト**にデプロイされていること。
+- **GCS 画像**（`https://storage.googleapis.com/...`）は GCS 直 URL のまま。ローカル保存画像（`/uploads/spots/...`）は `/api/uploads/spots/...` 経由で同一オリジン配信されます。
 - **`dist/` はビルド成果物**なのでコミット不要（`pnpm deploy` が毎回再生成）。
-- **インフラ管理（Terraform 等）は不要**。フロント静的配信のみで状態管理対象がほぼないため、
-  `firebase deploy` で完結する。backend 一式を GCP に本格構築する段階で IaC を検討する。
 
 ---
 

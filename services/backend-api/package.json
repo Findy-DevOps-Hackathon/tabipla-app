@@ -19,6 +19,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.21.0",
     "@tabipla/db": "workspace:*",
     "@tabipla/maps-core": "workspace:*",
     "@tabipla/search-core": "workspace:*",

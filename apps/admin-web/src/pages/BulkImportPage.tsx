@@ -1,21 +1,21 @@
 import { Loader2, Upload } from "lucide-react";
-import type { ReactNode } from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { bulkImportSpots } from "../api.ts";
-import { AdminShell } from "../components/layout/AdminShell.tsx";
 import { Button } from "../components/ui/Button.tsx";
 import { Toast } from "../components/ui/Modal.tsx";
+import {
+  type ImportDraft,
+  type ImportRowDraft,
+  useSpotAddDraft,
+} from "../context/SpotAddDraftContext.tsx";
 import { extractAreaFromAddress } from "../lib/address.ts";
 import { isSpotCategory, parseCategories, SPOT_CATEGORIES } from "../lib/categories.ts";
 import { parseCsvLine, stripBom } from "../lib/csv.ts";
-import { CSV_HEADER } from "../lib/format.ts";
+import { CSV_HEADER, downloadCsvTemplate, parseHighlights } from "../lib/format.ts";
 import { getFixedPrefecture } from "../master/index.ts";
-import type { Spot } from "../types.ts";
 
-type Step = 1 | 2 | 3;
-
-type ParsedRow = Omit<Spot, "id"> & { error?: string; line: number };
+type ParsedRow = ImportRowDraft;
 
 function parseCsv(text: string): ParsedRow[] {
   const lines = stripBom(text).trim().split(/\r?\n/);
@@ -30,7 +30,7 @@ function parseCsv(text: string): ParsedRow[] {
       return { line: index + 2, name: "", description: "", error: "空行です" };
     }
     const cols = parseCsvLine(line);
-    const [name, description, category, _area, prefecture, address, lat, lon, price] = cols;
+    const [name, category, _area, prefecture, address, description, highlights] = cols;
     const row: ParsedRow = {
       line: index + 2,
       name: name?.trim() ?? "",
@@ -39,6 +39,9 @@ function parseCsv(text: string): ParsedRow[] {
     if (!row.name || !row.description) {
       row.error = "name / description は必須です";
       return row;
+    }
+    if (highlights?.trim()) {
+      row.highlights = parseHighlights(highlights);
     }
     if (category?.trim()) {
       const cats = parseCategories(category);
@@ -59,19 +62,19 @@ function parseCsv(text: string): ParsedRow[] {
       row.address = address.trim();
       row.area = extractAreaFromAddress(row.address, fixedPrefecture);
     }
-    if (lat?.trim() && lon?.trim()) {
-      row.location = { lat: Number(lat), lon: Number(lon) };
-    }
-    if (price?.trim()) row.price = Number(price);
     return row;
   });
 }
 
-export default function BulkImportPage({ embedded = false }: { embedded?: boolean } = {}) {
+export default function BulkImportPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>(1);
-  const [rows, setRows] = useState<ParsedRow[]>([]);
-  const [result, setResult] = useState<{ ok: number; ng: number } | null>(null);
+  const { importDraft, setImportDraft } = useSpotAddDraft();
+  const { step, rows, result } = importDraft;
+
+  const patchImport = (patch: Partial<ImportDraft>) => {
+    setImportDraft((prev) => ({ ...prev, ...patch }));
+  };
+
   const [toast, setToast] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
 
@@ -82,8 +85,7 @@ export default function BulkImportPage({ embedded = false }: { embedded?: boolea
     try {
       const text = await file.text();
       const parsed = parseCsv(text);
-      setRows(parsed);
-      setStep(2);
+      patchImport({ rows: parsed, step: 2 });
     } catch (e) {
       setToast(e instanceof Error ? e.message : "ファイルの読み込みに失敗しました");
     }
@@ -98,8 +100,7 @@ export default function BulkImportPage({ embedded = false }: { embedded?: boolea
           id: crypto.randomUUID(),
         })),
       );
-      setResult({ ok: res.count, ng: errorRows.length });
-      setStep(3);
+      patchImport({ result: { ok: res.count, ng: errorRows.length }, step: 3 });
     } catch {
       setToast("取り込みに失敗しました");
     } finally {
@@ -108,25 +109,12 @@ export default function BulkImportPage({ embedded = false }: { embedded?: boolea
   };
 
   const downloadTemplate = () => {
-    const prefecture = getFixedPrefecture();
-    const sample = `${CSV_HEADER}\n"懐古園","小諸城址の公園。紅葉の名所。","歴史・文化;自然","小諸市","${prefecture}","長野県小諸市中央1丁目","36.325","138.425","0"\n`;
-    const blob = new Blob([sample], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "spots-template.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvTemplate(getFixedPrefecture());
   };
 
-  const wrap = (children: ReactNode) =>
-    embedded ? children : <AdminShell title="一括取り込み">{children}</AdminShell>;
-
-  return wrap(
+  return (
     <>
       <div className="px-8">
-        {!embedded && <p className="mb-6 text-sm text-[#64748b]">観光地管理 / 一括取り込み</p>}
-
         <div className="mb-8 flex items-center justify-center gap-4">
           {[1, 2, 3].map((n) => (
             <div key={n} className="flex items-center gap-2">
@@ -161,7 +149,7 @@ export default function BulkImportPage({ embedded = false }: { embedded?: boolea
               <p className="font-medium text-[#0f172a]">
                 ファイルをドラッグ＆ドロップ、またはクリックして選択
               </p>
-              <p className="mt-2 text-sm text-[#64748b]">UTF-8 CSV（必須列: name, description）</p>
+              <p className="mt-2 text-sm text-[#64748b]">UTF-8 CSV</p>
               <input
                 type="file"
                 accept=".csv,text/csv"
@@ -221,7 +209,7 @@ export default function BulkImportPage({ embedded = false }: { embedded?: boolea
               </table>
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setStep(1)}>
+              <Button variant="secondary" onClick={() => patchImport({ step: 1 })}>
                 戻る
               </Button>
               <Button
@@ -247,6 +235,6 @@ export default function BulkImportPage({ embedded = false }: { embedded?: boolea
         )}
       </div>
       {toast && <Toast message={toast} variant="error" />}
-    </>,
+    </>
   );
 }

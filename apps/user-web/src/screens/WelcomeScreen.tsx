@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { SpotImage } from "../components/SpotImage.tsx";
+import { preloadImage } from "../lib/preloadImage.ts";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
 import { ChevronRightIcon, MapPinIcon } from "../components/icons.tsx";
-import { RECOMMENDATIONS, type Recommendation, SWIPE_SPOTS } from "../data/spots.ts";
+import { RECOMMENDATIONS, type Recommendation } from "../data/spots.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 
 /** ホーム中央カードを切り替える間隔（ミリ秒）。 */
@@ -10,16 +12,15 @@ const FEATURED_ROTATE_MS = 4000;
 /** カードの入れ替えアニメーションの長さ（ミリ秒、CSS と一致させる）。 */
 const FEATURED_SWAP_MS = 1100;
 
-/** 相性スコアの高い順に並べたおすすめスポット（ホーム中央カードの表示候補）。 */
-const FEATURED_SPOTS =
-  RECOMMENDATIONS.length > 0
-    ? [...RECOMMENDATIONS].sort((a, b) => b.match - a.match)
-    : SWIPE_SPOTS.map((s) => ({
-        ...s,
-        reason: "小諸のおすすめ観光スポット",
-        match: 85,
-        memberOnly: false,
-      }));
+function buildFeaturedSpots(
+  recommendations: Recommendation[],
+  exploreSpots: Recommendation[],
+): Recommendation[] {
+  if (recommendations.length > 0) {
+    return [...recommendations].sort((a, b) => b.match - a.match);
+  }
+  return exploreSpots;
+}
 
 /**
  * ホーム中央のおすすめスポットカードの「見た目」1枚分。
@@ -29,14 +30,24 @@ function FeaturedCard({
   spot,
   className,
   onClick,
+  priority = false,
+  lazy = false,
 }: {
   spot: Recommendation;
   className?: string;
   onClick?: () => void;
+  priority?: boolean;
+  lazy?: boolean;
 }) {
   const inner = (
     <>
-      <img src={spot.image} alt={spot.name} className="absolute inset-0 size-full object-cover" />
+      <SpotImage
+        src={spot.image}
+        alt={spot.name}
+        className="absolute inset-0 size-full object-cover"
+        priority={priority}
+        lazy={lazy}
+      />
       <div className="absolute inset-0 bg-linear-to-t from-black/75 via-black/15 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-3">
         <p className="flex items-center gap-1 text-[10px] font-medium text-white/85">
@@ -78,6 +89,8 @@ type WelcomeScreenProps = {
   onStartDiagnosis: () => void;
   /** 中央のおすすめカードをタップしたとき。スポット詳細を開く。 */
   onOpenSpot: (spot: Recommendation) => void;
+  exploreSpots?: Recommendation[];
+  recommendations?: Recommendation[];
 };
 
 /**
@@ -86,7 +99,13 @@ type WelcomeScreenProps = {
  * 背景は格子状（グリッド）のデザイン。淡いグリッド線にブランドカラーの
  * グロー（ぼかし円）を重ね、中央から外周に向けてフェードさせる。
  */
-export function WelcomeScreen({ onStartDiagnosis, onOpenSpot }: WelcomeScreenProps) {
+export function WelcomeScreen({
+  onStartDiagnosis,
+  onOpenSpot,
+  exploreSpots = [],
+  recommendations = RECOMMENDATIONS,
+}: WelcomeScreenProps) {
+  const featuredSpots = buildFeaturedSpots(recommendations, exploreSpots);
   // ホーム中央に置くおすすめ観光スポット。一定時間ごとに次の候補へ外枠ごと入れ替える。
   const [featuredIndex, setFeaturedIndex] = useState(0);
   // 入れ替え中に左へ送り出している前のカードのインデックス（null なら入れ替えなし）。
@@ -94,16 +113,16 @@ export function WelcomeScreen({ onStartDiagnosis, onOpenSpot }: WelcomeScreenPro
   const indexRef = useRef(0);
 
   useEffect(() => {
-    if (FEATURED_SPOTS.length <= 1) return;
+    if (featuredSpots.length <= 1) return;
     const timer = window.setInterval(() => {
       const current = indexRef.current;
-      const next = (current + 1) % FEATURED_SPOTS.length;
+      const next = (current + 1) % featuredSpots.length;
       indexRef.current = next;
       setLeavingIndex(current);
       setFeaturedIndex(next);
     }, FEATURED_ROTATE_MS);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [featuredSpots.length]);
 
   // アニメーション終了後に前のカードを取り除く。
   useEffect(() => {
@@ -112,11 +131,19 @@ export function WelcomeScreen({ onStartDiagnosis, onOpenSpot }: WelcomeScreenPro
     return () => window.clearTimeout(timer);
   }, [leavingIndex]);
 
-  const featured = FEATURED_SPOTS[featuredIndex];
+  const featured = featuredSpots[featuredIndex];
   const leaving =
     leavingIndex !== null && leavingIndex !== featuredIndex
-      ? FEATURED_SPOTS[leavingIndex]
+      ? featuredSpots[leavingIndex]
       : undefined;
+
+  useEffect(() => {
+    if (!featured?.image) return;
+    preloadImage(featured.image);
+    if (featuredSpots.length <= 1) return;
+    const next = featuredSpots[(featuredIndex + 1) % featuredSpots.length];
+    if (next?.image) preloadImage(next.image);
+  }, [featured?.image, featuredIndex, featuredSpots]);
 
   return (
     <div className="relative flex h-screen flex-col overflow-hidden bg-(--page)">
@@ -144,6 +171,7 @@ export function WelcomeScreen({ onStartDiagnosis, onOpenSpot }: WelcomeScreenPro
                   key={`leave-${leaving.id}`}
                   spot={leaving}
                   className="animate-card-leave"
+                  lazy
                 />
               )}
               <FeaturedCard
@@ -151,6 +179,7 @@ export function WelcomeScreen({ onStartDiagnosis, onOpenSpot }: WelcomeScreenPro
                 spot={featured}
                 onClick={() => onOpenSpot(featured)}
                 className="animate-card-enter"
+                priority
               />
             </div>
           </div>

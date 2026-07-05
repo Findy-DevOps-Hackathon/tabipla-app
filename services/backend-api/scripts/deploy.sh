@@ -10,11 +10,12 @@ if [[ -z "$PROJECT" || "$PROJECT" == "(unset)" ]]; then
   exit 1
 fi
 
-REGION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
+REGION="${GOOGLE_CLOUD_LOCATION:-asia-northeast1}"
 SERVICE="${CLOUD_RUN_SERVICE:-tabipla-backend-api}"
 IMAGE="gcr.io/${PROJECT}/${SERVICE}"
 ENV_FILE="$ROOT/services/backend-api/.env"
 CREDS_FILE="$ROOT/infra/cloud-sql/.credentials"
+GCS_CREDS_FILE="$ROOT/infra/gcs/.credentials"
 
 if [[ -f "$ENV_FILE" ]]; then
   set -a
@@ -34,8 +35,15 @@ if [[ -f "$CREDS_FILE" ]]; then
   fi
 fi
 
+if [[ -f "$GCS_CREDS_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$GCS_CREDS_FILE"
+  set +a
+fi
+
 if [[ -z "${CORS_ORIGINS:-}" ]]; then
-  CORS_ORIGINS="https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com"
+  CORS_ORIGINS="https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com"
 fi
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
@@ -68,11 +76,15 @@ trap 'rm -f "$ENV_VARS_FILE"' EXIT
   [[ -n "${ADMIN_JWT_SECRET:-}" ]] && echo "ADMIN_JWT_SECRET: \"${ADMIN_JWT_SECRET}\""
   [[ -n "${USER_JWT_SECRET:-}" ]] && echo "USER_JWT_SECRET: \"${USER_JWT_SECRET}\""
   [[ -n "${CORS_ORIGINS:-}" ]] && echo "CORS_ORIGINS: \"${CORS_ORIGINS}\""
+  [[ -n "${GCS_BUCKET:-}" ]] && echo "GCS_BUCKET: \"${GCS_BUCKET}\""
+  [[ -n "${GCS_PUBLIC_BASE_URL:-}" ]] && echo "GCS_PUBLIC_BASE_URL: \"${GCS_PUBLIC_BASE_URL}\""
+  [[ -n "${GCS_OBJECT_PREFIX:-}" ]] && echo "GCS_OBJECT_PREFIX: \"${GCS_OBJECT_PREFIX}\""
 } >"$ENV_VARS_FILE"
 
-echo "Building ${IMAGE} with Cloud Build..."
+echo "Building ${IMAGE} with Cloud Build (${REGION})..."
 gcloud builds submit "$ROOT" \
   --project="$PROJECT" \
+  --region="$REGION" \
   --config=services/backend-api/cloudbuild.yaml \
   --substitutions=_IMAGE="${IMAGE}"
 
@@ -102,4 +114,7 @@ echo ""
 echo "Deployed: ${URL}"
 echo "Health check: ${URL}/health"
 echo ""
-echo "user-web から使う場合は firebase.json の /api/** rewrite または src/api.ts の API_BASE 切り替えが必要です。"
+echo "user-web / admin-web は firebase.json の /api/** rewrite で同一オリジン接続できます。"
+echo "  VITE_API_BASE を設定せず pnpm run deploy してください（API_BASE 既定値 /api）。"
+echo "  Cloud Run サービスは Firebase プロジェクトと同一 GCP プロジェクトである必要があります。"
+echo "  リージョン: ${REGION}（既定 asia-northeast1 / 東京）"

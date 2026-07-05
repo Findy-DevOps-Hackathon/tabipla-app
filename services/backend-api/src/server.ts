@@ -29,6 +29,7 @@ import {
   vectorSearch,
 } from "@tabipla/search-core";
 import Fastify, { type FastifyInstance } from "fastify";
+import { normalizeApiPath, registerApiMirrorRoutes } from "./apiPrefix.js";
 import { extractBearerToken, isAdminApiPath, issueAdminToken, verifyAdminToken } from "./auth.js";
 import { registerCors } from "./cors.js";
 import { buildSpotEmbedText, embedText } from "./embedding.js";
@@ -36,6 +37,17 @@ import { patchSpotInElasticsearch, upsertSpotInElasticsearch } from "./esSync.js
 import { geocodeAddressQuery } from "./geocode.js";
 import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./mapper.js";
 import { lookupPlaceByName } from "./places.js";
+import { enrichRecommendation, toAgentCatalogSpot } from "./spotCatalog.js";
+import {
+  deleteSpotImageFiles,
+  readSpotImageFile,
+  saveSpotImage,
+  spotImageLegacyRedirectUrl,
+} from "./spotImages.js";
+
+/** user-web 向け公開 API の既定エリア（現状は小諸市のみ）。 */
+const PUBLIC_SPOT_PREFECTURE = "長野県";
+const PUBLIC_SPOT_AREA = "小諸市";
 import {
   bulkSpotsSchema,
   createSpotSchema,
@@ -45,12 +57,14 @@ import {
   getSpotByIdSchema,
   getSpotCouponsSchema,
   getSpotSchema,
+  listPublicSpotsSchema,
   hybridSearchSchema,
   keywordSearchSchema,
   listSpotsSchema,
   loginSchema,
   placeLookupSchema,
   postRecommendationsSchema,
+  postSpotImageSchema,
   postSpotStorySchema,
   searchCandidateSpotsSchema,
   semanticSearchSchema,
@@ -141,9 +155,24 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     },
   });
   registerCors(app);
+  registerApiMirrorRoutes(app);
   const client = options.client ?? createElasticsearchClient();
 
-  // 正本 DB（PostgreSQL）。注入が無ければ自前で生成し、その場合は終了時にクローズする。
+  // ---- スポット画像の公開配信（認証不要） ------------------------------------
+  app.get<{ Params: { filename: string } }>("/uploads/spots/:filename", async (req, reply) => {
+    const redirectUrl = spotImageLegacyRedirectUrl(req.params.filename);
+    if (redirectUrl) {
+      return reply.redirect(redirectUrl, 301);
+    }
+
+    const file = await readSpotImageFile(req.params.filename);
+    if (!file) {
+      return reply.code(404).send({ error: "画像が見つかりません" });
+    }
+    reply.header("cache-control", "public, max-age=86400");
+    return reply.type(file.mimeType).send(file.buffer);
+  });
+
   const db = options.db ?? createDatabase();
   const ownsDb = options.db === undefined;
   if (ownsDb) {
@@ -169,7 +198,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   });
 
   app.addHook("onRequest", async (req, reply) => {
-    if (!isAdminApiPath(req.url)) return;
+    if (!isAdminApiPath(normalizeApiPath(req.url))) return;
 
     const token = extractBearerToken(req.headers.authorization);
     if (!token || !verifyAdminToken(token)) {
@@ -361,6 +390,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       q?: string;
       category?: string;
       prefecture?: string;
+      area?: string;
       offset?: number;
       limit?: number;
       sort?: "updatedAt" | "name";
@@ -423,6 +453,50 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     return document;
   });
 
+  // ---- スポット画像アップロード（管理画面） ----------------------------------
+  app.post<{
+    Params: { id: string };
+    Body: { mimeType: string; data: string };
+    Querystring: { refresh?: string };
+  }>("/spots/:id/image", { schema: postSpotImageSchema }, async (req, reply) => {
+    const refresh = req.query.refresh === "true";
+    const existing = await getSpotById(db, req.params.id);
+    if (!existing) {
+      return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
+    }
+
+    try {
+      const imageUrl = await saveSpotImage(req.params.id, req.body.mimeType, req.body.data);
+      const row = await upsertSpot(db, mergeSpotRow(existing, { imageUrl }));
+      const document = toSpotDocument(row);
+      const { id, ...partial } = document;
+      await patchSpotInElasticsearch(client, id, partial, { refresh });
+      return document;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "画像の保存に失敗しました";
+      return reply.code(400).send({ error: message });
+    }
+  });
+
+  app.delete<{ Params: { id: string }; Querystring: { refresh?: string } }>(
+    "/spots/:id/image",
+    { schema: deleteSpotSchema },
+    async (req, reply) => {
+      const refresh = req.query.refresh === "true";
+      const existing = await getSpotById(db, req.params.id);
+      if (!existing) {
+        return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
+      }
+
+      await deleteSpotImageFiles(req.params.id);
+      const row = await upsertSpot(db, { ...mergeSpotRow(existing, {}), imageUrl: null });
+      const document = toSpotDocument(row);
+      const { id, ...partial } = document;
+      await patchSpotInElasticsearch(client, id, partial, { refresh });
+      return document;
+    },
+  );
+
   // ---- スポット一括登録 (bulk upsert) --------------------------------------
   app.post<{ Body: { spots: SpotBody[] }; Querystring: { refresh?: string } }>(
     "/spots/bulk",
@@ -450,6 +524,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     { schema: deleteSpotSchema },
     async (req) => {
       const refresh = req.query.refresh === "true";
+      await deleteSpotImageFiles(req.params.id);
       await deleteSpot(db, req.params.id);
       const result = await deleteSpotInElasticsearch(client, req.params.id, {
         refresh,
@@ -578,12 +653,37 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     };
   });
 
+  app.get<{
+    Querystring: {
+      q?: string;
+      category?: string;
+      prefecture?: string;
+      area?: string;
+      offset?: number;
+      limit?: number;
+      sort?: "updatedAt" | "name";
+      order?: "asc" | "desc";
+    };
+  }>("/v1/spots", { schema: listPublicSpotsSchema }, async (req) => {
+    const prefecture = req.query.prefecture ?? PUBLIC_SPOT_PREFECTURE;
+    const area = req.query.area ?? PUBLIC_SPOT_AREA;
+    const { rows, total } = await listSpots(db, { ...req.query, prefecture, area });
+    return {
+      total,
+      count: rows.length,
+      spots: rows.map(toSpotDocument),
+    };
+  });
+
   app.get<{ Params: { id: string } }>(
     "/v1/spots/:id",
     { schema: getSpotByIdSchema },
     async (req, reply) => {
       const dbSpot = await getSpotById(db, req.params.id);
       if (!dbSpot) {
+        return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
+      }
+      if (dbSpot.area !== PUBLIC_SPOT_AREA || dbSpot.prefecture !== PUBLIC_SPOT_PREFECTURE) {
         return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
       }
 
@@ -598,23 +698,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         validUntil: c.validUntil ?? undefined,
       }));
 
-      // NOTE: main の spots.category は text[]（配列）型ですが、
-      // 外部APIの型仕様（GET /v1/spots/:id）が category: string (単一文字列) を想定している場合、
-      // 最初のカテゴリを返すか、または配列のまま渡します。
-      // フロントエンドの型定義（SpotDocument.category）は string | string[] を許容しているため、
-      // ここでは配列の最初の要素を返します。
-      const spot = {
-        id: dbSpot.id,
-        name: dbSpot.name,
-        category: dbSpot.category && dbSpot.category.length > 0 ? dbSpot.category[0] : "",
-        location: { lat: dbSpot.lat ?? 0, lng: dbSpot.lon ?? 0 },
-        address: dbSpot.address ?? "",
-        priceYen: dbSpot.price ?? 0,
-        estimatedStayMinutes: 60,
-        tags: dbSpot.tags ?? [],
-      };
-
-      return { spot, coupons };
+      return { spot: toSpotDocument(dbSpot), coupons };
     },
   );
 
@@ -703,17 +787,65 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
 
   const agentApiUrl = process.env.AGENT_API_URL ?? "http://localhost:8080";
 
-  // エージェントプロキシ：旅行プランの生成とディベート
+  // エージェントプロキシ：旅行プランの生成とディベート（DB カタログで enrich）
   app.post("/v1/personalized/plan", async (req, reply) => {
+    const body = req.body as {
+      likes?: string[];
+      nopes?: string[];
+      userId?: string;
+      timeBudget?: string;
+      origin?: string;
+      travelMemory?: string;
+      prefecture?: string;
+      area?: string;
+    };
+
+    const prefecture = body.prefecture ?? PUBLIC_SPOT_PREFECTURE;
+    const area = body.area ?? PUBLIC_SPOT_AREA;
+    const { rows: dbRows } = await listSpots(db, { prefecture, area, limit: 100 });
+    const catalog = dbRows.map(toAgentCatalogSpot);
+    const rowById = new Map(dbRows.map((row) => [row.id, row]));
+    const rowByName = new Map(dbRows.map((row) => [row.name, row]));
+    const allowedIds = new Set(dbRows.map((row) => row.id));
+
+    if (dbRows.length === 0) {
+      return {
+        profileSummary: "まだ好みが少なめ（もう少しスワイプすると精度が上がります）",
+        recommendations: [],
+        result: `${area}の観光スポットが登録されていません。`,
+      };
+    }
+
     const res = await fetch(`${agentApiUrl}/v1/personalized/plan`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify({
+        ...body,
+        catalog,
+      }),
     });
-    const data = await res.json();
+    const data = (await res.json()) as {
+      error?: string;
+      recommendations?: Record<string, unknown>[];
+      profileSummary?: string;
+      result?: string;
+      debate?: unknown;
+    };
     if (!res.ok) {
       return reply.code(res.status).send(data);
     }
+
+    if (data.recommendations?.length) {
+      data.recommendations = data.recommendations
+        .map((rec) => {
+          const id = String(rec.id ?? "");
+          const name = String(rec.name ?? "");
+          const row = rowById.get(id) ?? rowByName.get(name);
+          return enrichRecommendation(rec, row);
+        })
+        .filter((rec) => allowedIds.has(String(rec.id ?? "")));
+    }
+
     return data;
   });
 
@@ -760,10 +892,17 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     return data;
   });
 
-  // エージェントプロキシ：画像SVG配信
+  // エージェントプロキシ：画像SVG配信（DB カテゴリをクエリで渡す）
   app.get("/img/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const res = await fetch(`${agentApiUrl}/img/${id}`);
+    const dbSpot = await getSpotById(db, id);
+    const category = dbSpot?.category?.[0]
+      ? toAgentCatalogSpot(dbSpot).category
+      : undefined;
+    const url = category
+      ? `${agentApiUrl}/img/${encodeURIComponent(id)}?category=${encodeURIComponent(category)}`
+      : `${agentApiUrl}/img/${encodeURIComponent(id)}`;
+    const res = await fetch(url);
     if (!res.ok) {
       return reply.code(res.status).send();
     }

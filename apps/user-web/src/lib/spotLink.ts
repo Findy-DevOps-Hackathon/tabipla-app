@@ -1,4 +1,5 @@
-import { EXPLORE_SPOTS, type Recommendation } from "../data/spots.ts";
+import type { Recommendation } from "../data/spots.ts";
+import { isDestinationSpot } from "./destination.ts";
 
 const SPOT_PARAM = "spot";
 
@@ -34,6 +35,11 @@ export function setSpotIdInLocation(spotId: string | null): void {
 export function findRecommendationById(
   id: string,
   recommendations: Recommendation[],
+  exploreSpots: Recommendation[] = [],
 ): Recommendation | null {
-  return recommendations.find((r) => r.id === id) ?? EXPLORE_SPOTS.find((r) => r.id === id) ?? null;
+  return (
+    recommendations.find((r) => r.id === id && isDestinationSpot(r)) ??
+    exploreSpots.find((r) => r.id === id && isDestinationSpot(r)) ??
+    null
+  );
 }

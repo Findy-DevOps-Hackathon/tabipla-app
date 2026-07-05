@@ -1,3 +1,4 @@
+import type { Spot } from "../contracts.js";
 import { KOMORO_SPOTS, SPOT_IMAGES, SPOT_TAGS } from "../fixtures/spots.js";
 import {
   buildProfile,
@@ -34,9 +35,19 @@ export async function personalizedPlan(
   timeBudget = "4時間",
   origin = "小諸駅",
   travelMemory = "",
+  catalog: Spot[] = KOMORO_SPOTS,
 ): Promise<PersonalizedResult> {
+  if (catalog.length === 0) {
+    const profile = buildProfile(sw, catalog);
+    return {
+      profileSummary: summarizeProfile(profile),
+      recommendations: [],
+      result: "小諸市の観光スポットが登録されていません。",
+    };
+  }
+
   // 好みプロファイルの構築/取得
-  const profile = buildProfile(sw, KOMORO_SPOTS);
+  const profile = buildProfile(sw, catalog);
   const existing = userProfiles.get(userId);
   if (existing) {
     // 過去のフィードバックによって学習したメモを引き継ぐ
@@ -61,7 +72,7 @@ export async function personalizedPlan(
   );
 
   // ディベートによって決定したスポットを優先してスコアリング
-  const ranked = rankSpots(profile, KOMORO_SPOTS, { excludeNoped: true });
+  const ranked = rankSpots(profile, catalog, { excludeNoped: true });
 
   // ディベートが選んだ最終スポットを優先的に前に持ってくる
   const finalSpotSet = new Set(debateRes.finalSpots);
@@ -74,7 +85,7 @@ export async function personalizedPlan(
     name: r.spot.name,
     category: r.spot.category,
     priceLevel: r.spot.priceLevel,
-    tags: SPOT_TAGS[r.spot.id] ?? [],
+    tags: r.spot.tags?.length ? r.spot.tags : (SPOT_TAGS[r.spot.id] ?? []),
     image: SPOT_IMAGES[r.spot.id] ?? "",
     score: r.score,
     why: r.why,

@@ -19,13 +19,15 @@ import { Button } from "../components/ui/Button.tsx";
 import { Modal, Toast } from "../components/ui/Modal.tsx";
 import { getCategoryStyle, normalizeCategories } from "../lib/categories.ts";
 import { CSV_HEADER, spotToCsvRow } from "../lib/format.ts";
+import { resolveSpotImageSrc } from "../lib/spotImage.ts";
 import { getFixedPrefecture } from "../master/index.ts";
 import { PAGE_SIZE, type Spot } from "../types.ts";
 
 type Status = "loading" | "success" | "empty" | "error";
 
-/** チェックボックス + 観光地名 + カテゴリ + 紹介文 + 操作 */
-const TABLE_GRID_COLS = "grid-cols-[16px_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,2fr)_5rem]";
+/** チェックボックス + 画像 + 観光地名 + カテゴリ + 紹介文 + おすすめポイント + 操作 */
+const TABLE_GRID_COLS =
+  "grid-cols-[16px_3.5rem_minmax(0,1.1fr)_minmax(0,0.85fr)_minmax(0,1.3fr)_minmax(0,1.1fr)_5rem]";
 
 export default function SpotListPage() {
   const navigate = useNavigate();
@@ -129,7 +131,7 @@ export default function SpotListPage() {
 
   return (
     <AdminShell title="観光地一覧">
-      <div className="p-6">
+      <div className="py-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex w-full max-w-[220px] flex-wrap items-center gap-2">
             <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-[#e2e8f0] bg-white px-3">
@@ -178,10 +180,13 @@ export default function SpotListPage() {
             {[0, 1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className={`grid ${TABLE_GRID_COLS} gap-5 border-b border-[#e2e8f0] px-5 py-5 last:border-0`}
+                className={`grid ${TABLE_GRID_COLS} items-center gap-5 border-b border-[#e2e8f0] px-5 py-5 last:border-0`}
               >
-                {[0, 1, 2, 3, 4].map((j) => (
-                  <div key={j} className="h-4 w-full animate-pulse rounded bg-[#e2e8f0]" />
+                {[0, 1, 2, 3, 4, 5, 6].map((j) => (
+                  <div
+                    key={j}
+                    className={`animate-pulse rounded bg-[#e2e8f0] ${j === 1 ? "aspect-16/11 w-14" : "h-4 w-full"}`}
+                  />
                 ))}
               </div>
             ))}
@@ -237,9 +242,11 @@ export default function SpotListPage() {
                 }}
                 className="size-4 rounded border-[#e2e8f0]"
               />
+              <span>画像</span>
               <span>観光地名</span>
               <span>カテゴリ</span>
               <span>紹介文</span>
+              <span>おすすめポイント</span>
               <span className="text-right">操作</span>
             </div>
 
@@ -261,6 +268,7 @@ export default function SpotListPage() {
                   }}
                   className="size-4 rounded border-[#e2e8f0]"
                 />
+                <SpotListThumbnail spot={spot} />
                 <Link
                   to={`/spots/${spot.id}/edit`}
                   className="cursor-pointer truncate text-sm font-medium text-[#2563eb] hover:underline"
@@ -280,6 +288,7 @@ export default function SpotListPage() {
                 <span className="line-clamp-2 text-[13px] leading-relaxed text-[#64748b]">
                   {spot.description}
                 </span>
+                <SpotHighlights highlights={spot.highlights} />
                 <div className="flex items-center justify-end gap-1">
                   <button
                     type="button"
@@ -362,6 +371,36 @@ export default function SpotListPage() {
 
       {toast && <Toast message={toast} variant={toast.includes("失敗") ? "error" : "success"} />}
     </AdminShell>
+  );
+}
+
+function SpotListThumbnail({ spot }: { spot: Spot }) {
+  return (
+    <div className="relative aspect-16/11 w-14 shrink-0 overflow-hidden rounded-md border border-[#e2e8f0] bg-[#f1f5f9]">
+      <img
+        src={resolveSpotImageSrc(spot)}
+        alt=""
+        className="absolute inset-0 size-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
+  );
+}
+
+function SpotHighlights({ highlights }: { highlights?: string[] }) {
+  if (!highlights?.length) {
+    return <span className="text-[13px] text-[#94a3b8]">—</span>;
+  }
+
+  return (
+    <ul className="list-disc space-y-1 pl-4 text-[13px] leading-snug text-[#64748b]">
+      {highlights.map((point) => (
+        <li key={point} className="line-clamp-1">
+          {point}
+        </li>
+      ))}
+    </ul>
   );
 }
 

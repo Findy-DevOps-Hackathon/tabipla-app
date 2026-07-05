@@ -1,11 +1,14 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import { SpotImage } from "../components/SpotImage.tsx";
 import { CardsIcon, ChevronRightIcon, MapPinIcon } from "../components/icons.tsx";
-import { EXPLORE_SPOTS, RECOMMENDATIONS_PAGE_SIZE, type Recommendation } from "../data/spots.ts";
+import { RECOMMENDATIONS_PAGE_SIZE, type Recommendation } from "../data/spots.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 import { isVisited } from "../lib/visited.ts";
 
 type RecommendationsScreenProps = {
   recommendations: Recommendation[];
+  /** API から取得した探索用スポット（診断前）。 */
+  exploreSpots?: Recommendation[];
   /** 好み診断を完了済みか。 */
   diagnosisComplete: boolean;
   /** ユーザーの ID。 */
@@ -62,6 +65,7 @@ function buildPreferenceSentence(summary: string): string {
 /** フロー 5: 厳選したおすすめスポット一覧（ai-recommendations）。 */
 export function RecommendationsScreen({
   recommendations,
+  exploreSpots = [],
   diagnosisComplete,
   userId,
   onStartDiagnosis,
@@ -70,7 +74,7 @@ export function RecommendationsScreen({
   onOpenSpot,
   profileSummary = "",
 }: RecommendationsScreenProps) {
-  const listSource = diagnosisComplete ? recommendations : EXPLORE_SPOTS;
+  const listSource = diagnosisComplete ? recommendations : exploreSpots;
   const [initiallyVisitedIds] = useState<Set<string>>(
     () =>
       new Set(
@@ -189,10 +193,12 @@ export function RecommendationsScreen({
                       aria-label={`${rec.name} の詳細を見る`}
                       className="absolute inset-0 w-full text-left transition"
                     >
-                      <img
+                      <SpotImage
                         src={rec.image}
                         alt={rec.name}
                         className="absolute inset-0 size-full object-cover"
+                        priority={index < 4}
+                        lazy={index >= 4}
                       />
                       <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/20 to-transparent" />
                       <span className="absolute top-1.5 left-1.5 inline-block rounded-md bg-slate-600/90 px-1.5 py-0.5 text-[10px] font-extrabold text-white">
@@ -269,10 +275,12 @@ export function RecommendationsScreen({
                       aria-label={`${rec.name} の詳細を見る`}
                       className="absolute inset-0 w-full text-left transition"
                     >
-                      <img
+                      <SpotImage
                         src={rec.image}
                         alt={rec.name}
                         className="absolute inset-0 size-full object-cover"
+                        priority={index < 4}
+                        lazy={index >= 4}
                       />
                       <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/20 to-transparent" />
                       <span className="absolute top-1.5 left-1.5 inline-block rounded-md bg-slate-600/90 px-1.5 py-0.5 text-[10px] font-extrabold text-white">

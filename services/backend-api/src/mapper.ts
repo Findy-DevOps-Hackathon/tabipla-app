@@ -42,6 +42,8 @@ export function toSpotDocument(row: SpotRow): SpotDocument {
     ...(row.prefecture !== null ? { prefecture: row.prefecture } : {}),
     ...(row.address !== null ? { address: row.address } : {}),
     ...(row.tags !== null ? { tags: row.tags } : {}),
+    ...(row.highlights !== null ? { highlights: row.highlights } : {}),
+    ...(row.imageUrl !== null ? { imageUrl: row.imageUrl } : {}),
     ...(location ? { location } : {}),
     ...(row.price !== null ? { price: row.price } : {}),
     createdAt: row.createdAt.toISOString(),
@@ -66,9 +68,11 @@ export function toNewSpotRow(doc: SpotDocument): NewSpotRow {
     prefecture: doc.prefecture ?? null,
     address: doc.address ?? null,
     tags: doc.tags ?? null,
+    highlights: doc.highlights ?? null,
     lat: doc.location?.lat ?? null,
     lon: doc.location?.lon ?? null,
     price: doc.price ?? null,
+    imageUrl: doc.imageUrl ?? null,
   };
 }
 
@@ -90,9 +94,11 @@ export function mergeSpotRow(existing: SpotRow, patch: SpotPatch): NewSpotRow {
     prefecture: patch.prefecture ?? existing.prefecture,
     address: patch.address ?? existing.address,
     tags: patch.tags ?? existing.tags,
+    highlights: patch.highlights ?? existing.highlights,
     lat: patch.location ? patch.location.lat : existing.lat,
     lon: patch.location ? patch.location.lon : existing.lon,
     price: patch.price !== undefined ? patch.price : existing.price,
+    imageUrl: patch.imageUrl !== undefined ? patch.imageUrl : existing.imageUrl,
     createdAt: existing.createdAt,
   };
 }

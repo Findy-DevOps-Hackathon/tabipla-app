@@ -62,12 +62,16 @@ export const spots = pgTable(
     address: text("address"),
     /** タグ（例: ["寺", "世界遺産"]）。 */
     tags: text("tags").array(),
+    /** おすすめポイント（例: ["紅葉の名所", "城址散策"]）。 */
+    highlights: text("highlights").array(),
     /** 緯度。 */
     lat: doublePrecision("lat"),
     /** 経度。 */
     lon: doublePrecision("lon"),
     /** 参考価格（円）。 */
     price: integer("price"),
+    /** スポット画像 URL（相対パス `/uploads/spots/...` または外部 URL）。 */
+    imageUrl: text("image_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

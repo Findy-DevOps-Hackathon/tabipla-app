@@ -6,5 +6,7 @@ dist/
 .env.*
 !.env.example
 infra/cloud-sql/.credentials
+infra/gcs/.credentials
 docs/figma-export/
-.pnpm-store/
+data/uploads/
+services/backend-api/data/

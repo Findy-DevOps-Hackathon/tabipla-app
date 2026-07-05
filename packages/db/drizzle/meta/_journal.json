@@ -50,6 +50,20 @@
       "when": 1782580195516,
       "tag": "0006_tired_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782700000000,
+      "tag": "0007_spot_highlights",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782800000000,
+      "tag": "0008_spot_image_url",
+      "breakpoints": true
     }
   ]
 }

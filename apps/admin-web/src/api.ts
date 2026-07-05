@@ -1,5 +1,5 @@
 import { getAuthToken, logout } from "./auth.ts";
-import { API_BASE } from "./config.ts";
+import { AGENT_BASE, API_BASE } from "./config.ts";
 import type { BulkImportResponse, Spot, SpotListResponse } from "./types.ts";
 
 const BASE = API_BASE;
@@ -105,6 +105,43 @@ export async function deleteSpot(id: string): Promise<void> {
   await request(`/spots/${encodeURIComponent(id)}?refresh=true`, { method: "DELETE" });
 }
 
+async function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        reject(new Error("ファイルの読み込みに失敗しました"));
+        return;
+      }
+      const base64 = result.split(",")[1];
+      if (!base64) {
+        reject(new Error("ファイルの読み込みに失敗しました"));
+        return;
+      }
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error("ファイルの読み込みに失敗しました"));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** スポット画像をアップロードする。 */
+export async function uploadSpotImage(spotId: string, file: File): Promise<Spot> {
+  const data = await readFileAsBase64(file);
+  return request<Spot>(`/spots/${encodeURIComponent(spotId)}/image?refresh=true`, {
+    method: "POST",
+    body: JSON.stringify({ mimeType: file.type, data }),
+  });
+}
+
+/** スポット画像を削除する。 */
+export async function deleteSpotImage(spotId: string): Promise<Spot> {
+  return request<Spot>(`/spots/${encodeURIComponent(spotId)}/image?refresh=true`, {
+    method: "DELETE",
+  });
+}
+
 export async function bulkImportSpots(spots: Spot[]): Promise<BulkImportResponse> {
   return request<BulkImportResponse>("/spots/bulk?refresh=true", {
     method: "POST",
@@ -112,13 +149,39 @@ export async function bulkImportSpots(spots: Spot[]): Promise<BulkImportResponse
   });
 }
 
-export async function checkHealth(): Promise<boolean> {
-  try {
-    const res = await fetch(`${BASE}/health`);
-    return res.ok;
-  } catch {
-    return false;
+export type CollectedSpotPayload = {
+  name: string;
+  description: string;
+  highlights: string[];
+  category: string;
+  area: string;
+  prefecture: string;
+  address: string;
+  tags: string[];
+};
+
+export type CollectSpotsParams = {
+  municipality: string;
+  prefecture: string;
+  targetCount: number;
+  categories: string[];
+  excludeNames: string[];
+};
+
+/** AI 収集: 指定自治体の観光地を agent 経由で Web から収集する。 */
+export async function collectSpots(params: CollectSpotsParams): Promise<CollectedSpotPayload[]> {
+  const res = await fetch(`${AGENT_BASE}/v1/collect-spots`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const body = (await res.json().catch(() => null)) as
+    | { spots?: CollectedSpotPayload[]; error?: string }
+    | null;
+  if (!res.ok || !body || "error" in body) {
+    throw new Error(body && "error" in body && body.error ? body.error : `HTTP ${res.status}`);
   }
+  return body.spots ?? [];
 }
 
 export type PlaceLookupResult = {
@@ -160,25 +223,29 @@ export async function geocodeAddress(
   }
 }
 
-const AGENT_URL = "/agent";
+export type DescribeSpotMode = "description" | "highlights";
 
 export type DescribeSpotResult = {
-  description: string;
+  description?: string;
   category?: string;
+  highlights?: string[];
 };
 
-/** 個別登録向け: 指定自治体内の観光地について AI で紹介文を生成する。 */
-export async function generateSpotDescription(params: {
-  name: string;
-  prefecture: string;
-  municipality: string;
-  address?: string;
-}): Promise<DescribeSpotResult | null> {
+/** 個別登録向け: 指定自治体内の観光地について AI で紹介文またはおすすめポイントを生成する。 */
+export async function generateSpotContent(
+  params: {
+    name: string;
+    prefecture: string;
+    municipality: string;
+    address?: string;
+  },
+  mode: DescribeSpotMode,
+): Promise<DescribeSpotResult | null> {
   const name = params.name.trim();
   if (!name) return null;
 
   try {
-    const res = await fetch(`${AGENT_URL}/v1/describe-spot`, {
+    const res = await fetch(`${AGENT_BASE}/v1/describe-spot`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -186,11 +253,14 @@ export async function generateSpotDescription(params: {
         prefecture: params.prefecture,
         municipality: params.municipality,
         address: params.address?.trim() || undefined,
+        mode,
       }),
     });
     const body = (await res.json().catch(() => null)) as DescribeSpotResult | { error?: string } | null;
-    if (!res.ok || !body || !("description" in body) || !body.description) return null;
-    return body;
+    if (!res.ok || !body || "error" in body) return null;
+    if (mode === "description" && !("description" in body && body.description)) return null;
+    if (mode === "highlights" && !("highlights" in body && body.highlights?.length)) return null;
+    return body as DescribeSpotResult;
   } catch {
     return null;
   }

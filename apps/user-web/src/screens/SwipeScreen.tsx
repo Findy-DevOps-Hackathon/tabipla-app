@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SpotImage } from "../components/SpotImage.tsx";
 import { UndoIcon } from "../components/icons.tsx";
 import type { SwipeSpot } from "../data/spots.ts";
+import { spotPreviewText } from "../lib/spotMapper.ts";
 
 type SwipeScreenProps = {
   spots: SwipeSpot[];
@@ -46,11 +48,9 @@ type ComparisonCardProps = {
   onSelect: () => void;
 };
 
-/** 比較カード用：蘊蓄の最初の文（最初の「。」まで）を返す。 */
-function comparisonTrivia(text: string): string {
-  const end = text.indexOf("。");
-  if (end === -1) return text;
-  return text.slice(0, end + 1);
+/** 比較カード用：おすすめポイントまたは紹介文の先頭文。 */
+function comparisonPreview(spot: SwipeSpot): string {
+  return spotPreviewText(spot);
 }
 
 function ComparisonCard({
@@ -85,11 +85,12 @@ function ComparisonCard({
       } ${showWiggle ? (position === "top" ? "animate-compare-hint-top" : "animate-compare-hint-bottom") : ""}`}
     >
       <div className="relative h-[230px] w-full">
-        <img
+        <SpotImage
           src={spot.image}
           alt=""
           draggable={false}
           className="pointer-events-none absolute inset-0 size-full object-cover"
+          priority
         />
         <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/10 from-30% to-black/80" />
         <span className="absolute left-3 top-3 inline-block rounded-md bg-slate-600/90 px-2.5 py-1 text-[12px] font-bold text-white">
@@ -100,7 +101,7 @@ function ComparisonCard({
             {spot.name}
           </p>
           <p className="text-[13px] leading-relaxed font-medium text-white/90 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
-            {comparisonTrivia(spot.trivia)}
+            {comparisonPreview(spot)}
           </p>
         </div>
       </div>

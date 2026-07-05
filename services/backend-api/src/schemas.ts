@@ -42,8 +42,14 @@ const spotOptionalProps = {
     items: { type: "string", minLength: 1, maxLength: 64 },
     maxItems: 50,
   },
+  highlights: {
+    type: "array",
+    items: { type: "string", minLength: 1, maxLength: 30 },
+    maxItems: 5,
+  },
   location: geoPointSchema,
   price: { type: "integer", minimum: 0 },
+  imageUrl: { type: "string", maxLength: 2048 },
   embedding: { type: "array", items: { type: "number" } },
   createdAt: { type: "string", format: "date-time" },
   updatedAt: { type: "string", format: "date-time" },
@@ -146,6 +152,7 @@ export const listSpotsSchema = {
       q: { type: "string" },
       category: { type: "string", maxLength: 128 },
       prefecture: { type: "string", maxLength: 64 },
+      area: { type: "string", maxLength: 256 },
       offset: { type: "integer", minimum: 0 },
       limit: { type: "integer", minimum: 1, maximum: 1000 },
       sort: { type: "string", enum: ["updatedAt", "name"] },
@@ -345,6 +352,24 @@ export const userRegisterSchema = {
   },
 } as const;
 
+/** GET /v1/spots（ユーザー向け公開一覧） */
+export const listPublicSpotsSchema = {
+  querystring: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      q: { type: "string" },
+      category: { type: "string", maxLength: 128 },
+      prefecture: { type: "string", maxLength: 64 },
+      area: { type: "string", maxLength: 256 },
+      offset: { type: "integer", minimum: 0 },
+      limit: { type: "integer", minimum: 1, maximum: 100 },
+      sort: { type: "string", enum: ["updatedAt", "name"] },
+      order: { type: "string", enum: ["asc", "desc"] },
+    },
+  },
+} as const;
+
 /** GET /v1/spots/:id */
 export const getSpotByIdSchema = {
   params: idParams,
@@ -397,6 +422,21 @@ const spotIdParams = {
   required: ["spotId"],
   additionalProperties: false,
   properties: { spotId: { type: "string", minLength: 1 } },
+} as const;
+
+/** POST /spots/:id/image（管理画面向け画像アップロード） */
+export const postSpotImageSchema = {
+  params: idParams,
+  querystring: refreshQuerystring,
+  body: {
+    type: "object",
+    required: ["mimeType", "data"],
+    additionalProperties: false,
+    properties: {
+      mimeType: { type: "string", enum: ["image/jpeg", "image/png", "image/webp"] },
+      data: { type: "string", minLength: 1 },
+    },
+  },
 } as const;
 
 /** POST /v1/spots/:spotId/story */

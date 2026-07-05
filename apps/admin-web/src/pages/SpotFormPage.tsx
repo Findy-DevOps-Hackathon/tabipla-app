@@ -4,16 +4,22 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   createSpot,
   deleteSpot,
-  generateSpotDescription,
+  generateSpotContent,
   geocodeAddress,
   getSpot,
   lookupPlaceByName,
   updateSpot,
 } from "../api.ts";
 import { AdminShell } from "../components/layout/AdminShell.tsx";
+import { SpotImageField, uploadPendingSpotImage } from "../components/SpotImageField.tsx";
 import { Button } from "../components/ui/Button.tsx";
 import { Input } from "../components/ui/Input.tsx";
 import { Modal, Toast } from "../components/ui/Modal.tsx";
+import {
+  emptyManualFormDraft,
+  type ManualFormDraft,
+  useSpotAddDraft,
+} from "../context/SpotAddDraftContext.tsx";
 import { extractAreaFromAddress } from "../lib/address.ts";
 import {
   MAX_SPOT_CATEGORIES,
@@ -21,39 +27,31 @@ import {
   SPOT_CATEGORIES,
   type SpotCategory,
 } from "../lib/categories.ts";
-import { formatDateTime, MAX_SPOT_DESCRIPTION_LENGTH, trimSpotDescription } from "../lib/format.ts";
+import {
+  formatDateTime,
+  MAX_SPOT_DESCRIPTION_LENGTH,
+  trimSpotDescription,
+  enforceHighlightsText,
+  formatHighlightsText,
+  parseHighlightsText,
+} from "../lib/format.ts";
 import { getFixedPrefecture, MUNICIPALITY } from "../master/index.ts";
 import type { Spot } from "../types.ts";
 
 const MAX_DESCRIPTION_LENGTH = MAX_SPOT_DESCRIPTION_LENGTH;
 
-type FormState = {
-  id: string;
-  name: string;
-  description: string;
-  categories: string[];
-  address: string;
-  area: string;
-  lat: string;
-  lon: string;
-};
+type FormState = ManualFormDraft;
 
-const emptyForm = (): FormState => ({
-  id: "",
-  name: "",
-  description: "",
-  categories: [],
-  address: "",
-  area: MUNICIPALITY.defaultArea,
-  lat: "",
-  lon: "",
-});
+const emptyForm = emptyManualFormDraft;
 
 export default function SpotFormPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const { manualDraft, setManualDraft, resetManualDraft } = useSpotAddDraft();
+  const [editForm, setEditForm] = useState<FormState>(emptyForm);
+  const form = embedded ? manualDraft : editForm;
+  const setForm = embedded ? setManualDraft : setEditForm;
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -63,8 +61,11 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const [toast, setToast] = useState<string | null>(null);
   const [lookingUpPlace, setLookingUpPlace] = useState(false);
   const [generatingDescription, setGeneratingDescription] = useState(false);
+  const [generatingHighlights, setGeneratingHighlights] = useState(false);
   const [descriptionGenerateMiss, setDescriptionGenerateMiss] = useState(false);
+  const [highlightsGenerateMiss, setHighlightsGenerateMiss] = useState(false);
   const [placeLookupMiss, setPlaceLookupMiss] = useState(false);
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const coordsManualRef = useRef(false);
   const nameLookupSkipRef = useRef(isEdit);
 
@@ -75,10 +76,11 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     getSpot(id)
       .then((spot) => {
         coordsManualRef.current = true;
-        setForm({
+        setEditForm({
           id: spot.id,
           name: spot.name,
           description: spot.description,
+          highlights: formatHighlightsText(spot.highlights ?? []),
           categories: normalizeCategories(spot.category),
           address: spot.address ?? "",
           area:
@@ -87,6 +89,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               MUNICIPALITY.defaultArea),
           lat: spot.location?.lat != null ? String(spot.location.lat) : "",
           lon: spot.location?.lon != null ? String(spot.location.lon) : "",
+          imageUrl: spot.imageUrl,
         });
         setUpdatedAt(spot.updatedAt);
       })
@@ -113,7 +116,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [form.address]);
+  }, [form.address, setForm]);
 
   useEffect(() => {
     const name = form.name.trim();
@@ -164,7 +167,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [form.name]);
+  }, [form.name, setForm]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -177,6 +180,13 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     setField("name", value);
   };
 
+  const spotGenerateParams = () => ({
+    name: form.name.trim(),
+    prefecture: getFixedPrefecture(),
+    municipality: MUNICIPALITY.name,
+    address: form.address.trim() || undefined,
+  });
+
   const handleGenerateDescription = async () => {
     const name = form.name.trim();
     if (name.length < 2) {
@@ -188,17 +198,12 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     setDescriptionGenerateMiss(false);
     setErrors((prev) => ({ ...prev, description: undefined }));
 
-    const described = await generateSpotDescription({
-      name,
-      prefecture: getFixedPrefecture(),
-      municipality: MUNICIPALITY.name,
-      address: form.address.trim() || undefined,
-    });
+    const described = await generateSpotContent(spotGenerateParams(), "description");
 
     if (described?.description) {
       setForm((prev) => ({
         ...prev,
-        description: trimSpotDescription(described.description),
+        description: trimSpotDescription(described.description ?? ""),
         ...(described.category
           ? {
               categories: normalizeCategories([...prev.categories, described.category]),
@@ -210,6 +215,30 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     }
 
     setGeneratingDescription(false);
+  };
+
+  const handleGenerateHighlights = async () => {
+    const name = form.name.trim();
+    if (name.length < 2) {
+      setErrors((prev) => ({ ...prev, name: "観光地名を入力してください" }));
+      return;
+    }
+
+    setGeneratingHighlights(true);
+    setHighlightsGenerateMiss(false);
+
+    const described = await generateSpotContent(spotGenerateParams(), "highlights");
+
+    if (described?.highlights?.length) {
+      setForm((prev) => ({
+        ...prev,
+        highlights: formatHighlightsText(described.highlights ?? []),
+      }));
+    } else {
+      setHighlightsGenerateMiss(true);
+    }
+
+    setGeneratingHighlights(false);
   };
 
   const setAddress = (value: string) => {
@@ -230,6 +259,9 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     else if (form.description.length > MAX_DESCRIPTION_LENGTH) {
       next.description = `${MAX_DESCRIPTION_LENGTH}文字以内で入力してください`;
     }
+    if (isEdit && form.categories.length === 0) {
+      next.categories = "1件以上選択してください";
+    }
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -237,6 +269,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const buildSpot = (): Spot => {
     const address = form.address.trim();
     const area = form.area.trim() || MUNICIPALITY.defaultArea;
+    const highlights = parseHighlightsText(form.highlights);
 
     return {
       id: isEdit ? form.id.trim() : crypto.randomUUID(),
@@ -247,6 +280,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
       ...(address ? { address } : {}),
       ...(area ? { area } : {}),
       tags: [],
+      ...(highlights.length ? { highlights } : {}),
       ...(form.lat && form.lon
         ? { location: { lat: Number(form.lat), lon: Number(form.lon) } }
         : {}),
@@ -261,7 +295,12 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
         const { id: _id, ...patch } = buildSpot();
         await updateSpot(id, patch);
       } else {
-        await createSpot(buildSpot());
+        const created = await createSpot(buildSpot());
+        if (pendingImageFile) {
+          await uploadPendingSpotImage(created.id, pendingImageFile);
+        }
+        if (embedded) resetManualDraft();
+        setPendingImageFile(null);
       }
       setToast("観光地を保存しました。検索インデックスへ反映中…");
       setTimeout(() => navigate("/spots"), 1200);
@@ -351,7 +390,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 type="text"
                 value={form.name}
                 onChange={(e) => setSpotName(e.target.value)}
-                placeholder="例: 懐古園"
+                placeholder="例: 道の駅 〇〇"
                 className={`h-11 rounded-lg border px-3 text-sm outline-none transition focus:ring-2 focus:ring-[#2563eb]/30 ${
                   errors.name
                     ? "border-[#dc2626] bg-white"
@@ -364,21 +403,36 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               label="住所"
               value={form.address}
               onChange={setAddress}
-              placeholder="例: 長野県小諸市中央1丁目"
+              placeholder="例: 国道沿い1丁目"
               className="lg:col-span-2"
             />
+            <SpotImageField
+              spotId={isEdit ? id : undefined}
+              imageUrl={form.imageUrl}
+              pendingFile={pendingImageFile}
+              onImageUrlChange={(imageUrl) => setField("imageUrl", imageUrl)}
+              onPendingFileChange={setPendingImageFile}
+              disabled={saving}
+            />
             <div className="lg:col-span-2">
-              <div className="mb-2 flex flex-wrap items-center gap-4">
+              <div className="mb-2 flex flex-wrap items-end gap-4">
                 <label htmlFor="spot-description" className="text-sm font-medium text-[#0f172a]">
                   紹介文
                 </label>
+                {!errors.description && (
+                  <p className="mt-2 text-xs text-[#64748b]">
+                    {descriptionGenerateMiss
+                      ? "紹介文を自動生成できませんでした。手動で入力するか、もう一度お試しください。"
+                      : `${form.description.length}/${MAX_DESCRIPTION_LENGTH}文字`}
+                  </p>
+                )}
                 <button
                   type="button"
-                  className="cursor-pointer rounded-full px-3 py-1.5 text-xs text-[#475569] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={generatingDescription || form.name.trim().length < 2}
                   onClick={() => void handleGenerateDescription()}
                 >
-                  {generatingDescription ? "作成中…" : "AIで自動作成する"}
+                  {generatingDescription ? "作成中…" : "AIで作成"}
                 </button>
               </div>
               <textarea
@@ -386,7 +440,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 value={form.description}
                 rows={6}
                 maxLength={MAX_DESCRIPTION_LENGTH}
-                placeholder="例: 小諸城址の公園。紅葉の名所として知られ、春には桜、秋には紅葉が楽しめます。"
+                placeholder="例: 地元の特産品や食堂が楽しめる道の駅。旅の休憩・お土産選びに便利です。"
                 onChange={(e) => {
                   setDescriptionGenerateMiss(false);
                   setField("description", e.target.value);
@@ -395,22 +449,49 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                   errors.description ? "border-[#dc2626]" : "border-[#e2e8f0]"
                 }`}
               />
-              {!errors.description && (
-                <p className="mt-2 text-xs text-[#64748b]">
-                  {descriptionGenerateMiss
-                    ? "紹介文を自動生成できませんでした。手動で入力するか、もう一度お試しください。"
-                    : `最大 ${MAX_DESCRIPTION_LENGTH} 文字（${form.description.length}/${MAX_DESCRIPTION_LENGTH}）`}
-                </p>
-              )}
               {errors.description && (
                 <p className="mt-2 text-xs text-[#dc2626]">{errors.description}</p>
               )}
             </div>
             <div className="lg:col-span-2">
+              <div className="mb-2 flex flex-wrap items-end gap-4">
+                <label htmlFor="spot-highlights" className="text-sm font-medium text-[#0f172a]">
+                  おすすめポイント
+                </label>
+
+                <span className="text-xs text-[#64748b]">
+                  {highlightsGenerateMiss
+                    ? "おすすめポイントを自動生成できませんでした。手動で入力するか、もう一度お試しください。"
+                    : "1行1件（最大3件・各30文字）"}
+                </span>
+                <button
+                  type="button"
+                  className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={generatingHighlights || form.name.trim().length < 2}
+                  onClick={() => void handleGenerateHighlights()}
+                >
+                  {generatingHighlights ? "作成中…" : "AIで作成"}
+                </button>
+              </div>
+              <textarea
+                id="spot-highlights"
+                value={form.highlights}
+                rows={4}
+                placeholder={
+                  "例: 地元野菜の直売所が充実している\n例: 名物メニューの食堂が人気\n例: 展望デッキの景色がきれい"
+                }
+                onChange={(e) => {
+                  setHighlightsGenerateMiss(false);
+                  setField("highlights", enforceHighlightsText(e.target.value));
+                }}
+                className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30"
+              />
+            </div>
+            <div className="lg:col-span-2">
               <p className="mb-3 text-sm font-medium text-[#0f172a]">
                 カテゴリ{" "}
                 <span className="text-xs text-[#64748b]">
-                  （複数選択可・最大 {MAX_SPOT_CATEGORIES} 件）
+                  複数選択可・最大 {MAX_SPOT_CATEGORIES} 件
                 </span>
               </p>
               <div className="flex flex-wrap gap-2">
@@ -435,12 +516,19 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                   );
                 })}
               </div>
+              {errors.categories && (
+                <p className="mt-2 text-xs text-[#dc2626]">{errors.categories}</p>
+              )}
             </div>
           </div>
 
           <div className="mt-8 flex items-center justify-between pt-6">
             {isEdit ? (
-              <Button variant="danger" onClick={() => setShowDelete(true)}>
+              <Button
+                type="button"
+                className="bg-transparent text-[#dc2626]! border border-[#dc2626]! hover:bg-transparent! hover:opacity-50"
+                onClick={() => setShowDelete(true)}
+              >
                 削除
               </Button>
             ) : (

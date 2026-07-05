@@ -4,6 +4,20 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "tabipla-backend-api",
+          "region": "asia-northeast1"
+        }
+      },
+      {
+        "source": "/agent/**",
+        "run": {
+          "serviceId": "tabipla-agent",
+          "region": "asia-northeast1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

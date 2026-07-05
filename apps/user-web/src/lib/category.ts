@@ -11,6 +11,9 @@ const CATEGORY_BADGE: Record<string, string> = {
   宿泊: "bg-[#ede9fe] text-[#6d28d9]",
   自然: "bg-[#d1fae5] text-[#047857]",
   歴史: "bg-[#fef3c7] text-[#b45309]",
+  食: "bg-[#fef3c7] text-[#b45309]",
+  "歴史・文化": "bg-[#fef3c7] text-[#b45309]",
+  ショッピング: "bg-[#ffe4e6] text-[#be123c]",
 };
 
 const CATEGORY_BADGE_DEFAULT = "bg-[#f1f5f9] text-[#475569]";

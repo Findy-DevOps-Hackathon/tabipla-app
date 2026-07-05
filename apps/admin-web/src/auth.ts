@@ -1,11 +1,5 @@
 const AUTH_TOKEN_KEY = "tabipla-admin-token";
 
-export type AuthUser = {
-  id: string;
-  email: string;
-  municipalityName?: string;
-};
-
 export function getAuthToken(): string | null {
   return localStorage.getItem(AUTH_TOKEN_KEY);
 }
@@ -21,5 +15,3 @@ export function setAuthSession(token: string): void {
 export function logout(): void {
   localStorage.removeItem(AUTH_TOKEN_KEY);
 }
-
-export const DEMO_USER_EMAIL = "admin@example.com";

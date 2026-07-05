@@ -3,6 +3,9 @@ import type { FastifyInstance } from "fastify";
 const DEFAULT_ORIGINS = [
   "https://tabipla-admin-web.web.app",
   "https://tabipla-admin-web.firebaseapp.com",
+  "https://tabipla-user-web.web.app",
+  "https://tabipla-user-web.firebaseapp.com",
+  "http://localhost:5173",
   "http://localhost:5174",
 ];
 
@@ -13,7 +16,7 @@ function getAllowedOrigins(): Set<string> {
   return new Set(fromEnv?.length ? fromEnv : DEFAULT_ORIGINS);
 }
 
-/** 管理画面（Firebase Hosting）からのクロスオリジン API 呼び出しを許可する。 */
+/** Firebase Hosting（admin / user）からのクロスオリジン API 呼び出しを許可する。 */
 export function registerCors(app: FastifyInstance): void {
   const allowed = getAllowedOrigins();
 

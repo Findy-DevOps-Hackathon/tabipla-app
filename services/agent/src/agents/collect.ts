@@ -8,17 +8,30 @@ import { SPOT_CATEGORIES } from "../categories.js";
 // そのためツールは GOOGLE_SEARCH のみ・JSON出力はプロンプト指示 + zodバリデーションで担保する。
 
 // モデルは name/description 以外のフィールドを取りこぼすことがある（特に件数が多いと後半で
-// price/sources 等が欠落しやすい）。欠落で収集全体を失敗させないよう、非必須項目には
+// tags/sources 等が欠落しやすい）。欠落で収集全体を失敗させないよう、非必須項目には
 // デフォルトを与える。必須は name/description のみ。
 const DESCRIPTION_MAX = 200;
+const HIGHLIGHT_MAX = 30;
+const HIGHLIGHT_COUNT = 3;
 
-function sanitizeSpot(spot: CollectedSpot): CollectedSpot {
-  const description = spot.description
+function sanitizeText(text: string, max: number): string {
+  return text
     .replace(/https?:\/\/\S+/g, "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, DESCRIPTION_MAX);
-  return { ...spot, description };
+    .slice(0, max);
+}
+
+function sanitizeHighlights(items: string[]): string[] {
+  return items
+    .map((item) => sanitizeText(item, HIGHLIGHT_MAX))
+    .filter(Boolean)
+    .slice(0, HIGHLIGHT_COUNT);
+}
+
+function sanitizeSpot(spot: CollectedSpot): CollectedSpot {
+  const description = sanitizeText(spot.description, DESCRIPTION_MAX);
+  return { ...spot, description, highlights: sanitizeHighlights(spot.highlights) };
 }
 
 const spotSchema = z.object({
@@ -29,7 +42,7 @@ const spotSchema = z.object({
   prefecture: z.string().default(""),
   address: z.string().default(""),
   tags: z.array(z.string()).default([]),
-  price: z.number().nullable().default(null),
+  highlights: z.array(z.string()).default([]),
   sources: z.array(z.string()).default([]),
 });
 
@@ -65,6 +78,7 @@ export const collectAgent = new LlmAgent({
 各スポットは以下のフィールドを持つ:
 - name: スポット名（正式名称）
 - description: 100〜200字の説明文。元の文章をそのままコピーせず、要約・再構成すること。
+- highlights: おすすめポイント3件の文字列配列。各15〜30字。description と重複せず、見どころ・ベストシーズン・楽しみ方など具体的な事実に限定する。
 
 【description（紹介文）の書き方】
 - 複数の情報源を突き合わせ、共通して確認できる事実だけで構成する。
@@ -75,12 +89,12 @@ export const collectAgent = new LlmAgent({
 - 書く内容の優先順位: ①それが何か（城跡・滝など） ②具体的な特徴（規模・歴史・見られるもの）
   ③楽しみ方や季節の情報（紅葉の時期など）。
 - 文体は「です・ます」調で統一。
+- highlights（おすすめポイント）: 必ず3件。宣伝的なキャッチコピーは禁止。URLは含めない。
 - category: 次のいずれか1つだけを付与する — ${SPOT_CATEGORIES.map((c) => `"${c}"`).join(" | ")}
 - area: 市区町村名
 - prefecture: 都道府県名
 - address: できるだけ正確な住所。不明なら "{都道府県}{市区町村名}" のみ
 - tags: 特徴を表すタグ（3〜5個）例: ["紅葉","城址","公園"]
-- price: 参考価格（円）。無料なら0、不明ならnull
 - sources: 情報を得たソースのサイト名（URLではなく「じゃらん」「小諸市公式HP」のような名称）
 
 【自治体スコープ（最重要）】
@@ -106,7 +120,7 @@ export const collectAgent = new LlmAgent({
 
 【出力形式】
 前置き・説明・コードフェンスは一切書かず、次の形のJSONだけを出力する:
-{"spots":[{"name":"...","description":"...","category":"自然","area":"...","prefecture":"...","address":"...","tags":["..."],"price":0,"sources":["..."]}]}`,
+{"spots":[{"name":"...","description":"...","highlights":["...","...","..."],"category":"自然","area":"...","prefecture":"...","address":"...","tags":["..."],"sources":["..."]}]}`,
   tools: [GOOGLE_SEARCH],
   generateContentConfig: {
     thinkingConfig: { thinkingBudget: 1024 },

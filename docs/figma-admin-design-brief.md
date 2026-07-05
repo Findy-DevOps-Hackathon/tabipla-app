@@ -209,9 +209,7 @@ tabipla 管理
 | カテゴリ | セレクト | — | 観光 / グルメ / 宿泊 / 自然 / 歴史 |
 | 都道府県 | セレクト or テキスト | — | 例: 長野県 |
 | エリア | テキスト | — | 例: 小諸市 |
-| 住所 | テキスト | — | 地図ピン連動を想定した幅広入力 |
-| 緯度 / 経度 | 数値 2 フィールド | — | 地図プレビュー枠（プレースホルダ地図）を横に配置 |
-| 参考価格（円） | 数値 | — | 0 以上の整数。未入力 = 無料扱いのヘルプ |
+| 住所 | テキスト | — | Places lookup / geocode による自動補完を想定 |
 | タグ | タグ入力（チップ UI） | — | Enter で追加、× で削除。max 50 |
 
 **フッターアクション**
@@ -240,10 +238,9 @@ tabipla 管理
 
 1. ヘッダー: スポット名 + 編集ボタン
 2. 基本情報（2 カラム定義リスト）
-3. 地図プレビュー
-4. タグ一覧
-5. メタ: 作成日 / 更新日 / 同期状態
-6. （Should）蘊蓄プレビュー: 「AI が生成する蘊蓄の元データ（facts）が N 件登録されています」
+3. タグ一覧
+4. メタ: 作成日 / 更新日 / 同期状態
+5. （Should）蘊蓄プレビュー: 「AI が生成する蘊蓄の元データ（facts）が N 件登録されています」
 
 ---
 
@@ -261,7 +258,7 @@ tabipla 管理
 
 - ドラッグ & ドロップエリア（点線枠）
 - 「CSV テンプレートをダウンロード」リンク
-- 対応形式の説明（UTF-8、必須列: id, name, description）
+- 対応形式の説明（UTF-8、列順: name, category, area, prefecture, address, description, highlights。必須: name, description / highlights はセミコロン区切り最大3件・各30文字以内）
 
 **Step 2 — プレビュー**
 
@@ -417,8 +414,8 @@ Sample data: 懐古園, 高峰高原, 停車場ガーデン (Komoro city tourism
 
 ```
 Design spot create/edit form with fields: id, name, description (textarea),
-category select, prefecture, area, address, lat/lon with map placeholder,
-price, tag chips input. Footer: Cancel, Save. Include validation error and delete confirmation modal.
+category select, prefecture, area, address, tag chips input.
+Footer: Cancel, Save. Include validation error and delete confirmation modal.
 ```
 
 ### Prompt 5 — 一括取り込み
@@ -466,8 +463,7 @@ result summary. Japanese copy. Match existing admin shell.
   "prefecture": "長野県",
   "address": "長野県小諸市中央1丁目",
   "tags": ["紅葉", "城址", "公園"],
-  "location": { "lat": 36.325, "lon": 138.425 },
-  "price": 0
+  "location": { "lat": 36.325, "lon": 138.425 }
 }
 ```
 
