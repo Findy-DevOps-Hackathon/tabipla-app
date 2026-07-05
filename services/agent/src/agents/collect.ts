@@ -8,7 +8,7 @@ import { SPOT_CATEGORIES } from "../categories.js";
 // そのためツールは GOOGLE_SEARCH のみ・JSON出力はプロンプト指示 + zodバリデーションで担保する。
 
 // モデルは name/description 以外のフィールドを取りこぼすことがある（特に件数が多いと後半で
-// price/sources 等が欠落しやすい）。欠落で収集全体を失敗させないよう、非必須項目には
+// tags/sources 等が欠落しやすい）。欠落で収集全体を失敗させないよう、非必須項目には
 // デフォルトを与える。必須は name/description のみ。
 const DESCRIPTION_MAX = 200;
 const HIGHLIGHT_MAX = 80;
@@ -43,7 +43,6 @@ const spotSchema = z.object({
   address: z.string().default(""),
   tags: z.array(z.string()).default([]),
   highlights: z.array(z.string()).default([]),
-  price: z.number().nullable().default(null),
   sources: z.array(z.string()).default([]),
 });
 
@@ -96,7 +95,6 @@ export const collectAgent = new LlmAgent({
 - prefecture: 都道府県名
 - address: できるだけ正確な住所。不明なら "{都道府県}{市区町村名}" のみ
 - tags: 特徴を表すタグ（3〜5個）例: ["紅葉","城址","公園"]
-- price: 参考価格（円）。無料なら0、不明ならnull
 - sources: 情報を得たソースのサイト名（URLではなく「じゃらん」「小諸市公式HP」のような名称）
 
 【自治体スコープ（最重要）】
@@ -122,7 +120,7 @@ export const collectAgent = new LlmAgent({
 
 【出力形式】
 前置き・説明・コードフェンスは一切書かず、次の形のJSONだけを出力する:
-{"spots":[{"name":"...","description":"...","highlights":["...","...","..."],"category":"自然","area":"...","prefecture":"...","address":"...","tags":["..."],"price":0,"sources":["..."]}]}`,
+{"spots":[{"name":"...","description":"...","highlights":["...","...","..."],"category":"自然","area":"...","prefecture":"...","address":"...","tags":["..."],"sources":["..."]}]}`,
   tools: [GOOGLE_SEARCH],
   generateContentConfig: {
     thinkingConfig: { thinkingBudget: 1024 },

@@ -1,9 +1,13 @@
 import { Loader2, Pencil } from "lucide-react";
-import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { bulkImportSpots, geocodeAddress, listSpots, lookupPlaceByName } from "../api.ts";
-import { AdminShell } from "../components/layout/AdminShell.tsx";
+import {
+  bulkImportSpots,
+  collectSpots,
+  geocodeAddress,
+  listSpots,
+  lookupPlaceByName,
+} from "../api.ts";
 import { Button } from "../components/ui/Button.tsx";
 import { Modal, Toast } from "../components/ui/Modal.tsx";
 import {
@@ -17,9 +21,6 @@ import { MAX_SPOT_DESCRIPTION_LENGTH, trimSpotDescription } from "../lib/format.
 import { MUNICIPALITY, type Prefecture } from "../master/index.ts";
 
 type CollectedSpot = CollectedSpotDraft;
-
-// vite の dev proxy
-const AGENT_URL = "/agent";
 
 /** チェックボックス + 観光地名 + カテゴリ + 住所 + 紹介文 + おすすめポイント + 操作 */
 const COLLECT_TABLE_GRID_COLS =
@@ -75,7 +76,7 @@ async function enrichCollectedSpot(
   };
 }
 
-export default function CollectPage({ embedded = false }: { embedded?: boolean } = {}) {
+export default function CollectPage() {
   const navigate = useNavigate();
   const { collectDraft, setCollectDraft, resetCollectDraft } = useSpotAddDraft();
   const { selectedCategories, targetCount, step, spots, categoryFilter, result } = collectDraft;
@@ -174,25 +175,14 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
     patchCollect({ step: "collecting" });
     try {
       const excludeNames = await fetchExistingNames(municipality);
-      const res = await fetch(`${AGENT_URL}/v1/collect-spots`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          municipality,
-          prefecture,
-          targetCount,
-          categories: selectedCategories,
-          excludeNames,
-        }),
+      const collected = await collectSpots({
+        municipality,
+        prefecture,
+        targetCount,
+        categories: selectedCategories,
+        excludeNames,
       });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? `HTTP ${res.status}`);
-      }
-      const data = (await res.json()) as {
-        spots: Omit<CollectedSpot, "selected">[];
-      };
-      if (data.spots.length === 0) {
+      if (collected.length === 0) {
         setToast(
           excludeNames.length > 0
             ? "新しい観光地は見つかりませんでした（登録済みの観光地は除外されます）"
@@ -203,7 +193,7 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
       }
       // 収集直後に Places lookup で住所・座標を補完する（登録時にそのまま使う）。
       const withLocation = await Promise.all(
-        data.spots.map((s) => enrichCollectedSpot(s, prefecture, municipality)),
+        collected.map((s) => enrichCollectedSpot(s, prefecture, municipality)),
       );
       setSpots(withLocation);
       patchCollect({ categoryFilter: null, step: "preview" });
@@ -252,13 +242,10 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
     }
   };
 
-  const wrap = (children: ReactNode) =>
-    embedded ? children : <AdminShell title="観光地収集">{children}</AdminShell>;
-
   const pageShell = "px-8";
   const cardShell = "flex flex-col gap-5";
 
-  return wrap(
+  return (
     <>
       {step === "input" && (
         <div className={pageShell}>
@@ -591,7 +578,7 @@ export default function CollectPage({ embedded = false }: { embedded?: boolean }
           </Button>
         </div>
       </Modal>
-    </>,
+    </>
   );
 }
 

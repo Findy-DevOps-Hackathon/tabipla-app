@@ -16,7 +16,6 @@ export type CollectedSpotDraft = {
   prefecture: string;
   address: string;
   tags: string[];
-  sources: string[];
   location?: { lat: number; lon: number };
   selected: boolean;
 };
@@ -94,7 +93,6 @@ type SpotAddDraftContextValue = {
   resetCollectDraft: () => void;
   importDraft: ImportDraft;
   setImportDraft: React.Dispatch<React.SetStateAction<ImportDraft>>;
-  resetImportDraft: () => void;
 };
 
 const SpotAddDraftContext = createContext<SpotAddDraftContextValue | null>(null);
@@ -107,7 +105,6 @@ export function SpotAddDraftProvider({ children }: { children: ReactNode }) {
 
   const resetManualDraft = useCallback(() => setManualDraft(emptyManualFormDraft()), []);
   const resetCollectDraft = useCallback(() => setCollectDraft(initialCollectDraft()), []);
-  const resetImportDraft = useCallback(() => setImportDraft(initialImportDraft()), []);
 
   const value = useMemo(
     () => ({
@@ -121,7 +118,6 @@ export function SpotAddDraftProvider({ children }: { children: ReactNode }) {
       resetCollectDraft,
       importDraft,
       setImportDraft,
-      resetImportDraft,
     }),
     [
       lastTab,
@@ -130,7 +126,6 @@ export function SpotAddDraftProvider({ children }: { children: ReactNode }) {
       importDraft,
       resetManualDraft,
       resetCollectDraft,
-      resetImportDraft,
     ],
   );
 

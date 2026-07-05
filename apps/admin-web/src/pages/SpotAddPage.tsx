@@ -46,10 +46,10 @@ export default function SpotAddPage() {
         <SpotFormPage embedded />
       </div>
       <div hidden={tab !== "collect"}>
-        <CollectPage embedded />
+        <CollectPage />
       </div>
       <div hidden={tab !== "import"}>
-        <BulkImportPage embedded />
+        <BulkImportPage />
       </div>
     </AdminShell>
   );

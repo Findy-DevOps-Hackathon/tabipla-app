@@ -1,5 +1,5 @@
 import { getAuthToken, logout } from "./auth.ts";
-import { API_BASE } from "./config.ts";
+import { AGENT_BASE, API_BASE } from "./config.ts";
 import type { BulkImportResponse, Spot, SpotListResponse } from "./types.ts";
 
 const BASE = API_BASE;
@@ -112,13 +112,39 @@ export async function bulkImportSpots(spots: Spot[]): Promise<BulkImportResponse
   });
 }
 
-export async function checkHealth(): Promise<boolean> {
-  try {
-    const res = await fetch(`${BASE}/health`);
-    return res.ok;
-  } catch {
-    return false;
+export type CollectedSpotPayload = {
+  name: string;
+  description: string;
+  highlights: string[];
+  category: string;
+  area: string;
+  prefecture: string;
+  address: string;
+  tags: string[];
+};
+
+export type CollectSpotsParams = {
+  municipality: string;
+  prefecture: string;
+  targetCount: number;
+  categories: string[];
+  excludeNames: string[];
+};
+
+/** AI 収集: 指定自治体の観光地を agent 経由で Web から収集する。 */
+export async function collectSpots(params: CollectSpotsParams): Promise<CollectedSpotPayload[]> {
+  const res = await fetch(`${AGENT_BASE}/v1/collect-spots`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const body = (await res.json().catch(() => null)) as
+    | { spots?: CollectedSpotPayload[]; error?: string }
+    | null;
+  if (!res.ok || !body || "error" in body) {
+    throw new Error(body && "error" in body && body.error ? body.error : `HTTP ${res.status}`);
   }
+  return body.spots ?? [];
 }
 
 export type PlaceLookupResult = {
@@ -160,8 +186,6 @@ export async function geocodeAddress(
   }
 }
 
-const AGENT_URL = "/agent";
-
 export type DescribeSpotMode = "description" | "highlights";
 
 export type DescribeSpotResult = {
@@ -184,7 +208,7 @@ export async function generateSpotContent(
   if (!name) return null;
 
   try {
-    const res = await fetch(`${AGENT_URL}/v1/describe-spot`, {
+    const res = await fetch(`${AGENT_BASE}/v1/describe-spot`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
