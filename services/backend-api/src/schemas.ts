@@ -44,7 +44,7 @@ const spotOptionalProps = {
   },
   highlights: {
     type: "array",
-    items: { type: "string", minLength: 1, maxLength: 80 },
+    items: { type: "string", minLength: 1, maxLength: 30 },
     maxItems: 5,
   },
   location: geoPointSchema,

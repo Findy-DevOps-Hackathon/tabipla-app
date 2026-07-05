@@ -258,7 +258,7 @@ tabipla 管理
 
 - ドラッグ & ドロップエリア（点線枠）
 - 「CSV テンプレートをダウンロード」リンク
-- 対応形式の説明（UTF-8、列順: name, category, area, prefecture, address, description, highlights。必須: name, description / highlights はセミコロン区切り最大3件）
+- 対応形式の説明（UTF-8、列順: name, category, area, prefecture, address, description, highlights。必須: name, description / highlights はセミコロン区切り最大3件・各30文字以内）
 
 **Step 2 — プレビュー**
 

@@ -17,7 +17,13 @@ import {
 } from "../context/SpotAddDraftContext.tsx";
 import { extractAreaFromAddress } from "../lib/address.ts";
 import { getCategoryStyle, SPOT_CATEGORIES, type SpotCategory } from "../lib/categories.ts";
-import { MAX_SPOT_DESCRIPTION_LENGTH, trimSpotDescription } from "../lib/format.ts";
+import {
+  MAX_SPOT_DESCRIPTION_LENGTH,
+  MAX_SPOT_HIGHLIGHT_LENGTH,
+  MAX_SPOT_HIGHLIGHT_COUNT,
+  normalizeHighlights,
+  trimSpotDescription,
+} from "../lib/format.ts";
 import { MUNICIPALITY, type Prefecture } from "../master/index.ts";
 
 type CollectedSpot = CollectedSpotDraft;
@@ -55,7 +61,7 @@ async function enrichCollectedSpot(
     return {
       ...spot,
       description,
-      highlights: spot.highlights ?? [],
+      highlights: normalizeHighlights(spot.highlights ?? []),
       address,
       area,
       selected: true,
@@ -70,7 +76,7 @@ async function enrichCollectedSpot(
   return {
     ...spot,
     description,
-    highlights: spot.highlights ?? [],
+    highlights: normalizeHighlights(spot.highlights ?? []),
     selected: true,
     location: location ?? undefined,
   };
@@ -226,7 +232,7 @@ export default function CollectPage() {
         id: crypto.randomUUID(),
         name: s.name,
         description: trimSpotDescription(s.description),
-        ...(s.highlights.length ? { highlights: s.highlights } : {}),
+        ...(s.highlights.length ? { highlights: normalizeHighlights(s.highlights) } : {}),
         category: [s.category],
         area: s.area,
         prefecture: s.prefecture,
@@ -403,7 +409,7 @@ export default function CollectPage() {
                           type="text"
                           value={spot.name}
                           onChange={(e) => updateSpot(index, { name: e.target.value })}
-                          placeholder="観光地名"
+                          placeholder="例: 道の駅 〇〇"
                           className="min-w-[200px] flex-1 rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm font-medium"
                         />
                         <select
@@ -422,7 +428,7 @@ export default function CollectPage() {
                         type="text"
                         value={spot.address}
                         onChange={(e) => updateSpot(index, { address: e.target.value })}
-                        placeholder="住所"
+                        placeholder="例: 国道沿い1丁目"
                         className="mt-2 w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm"
                       />
                       <div>
@@ -433,7 +439,7 @@ export default function CollectPage() {
                               description: e.target.value.slice(0, MAX_SPOT_DESCRIPTION_LENGTH),
                             })
                           }
-                          placeholder="紹介文"
+                          placeholder="例: 地元の特産品や食堂が楽しめる道の駅。旅の休憩・お土産選びに便利です。"
                           rows={3}
                           maxLength={MAX_SPOT_DESCRIPTION_LENGTH}
                           className="mt-2 w-full resize-y rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm leading-relaxed"
@@ -448,14 +454,12 @@ export default function CollectPage() {
                           value={spot.highlights.join("\n")}
                           onChange={(e) =>
                             updateSpot(index, {
-                              highlights: e.target.value
-                                .split("\n")
-                                .map((line) => line.trim())
-                                .filter(Boolean)
-                                .slice(0, 3),
+                              highlights: normalizeHighlights(
+                                e.target.value.split("\n").map((line) => line.trim()).filter(Boolean),
+                              ),
                             })
                           }
-                          placeholder={"おすすめポイント（1行1件・最大3件）"}
+                          placeholder={`例: 地元野菜の直売所が充実している（1行1件・最大${MAX_SPOT_HIGHLIGHT_COUNT}件・各${MAX_SPOT_HIGHLIGHT_LENGTH}文字）`}
                           rows={3}
                           className="mt-2 w-full resize-y rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm leading-relaxed"
                         />

@@ -26,7 +26,12 @@ import {
   SPOT_CATEGORIES,
   type SpotCategory,
 } from "../lib/categories.ts";
-import { formatDateTime, MAX_SPOT_DESCRIPTION_LENGTH, trimSpotDescription } from "../lib/format.ts";
+import {
+  formatDateTime,
+  MAX_SPOT_DESCRIPTION_LENGTH,
+  normalizeHighlights,
+  trimSpotDescription,
+} from "../lib/format.ts";
 import { getFixedPrefecture, MUNICIPALITY } from "../master/index.ts";
 import type { Spot } from "../types.ts";
 
@@ -67,7 +72,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     getSpot(id)
       .then((spot) => {
         coordsManualRef.current = true;
-        setForm({
+        setEditForm({
           id: spot.id,
           name: spot.name,
           description: spot.description,
@@ -106,7 +111,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [form.address]);
+  }, [form.address, setForm]);
 
   useEffect(() => {
     const name = form.name.trim();
@@ -157,7 +162,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [form.name]);
+  }, [form.name, setForm]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -222,7 +227,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     if (described?.highlights?.length) {
       setForm((prev) => ({
         ...prev,
-        highlights: described.highlights?.join("\n") ?? "",
+        highlights: normalizeHighlights(described.highlights ?? []).join("\n"),
       }));
     } else {
       setHighlightsGenerateMiss(true);
@@ -256,10 +261,12 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const buildSpot = (): Spot => {
     const address = form.address.trim();
     const area = form.area.trim() || MUNICIPALITY.defaultArea;
-    const highlights = form.highlights
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
+    const highlights = normalizeHighlights(
+      form.highlights
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+    );
 
     return {
       id: isEdit ? form.id.trim() : crypto.randomUUID(),
@@ -376,7 +383,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 type="text"
                 value={form.name}
                 onChange={(e) => setSpotName(e.target.value)}
-                placeholder="例: 懐古園"
+                placeholder="例: 道の駅 〇〇"
                 className={`h-11 rounded-lg border px-3 text-sm outline-none transition focus:ring-2 focus:ring-[#2563eb]/30 ${
                   errors.name
                     ? "border-[#dc2626] bg-white"
@@ -389,7 +396,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               label="住所"
               value={form.address}
               onChange={setAddress}
-              placeholder="例: 長野県小諸市中央1丁目"
+              placeholder="例: 国道沿い1丁目"
               className="lg:col-span-2"
             />
             <div className="lg:col-span-2">
@@ -418,7 +425,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 value={form.description}
                 rows={6}
                 maxLength={MAX_DESCRIPTION_LENGTH}
-                placeholder="例: 小諸城址の公園。紅葉の名所として知られ、春には桜、秋には紅葉が楽しめます。"
+                placeholder="例: 地元の特産品や食堂が楽しめる道の駅。旅の休憩・お土産選びに便利です。"
                 onChange={(e) => {
                   setDescriptionGenerateMiss(false);
                   setField("description", e.target.value);
@@ -437,7 +444,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                   おすすめポイント
                 </label>
 
-                <span className="text-xs text-[#64748b]">1行1件（最大3件）</span>
+                <span className="text-xs text-[#64748b]">1行1件（最大3件・各30文字）</span>
                 <button
                   type="button"
                   className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
@@ -452,7 +459,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 value={form.highlights}
                 rows={4}
                 placeholder={
-                  "例: 小諸城址の石垣と三の門が見どころ\n例: 秋の紅葉シーズンは特に人気\n例: 千曲川を望む展望スポットあり"
+                  "例: 地元野菜の直売所が充実している\n例: 名物メニューの食堂が人気\n例: 展望デッキの景色がきれい"
                 }
                 onChange={(e) => {
                   setHighlightsGenerateMiss(false);
@@ -460,11 +467,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 }}
                 className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30"
               />
-              <p className="mt-2 text-xs text-[#64748b]">
-                {highlightsGenerateMiss
-                  ? "おすすめポイントを自動生成できませんでした。手動で入力するか、もう一度お試しください。"
-                  : "訪問者向けの見どころ・楽しみ方を1行1件で入力"}
-              </p>
             </div>
             <div className="lg:col-span-2">
               <p className="mb-3 text-sm font-medium text-[#0f172a]">
@@ -500,7 +502,11 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
 
           <div className="mt-8 flex items-center justify-between pt-6">
             {isEdit ? (
-              <Button variant="danger" onClick={() => setShowDelete(true)}>
+              <Button
+                type="button"
+                className="bg-transparent text-[#dc2626]! border border-[#dc2626]! hover:bg-transparent! hover:opacity-50"
+                onClick={() => setShowDelete(true)}
+              >
                 削除
               </Button>
             ) : (

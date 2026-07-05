@@ -11,7 +11,7 @@ import { SPOT_CATEGORIES } from "../categories.js";
 // tags/sources 等が欠落しやすい）。欠落で収集全体を失敗させないよう、非必須項目には
 // デフォルトを与える。必須は name/description のみ。
 const DESCRIPTION_MAX = 200;
-const HIGHLIGHT_MAX = 80;
+const HIGHLIGHT_MAX = 30;
 const HIGHLIGHT_COUNT = 3;
 
 function sanitizeText(text: string, max: number): string {
@@ -78,7 +78,7 @@ export const collectAgent = new LlmAgent({
 各スポットは以下のフィールドを持つ:
 - name: スポット名（正式名称）
 - description: 100〜200字の説明文。元の文章をそのままコピーせず、要約・再構成すること。
-- highlights: おすすめポイント3件の文字列配列。各15〜60字。description と重複せず、見どころ・ベストシーズン・楽しみ方など具体的な事実に限定する。
+- highlights: おすすめポイント3件の文字列配列。各15〜30字。description と重複せず、見どころ・ベストシーズン・楽しみ方など具体的な事実に限定する。
 
 【description（紹介文）の書き方】
 - 複数の情報源を突き合わせ、共通して確認できる事実だけで構成する。

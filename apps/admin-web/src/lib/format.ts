@@ -1,13 +1,26 @@
-import { getFixedPrefecture } from "../master/index.ts";
+import { getFixedPrefecture, MUNICIPALITY } from "../master/index.ts";
 import { extractAreaFromAddress } from "./address.ts";
 import { formatCategories } from "./categories.ts";
 
 export const MAX_SPOT_DESCRIPTION_LENGTH = 200;
-const HIGHLIGHT_MAX = 80;
-const HIGHLIGHT_COUNT = 3;
+export const MAX_SPOT_HIGHLIGHT_LENGTH = 30;
+export const MAX_SPOT_HIGHLIGHT_COUNT = 3;
 
 export function trimSpotDescription(text: string): string {
   return text.trim().slice(0, MAX_SPOT_DESCRIPTION_LENGTH);
+}
+
+/** おすすめポイント1件を正規化（空白除去・30字上限）。 */
+export function trimSpotHighlight(text: string): string {
+  return text.trim().slice(0, MAX_SPOT_HIGHLIGHT_LENGTH);
+}
+
+/** おすすめポイント配列を正規化（最大3件・各30字）。 */
+export function normalizeHighlights(items: string[]): string[] {
+  return items
+    .map(trimSpotHighlight)
+    .filter(Boolean)
+    .slice(0, MAX_SPOT_HIGHLIGHT_COUNT);
 }
 
 export function formatDateTime(iso?: string): string {
@@ -21,20 +34,12 @@ export function formatDateTime(iso?: string): string {
 /** おすすめポイント配列を CSV 用のセミコロン区切り文字列へ。 */
 export function formatHighlights(value?: string[]): string {
   if (!value?.length) return "";
-  return value
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, HIGHLIGHT_COUNT)
-    .join(";");
+  return normalizeHighlights(value).join(";");
 }
 
 /** CSV のセミコロン区切り文字列をおすすめポイント配列へ。 */
 export function parseHighlights(value: string): string[] {
-  return value
-    .split(";")
-    .map((s) => s.trim().slice(0, HIGHLIGHT_MAX))
-    .filter(Boolean)
-    .slice(0, HIGHLIGHT_COUNT);
+  return normalizeHighlights(value.split(";"));
 }
 
 export function spotToCsvRow(spot: {
@@ -69,7 +74,7 @@ export const CSV_HEADER = "name,category,area,prefecture,address,description,hig
 export function buildCsvTemplate(prefecture: string = getFixedPrefecture()): string {
   return [
     CSV_HEADER,
-    `"懐古園","歴史・文化;自然","小諸市","${prefecture}","長野県小諸市中央1丁目","小諸城址の公園。紅葉の名所として知られ、春には桜、秋には紅葉が楽しめます。","小諸城址と三の門が見どころ;秋の紅葉シーズンは特に人気;千曲川を望む展望スポットあり"`,
+    `"道の駅 〇〇","ショッピング;食","${MUNICIPALITY.defaultArea}","${prefecture}","${prefecture}${MUNICIPALITY.defaultArea}国道沿い1","地元の特産品や食堂が楽しめる道の駅。旅の休憩・お土産選びに便利です。","地元野菜の直売所が充実している;名物メニューの食堂が人気;展望デッキの景色がきれい"`,
   ].join("\n");
 }
 

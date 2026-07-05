@@ -4,7 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { bulkImportSpots } from "../api.ts";
 import { Button } from "../components/ui/Button.tsx";
 import { Toast } from "../components/ui/Modal.tsx";
-import { type ImportDraft, type ImportRowDraft, useSpotAddDraft } from "../context/SpotAddDraftContext.tsx";
+import {
+  type ImportDraft,
+  type ImportRowDraft,
+  useSpotAddDraft,
+} from "../context/SpotAddDraftContext.tsx";
 import { extractAreaFromAddress } from "../lib/address.ts";
 import { isSpotCategory, parseCategories, SPOT_CATEGORIES } from "../lib/categories.ts";
 import { parseCsvLine, stripBom } from "../lib/csv.ts";
@@ -145,13 +149,7 @@ export default function BulkImportPage() {
               <p className="font-medium text-[#0f172a]">
                 ファイルをドラッグ＆ドロップ、またはクリックして選択
               </p>
-              <p className="mt-2 text-sm text-[#64748b]">
-                UTF-8 CSV（必須: name, description / 任意: category, area, prefecture, address,
-                highlights）
-              </p>
-              <p className="mt-1 text-xs text-[#64748b]">
-                highlights（おすすめポイント）はセミコロン区切り（最大3件）
-              </p>
+              <p className="mt-2 text-sm text-[#64748b]">UTF-8 CSV</p>
               <input
                 type="file"
                 accept=".csv,text/csv"

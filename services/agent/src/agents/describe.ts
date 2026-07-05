@@ -3,7 +3,7 @@ import { z } from "zod";
 import { SPOT_CATEGORIES } from "../categories.js";
 
 const DESCRIPTION_MAX = 200;
-const HIGHLIGHT_MAX = 80;
+const HIGHLIGHT_MAX = 30;
 const HIGHLIGHT_COUNT = 3;
 
 export const describeResultSchema = z.object({
@@ -55,7 +55,7 @@ export const describeAgent = new LlmAgent({
 - 次のいずれか1つ。判断できなければ null — ${SPOT_CATEGORIES.map((c) => `"${c}"`).join(" | ")} | null
 
 【highlights（おすすめポイント）】
-- 必ず3件の文字列配列。各15〜60字。
+- 必ず3件の文字列配列。各15〜30字。
 - 紹介文と重複しない、訪問者が「ここが見どころ」「こう楽しむ」と分かる具体的なポイントにする。
 - 例: 見どころ・ベストシーズン・楽しみ方・周辺との組み合わせなど、検索で確認できる事実に限定。
 - 宣伝的なキャッチコピーは禁止。URLは含めない。
