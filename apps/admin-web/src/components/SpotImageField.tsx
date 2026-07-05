@@ -154,11 +154,12 @@ export function SpotImageField({
         ) : deleting ? (
           <>
             {previewUrl && (
-              <img
-                src={previewUrl}
-                alt=""
-                className="absolute inset-0 size-full object-cover opacity-40"
-              />
+            <img
+              src={previewUrl}
+              alt=""
+              className="absolute inset-0 size-full object-cover opacity-40"
+              decoding="async"
+            />
             )}
             <Loader2 className="relative z-10 size-10 animate-spin text-[#2563eb]" aria-hidden />
             <p className="relative z-10 mt-4 font-medium text-[#0f172a]">削除中…</p>
@@ -169,6 +170,8 @@ export function SpotImageField({
               src={previewUrl}
               alt="スポット画像プレビュー"
               className="absolute inset-0 size-full object-cover"
+              decoding="async"
+              fetchPriority="high"
             />
             <div
               className={`absolute inset-0 z-10 flex flex-col items-center justify-center px-4 text-center transition ${

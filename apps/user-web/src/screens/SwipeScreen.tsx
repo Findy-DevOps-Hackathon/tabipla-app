@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SpotImage } from "../components/SpotImage.tsx";
 import { UndoIcon } from "../components/icons.tsx";
 import type { SwipeSpot } from "../data/spots.ts";
 import { spotPreviewText } from "../lib/spotMapper.ts";
@@ -84,11 +85,12 @@ function ComparisonCard({
       } ${showWiggle ? (position === "top" ? "animate-compare-hint-top" : "animate-compare-hint-bottom") : ""}`}
     >
       <div className="relative h-[230px] w-full">
-        <img
+        <SpotImage
           src={spot.image}
           alt=""
           draggable={false}
           className="pointer-events-none absolute inset-0 size-full object-cover"
+          priority
         />
         <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/10 from-30% to-black/80" />
         <span className="absolute left-3 top-3 inline-block rounded-md bg-slate-600/90 px-2.5 py-1 text-[12px] font-bold text-white">

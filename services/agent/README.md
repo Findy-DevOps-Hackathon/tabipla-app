@@ -66,7 +66,7 @@ docker build -f services/agent/Dockerfile -t tabipla-agent .
 docker run --rm -p 8080:8080 \
   -e GOOGLE_GENAI_USE_VERTEXAI=TRUE \
   -e GOOGLE_CLOUD_PROJECT=your-project \
-  -e GOOGLE_CLOUD_LOCATION=us-central1 \
+  -e GOOGLE_CLOUD_LOCATION=asia-northeast1 \
   tabipla-agent
 ```
 

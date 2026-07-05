@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import { SpotImage } from "../components/SpotImage.tsx";
 import { CardsIcon, ChevronRightIcon, MapPinIcon } from "../components/icons.tsx";
 import { RECOMMENDATIONS_PAGE_SIZE, type Recommendation } from "../data/spots.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
@@ -192,10 +193,12 @@ export function RecommendationsScreen({
                       aria-label={`${rec.name} の詳細を見る`}
                       className="absolute inset-0 w-full text-left transition"
                     >
-                      <img
+                      <SpotImage
                         src={rec.image}
                         alt={rec.name}
                         className="absolute inset-0 size-full object-cover"
+                        priority={index < 4}
+                        lazy={index >= 4}
                       />
                       <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/20 to-transparent" />
                       <span className="absolute top-1.5 left-1.5 inline-block rounded-md bg-slate-600/90 px-1.5 py-0.5 text-[10px] font-extrabold text-white">
@@ -272,10 +275,12 @@ export function RecommendationsScreen({
                       aria-label={`${rec.name} の詳細を見る`}
                       className="absolute inset-0 w-full text-left transition"
                     >
-                      <img
+                      <SpotImage
                         src={rec.image}
                         alt={rec.name}
                         className="absolute inset-0 size-full object-cover"
+                        priority={index < 4}
+                        lazy={index >= 4}
                       />
                       <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/20 to-transparent" />
                       <span className="absolute top-1.5 left-1.5 inline-block rounded-md bg-slate-600/90 px-1.5 py-0.5 text-[10px] font-extrabold text-white">

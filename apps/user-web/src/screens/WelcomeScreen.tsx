@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { SpotImage } from "../components/SpotImage.tsx";
+import { preloadImage } from "../lib/preloadImage.ts";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
 import { ChevronRightIcon, MapPinIcon } from "../components/icons.tsx";
 import { RECOMMENDATIONS, type Recommendation } from "../data/spots.ts";
@@ -28,14 +30,24 @@ function FeaturedCard({
   spot,
   className,
   onClick,
+  priority = false,
+  lazy = false,
 }: {
   spot: Recommendation;
   className?: string;
   onClick?: () => void;
+  priority?: boolean;
+  lazy?: boolean;
 }) {
   const inner = (
     <>
-      <img src={spot.image} alt={spot.name} className="absolute inset-0 size-full object-cover" />
+      <SpotImage
+        src={spot.image}
+        alt={spot.name}
+        className="absolute inset-0 size-full object-cover"
+        priority={priority}
+        lazy={lazy}
+      />
       <div className="absolute inset-0 bg-linear-to-t from-black/75 via-black/15 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-3">
         <p className="flex items-center gap-1 text-[10px] font-medium text-white/85">
@@ -125,6 +137,14 @@ export function WelcomeScreen({
       ? featuredSpots[leavingIndex]
       : undefined;
 
+  useEffect(() => {
+    if (!featured?.image) return;
+    preloadImage(featured.image);
+    if (featuredSpots.length <= 1) return;
+    const next = featuredSpots[(featuredIndex + 1) % featuredSpots.length];
+    if (next?.image) preloadImage(next.image);
+  }, [featured?.image, featuredIndex, featuredSpots]);
+
   return (
     <div className="relative flex h-screen flex-col overflow-hidden bg-(--page)">
       <GridBackdrop />
@@ -151,6 +171,7 @@ export function WelcomeScreen({
                   key={`leave-${leaving.id}`}
                   spot={leaving}
                   className="animate-card-leave"
+                  lazy
                 />
               )}
               <FeaturedCard
@@ -158,6 +179,7 @@ export function WelcomeScreen({
                 spot={featured}
                 onClick={() => onOpenSpot(featured)}
                 className="animate-card-enter"
+                priority
               />
             </div>
           </div>

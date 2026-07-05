@@ -1,7 +1,7 @@
 /**
  * backend-api のベース URL。
  * - 開発: `/api`（Vite が backend-api へプロキシ）
- * - 本番: `.env.production` の `VITE_API_BASE` に Cloud Run URL を設定
+ * - 本番: 未設定のまま `/api`（Firebase Hosting rewrite。Cloud Run と同一 GCP プロジェクトが必要）
  */
 export const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 

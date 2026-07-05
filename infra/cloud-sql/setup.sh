@@ -11,7 +11,7 @@ if [[ -z "$PROJECT" || "$PROJECT" == "(unset)" ]]; then
   exit 1
 fi
 
-REGION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
+REGION="${GOOGLE_CLOUD_LOCATION:-asia-northeast1}"
 INSTANCE="${CLOUD_SQL_INSTANCE_NAME:-tabipla-db}"
 DB_NAME="${CLOUD_SQL_DB_NAME:-tabipla}"
 DB_USER="${CLOUD_SQL_DB_USER:-tabipla}"

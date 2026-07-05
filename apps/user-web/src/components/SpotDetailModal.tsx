@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { SpotImage } from "./SpotImage.tsx";
 import { type Recommendation } from "../data/spots.ts";
 import { copyToClipboard } from "../lib/clipboard.ts";
 import { buildSpotShareUrl } from "../lib/spotLink.ts";
@@ -157,10 +158,11 @@ export function SpotDetailModal({
           className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
         >
           <div className="relative aspect-16/11 w-full shrink-0">
-            <img
+            <SpotImage
               src={rec.image}
               alt={rec.name}
               className="absolute inset-0 size-full object-cover"
+              priority
             />
             <div className="absolute inset-0 bg-linear-to-t from-black/75 via-black/15 to-black/20" />
 
@@ -286,6 +288,8 @@ export function SpotDetailModal({
                             src={m.image}
                             alt="添付画像"
                             className="max-h-40 w-full rounded-lg object-cover"
+                            loading="lazy"
+                            decoding="async"
                           />
                         )}
                         {m.text && <span>{m.text}</span>}

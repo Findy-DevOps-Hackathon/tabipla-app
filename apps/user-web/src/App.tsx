@@ -22,6 +22,7 @@ import {
   refreshRecommendationImages,
   resolveSpotById,
 } from "./lib/spotCatalog.ts";
+import { preloadImages } from "./lib/preloadImage.ts";
 import {
   readSpotIdFromLocation,
   setSpotIdInLocation,
@@ -184,6 +185,7 @@ export default function App() {
       }
       setExploreSpots(exploreSpots);
       setRecommendations((prev) => refreshRecommendationImages(prev, docs));
+      preloadImages(exploreSpots.slice(0, 3).map((s) => s.image));
     });
     return () => {
       active = false;

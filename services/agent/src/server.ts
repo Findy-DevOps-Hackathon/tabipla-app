@@ -23,6 +23,15 @@ app.use("*", async (c, next) => {
   return toolCallStorage.run({ count: 0 }, next);
 });
 
+/** Firebase Hosting /agent/** プロキシ: プレフィックスを除去して既存ルートに合わせる。 */
+app.use("*", async (c, next) => {
+  const path = c.req.path;
+  if (!path.startsWith("/agent/")) return next();
+  const url = new URL(c.req.url);
+  url.pathname = path.slice("/agent".length) || "/";
+  return app.fetch(new Request(url, c.req.raw));
+});
+
 // admin-web(5174) からのクロスオリジン呼び出しを許可（ローカル開発用）
 app.use("/v1/*", cors());
 

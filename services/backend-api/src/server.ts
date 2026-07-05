@@ -29,6 +29,7 @@ import {
   vectorSearch,
 } from "@tabipla/search-core";
 import Fastify, { type FastifyInstance } from "fastify";
+import { normalizeApiPath, registerApiMirrorRoutes } from "./apiPrefix.js";
 import { extractBearerToken, isAdminApiPath, issueAdminToken, verifyAdminToken } from "./auth.js";
 import { registerCors } from "./cors.js";
 import { buildSpotEmbedText, embedText } from "./embedding.js";
@@ -37,7 +38,12 @@ import { geocodeAddressQuery } from "./geocode.js";
 import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./mapper.js";
 import { lookupPlaceByName } from "./places.js";
 import { enrichRecommendation, toAgentCatalogSpot } from "./spotCatalog.js";
-import { deleteSpotImageFiles, readSpotImageFile, saveSpotImage } from "./spotImages.js";
+import {
+  deleteSpotImageFiles,
+  readSpotImageFile,
+  saveSpotImage,
+  spotImageLegacyRedirectUrl,
+} from "./spotImages.js";
 
 /** user-web 向け公開 API の既定エリア（現状は小諸市のみ）。 */
 const PUBLIC_SPOT_PREFECTURE = "長野県";
@@ -149,10 +155,16 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     },
   });
   registerCors(app);
+  registerApiMirrorRoutes(app);
   const client = options.client ?? createElasticsearchClient();
 
   // ---- スポット画像の公開配信（認証不要） ------------------------------------
   app.get<{ Params: { filename: string } }>("/uploads/spots/:filename", async (req, reply) => {
+    const redirectUrl = spotImageLegacyRedirectUrl(req.params.filename);
+    if (redirectUrl) {
+      return reply.redirect(redirectUrl, 301);
+    }
+
     const file = await readSpotImageFile(req.params.filename);
     if (!file) {
       return reply.code(404).send({ error: "画像が見つかりません" });
@@ -186,7 +198,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   });
 
   app.addHook("onRequest", async (req, reply) => {
-    if (!isAdminApiPath(req.url)) return;
+    if (!isAdminApiPath(normalizeApiPath(req.url))) return;
 
     const token = extractBearerToken(req.headers.authorization);
     if (!token || !verifyAdminToken(token)) {

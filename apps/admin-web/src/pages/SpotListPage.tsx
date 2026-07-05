@@ -382,6 +382,7 @@ function SpotListThumbnail({ spot }: { spot: Spot }) {
         alt=""
         className="absolute inset-0 size-full object-cover"
         loading="lazy"
+        decoding="async"
       />
     </div>
   );

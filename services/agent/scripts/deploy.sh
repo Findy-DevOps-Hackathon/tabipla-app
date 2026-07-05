@@ -11,14 +11,15 @@ if [[ -z "$PROJECT" || "$PROJECT" == "(unset)" ]]; then
   exit 1
 fi
 
-REGION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
+REGION="${GOOGLE_CLOUD_LOCATION:-asia-northeast1}"
 SERVICE="${CLOUD_RUN_SERVICE:-tabipla-agent}"
 USE_MOCK="${USE_MOCK:-1}"
 IMAGE="gcr.io/${PROJECT}/${SERVICE}"
 
-echo "Building ${IMAGE} with Cloud Build..."
+echo "Building ${IMAGE} with Cloud Build (${REGION})..."
 gcloud builds submit "$ROOT" \
   --project="$PROJECT" \
+  --region="$REGION" \
   --config=services/agent/cloudbuild.yaml \
   --substitutions=_IMAGE="${IMAGE}"
 
