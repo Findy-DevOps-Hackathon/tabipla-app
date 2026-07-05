@@ -375,15 +375,22 @@ export default function SpotListPage() {
 }
 
 function SpotListThumbnail({ spot }: { spot: Spot }) {
+  const src = resolveSpotImageSrc(spot);
   return (
     <div className="relative aspect-16/11 w-14 shrink-0 overflow-hidden rounded-md border border-[#e2e8f0] bg-[#f1f5f9]">
-      <img
-        src={resolveSpotImageSrc(spot)}
-        alt=""
-        className="absolute inset-0 size-full object-cover"
-        loading="lazy"
-        decoding="async"
-      />
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          className="absolute inset-0 size-full object-cover"
+          loading="lazy"
+          decoding="async"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center text-[10px] text-[#94a3b8]">
+          未設定
+        </div>
+      )}
     </div>
   );
 }

@@ -257,10 +257,20 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     setImageGenerateMiss(false);
 
     try {
+      const description = form.description.trim();
+      const highlights = parseHighlightsText(form.highlights);
+      if (description.length < 20 && !highlights.some((item) => item.length >= 5)) {
+        setErrors((prev) => ({
+          ...prev,
+          description: "参考イラストを生成する前に、紹介文またはおすすめポイントを入力してください。",
+        }));
+        return;
+      }
+
       const image = await generateSpotImage({
         ...spotGenerateParams(),
-        description: form.description.trim() || undefined,
-        highlights: parseHighlightsText(form.highlights),
+        description: description || undefined,
+        highlights,
         category: form.categories,
       });
       const file = spotImageResultToFile(image, name);
@@ -272,8 +282,11 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
       } else {
         setPendingImageFile(file);
       }
-    } catch {
+    } catch (e) {
       setImageGenerateMiss(true);
+      if (e instanceof Error && e.message) {
+        setErrors((prev) => ({ ...prev, description: e.message }));
+      }
     } finally {
       setGeneratingImage(false);
     }

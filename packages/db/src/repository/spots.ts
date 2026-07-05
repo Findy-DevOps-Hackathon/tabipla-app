@@ -22,6 +22,7 @@ export async function upsertSpot(db: Database, input: NewSpotRow): Promise<SpotR
     .onConflictDoUpdate({
       target: spots.id,
       set: {
+        municipalityId: sql`excluded.municipality_id`,
         name: sql`excluded.name`,
         description: sql`excluded.description`,
         category: sql`excluded.category`,
@@ -59,6 +60,7 @@ export async function upsertSpots(db: Database, inputs: NewSpotRow[]): Promise<S
     .onConflictDoUpdate({
       target: spots.id,
       set: {
+        municipalityId: sql`excluded.municipality_id`,
         name: sql`excluded.name`,
         description: sql`excluded.description`,
         category: sql`excluded.category`,
