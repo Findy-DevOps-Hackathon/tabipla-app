@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "clean": "rm -rf dist",
-    "deploy": "pnpm build && firebase deploy --only hosting"
+    "deploy": "bash scripts/deploy.sh"
   },
   "engines": {
     "node": ">=22"

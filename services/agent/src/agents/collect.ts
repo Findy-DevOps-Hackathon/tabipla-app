@@ -129,18 +129,22 @@ export const collectAgent = new LlmAgent({
 });
 
 /**
- * モデル出力からJSONを取り出してバリデーションする（コードフェンスや前置きに耐性を持たせる）。
- *
- * スポットは1件ずつ検証し、必須項目（name/description）を満たすものだけ採用する。
- * 一部のスポットがフィールド欠落で不正でも、収集結果全体を失敗させない。
+ * モデル出力から JSON オブジェクト文字列を取り出す（コードフェンス・前置きに耐性）。
  */
-export function parseCollectResult(text: string): CollectResult {
+function extractJsonObject(text: string): string | null {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    const inner = fenced[1].trim();
+    if (inner.startsWith("{")) return inner;
+  }
+
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error(`エージェント出力にJSONが見つかりません: ${text.slice(0, 200)}`);
-  }
-  const parsed = JSON.parse(text.slice(start, end + 1)) as { spots?: unknown[] };
+  if (start === -1 || end <= start) return null;
+  return text.slice(start, end + 1);
+}
+
+function normalizeCollectResult(parsed: { spots?: unknown[] }): CollectResult {
   const rawSpots = Array.isArray(parsed?.spots) ? parsed.spots : [];
   const spots: CollectedSpot[] = [];
   for (const raw of rawSpots) {
@@ -150,4 +154,76 @@ export function parseCollectResult(text: string): CollectResult {
     }
   }
   return { spots };
+}
+
+/**
+ * モデル出力からJSONを取り出してバリデーションする（コードフェンスや前置きに耐性を持たせる）。
+ *
+ * スポットは1件ずつ検証し、必須項目（name/description）を満たすものだけ採用する。
+ * 一部のスポットがフィールド欠落で不正でも、収集結果全体を失敗させない。
+ */
+export function parseCollectResult(text: string): CollectResult {
+  const jsonText = extractJsonObject(text);
+  if (!jsonText) {
+    throw new Error(`エージェント出力にJSONが見つかりません: ${text.slice(0, 200)}`);
+  }
+  let parsed: { spots?: unknown[] };
+  try {
+    parsed = JSON.parse(jsonText) as { spots?: unknown[] };
+  } catch {
+    throw new Error(`JSONの解析に失敗しました: ${text.slice(0, 200)}`);
+  }
+  return normalizeCollectResult(parsed);
+}
+
+/** Markdown 等の非JSON出力を構造化 JSON に変換する（google_search 非使用）。 */
+export const collectFormatAgent = new LlmAgent({
+  name: "collect_format_agent",
+  model: "gemini-2.5-flash",
+  description: "観光地テキストを構造化JSONに変換する",
+  instruction: `あなたは観光データの整形エージェントです。
+入力テキスト（Markdown・説明文を含む場合あり）から、実際に言及されている観光スポットだけを spots 配列に変換します。
+
+【ルール】
+- 入力に明示されていないスポットは追加しない（創作禁止）
+- 各スポット: name, description(100〜200字), highlights(3件・各15〜30字), category, area, prefecture, address, tags, sources
+- category は次のいずれか1つ — ${SPOT_CATEGORIES.map((c) => `"${c}"`).join(" | ")}
+- 入力にスポットが見つからない場合は {"spots":[]}
+- 指定スキーマのJSONのみ出力する`,
+  outputSchema: collectResultSchema,
+  generateContentConfig: {
+    thinkingConfig: { thinkingBudget: 0 },
+    maxOutputTokens: 16384,
+  },
+});
+
+/** parseCollectResult 失敗時に format agent で Markdown 等から復旧を試みる。 */
+export async function resolveCollectResult(
+  rawText: string,
+  context: { prefecture: string; municipality: string },
+  runAgent: (agent: LlmAgent, prompt: string) => Promise<{ final: string; errMsg: string }>,
+): Promise<CollectResult> {
+  try {
+    return parseCollectResult(rawText);
+  } catch (firstErr) {
+    const formatPrompt = `【都道府県】${context.prefecture}
+【市区町村】${context.municipality}
+
+以下のテキストから、${context.prefecture}${context.municipality}内の観光スポットだけを抽出してJSON化してください。
+テキストにないスポットは絶対に追加しないでください。
+
+--- 入力テキスト ---
+${rawText.slice(0, 14000)}`;
+
+    const { final, errMsg } = await runAgent(collectFormatAgent, formatPrompt);
+    if (!final) {
+      throw firstErr instanceof Error ? firstErr : new Error(String(firstErr));
+    }
+
+    try {
+      return normalizeCollectResult(JSON.parse(final) as { spots?: unknown[] });
+    } catch {
+      return parseCollectResult(final);
+    }
+  }
 }

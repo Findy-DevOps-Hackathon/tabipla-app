@@ -2,7 +2,7 @@ import { InMemoryRunner, stringifyContent, type LlmAgent } from "@google/adk";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { collectAgent, COLLECT_CATEGORIES, parseCollectResult } from "./agents/collect.js";
+import { collectAgent, COLLECT_CATEGORIES, resolveCollectResult } from "./agents/collect.js";
 import { describeAgent, describeSpot, type DescribeMode } from "./agents/describe.js";
 import { analyzeFeedback } from "./agents/feedback.js";
 import { askIntroduce } from "./agents/introduce.js";
@@ -348,13 +348,19 @@ ${categoryList}
 選択されたカテゴリ全体からバランスよく収集し、該当しないカテゴリのスポットは無理に含めないこと。`;
 
     const prompt = `${prefecture}${municipality}の観光地を${targetCount}件を目標に収集してください。
-${focusBlock}${excludeBlock}`;
+${focusBlock}${excludeBlock}
+
+【出力の再確認】Markdown・見出し・箇条書き・説明文は禁止。{"spots":[{"name":"...","description":"...","highlights":["...","...","..."],"category":"自然","area":"...","prefecture":"...","address":"...","tags":["..."],"sources":["..."]}]} 形式のJSONだけを出力すること。`;
+
+    const JSON_RETRY_SUFFIX =
+      "\n\n【再指示】前回はMarkdownで返したため失敗しました。JSON以外は一切書かず、{\"spots\":[...]} だけを出力してください。";
 
     const MAX_ATTEMPTS = 3;
     let final = "";
     let errMsg = "";
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const res = await runAgentOnce(collectAgent, prompt);
+      const attemptPrompt = attempt === 1 ? prompt : `${prompt}${JSON_RETRY_SUFFIX}`;
+      const res = await runAgentOnce(collectAgent, attemptPrompt);
       final = res.final;
       errMsg = res.errMsg;
       if (final) break;
@@ -372,7 +378,7 @@ ${focusBlock}${excludeBlock}`;
       return c.json({ error: message }, 500);
     }
 
-    const result = parseCollectResult(final);
+    const result = await resolveCollectResult(final, { prefecture, municipality }, runAgentOnce);
     const excludeSet = new Set(excludeNames.map(normalizeSpotName));
     const spots = result.spots.filter((s) => !excludeSet.has(normalizeSpotName(s.name)));
     return c.json({
