@@ -2,8 +2,8 @@
   "exportedAt": "2026-07-06T10:24:57.709Z",
   "sourceDatabaseUrl": "postgresql://tabipla:***@localhost:5432/tabipla",
   "counts": {
-    "municipalities": 1,
-    "adminUsers": 1,
+    "municipalities": 11,
+    "adminUsers": 2,
     "spots": 24,
     "coupons": 0,
     "unchikuFacts": 0,

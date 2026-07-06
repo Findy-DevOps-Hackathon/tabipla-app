@@ -2,14 +2,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
-import { API_BASE, DESTINATION_AREA, DESTINATION_PREFECTURE } from "./config.ts";
+import { API_BASE } from "./config.ts";
+import { getAllSupportedDestinations, resolveTripDestinations } from "./data/places.ts";
 import { AI_GUIDE_LOADING_TEXT, formatAiGuideAnswer, isAiGuideLoadingMessage } from "./lib/aiGuide.ts";
-import { isDestinationSpot } from "./lib/destination.ts";
 import {
+  formatDestinationLabel,
+  getCurrentDestination,
+  getCurrentDestinations,
+  isDestinationSpot,
+  setCurrentDestinations,
+} from "./lib/destination.ts";
+import {
+  EXPLORE_SPOTS,
   type Recommendation,
   type SwipeSpot,
   SWIPE_LIMIT,
   SWIPE_LIMIT_REFINE,
+  SWIPE_SPOTS,
+  SWIPE_SPOTS_REFINE,
 } from "./data/spots.ts";
 import {
   isDetailedDiagnosisComplete,
@@ -23,6 +33,7 @@ import {
   refreshRecommendationImages,
   resolveSpotById,
 } from "./lib/spotCatalog.ts";
+import { documentToRecommendation } from "./lib/spotMapper.ts";
 import { preloadImages } from "./lib/preloadImage.ts";
 import {
   readSpotIdFromLocation,
@@ -56,12 +67,14 @@ type PlanApiRecommendation = {
   memberOnly?: boolean;
   image?: string;
   imageUrl?: string;
+  address?: string;
 };
 
 type PersonalizedPlanResponse = {
   error?: string;
   recommendations?: PlanApiRecommendation[];
   profileSummary?: string;
+  result?: string;
   debate?: { agent: string; thought?: string; message: string }[];
 };
 
@@ -101,7 +114,7 @@ function readStoredRecommendations(): Recommendation[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return (parsed as Recommendation[]).filter(isDestinationSpot);
+    return (parsed as Recommendation[]).filter((rec) => isDestinationSpot(rec));
   } catch {
     return [];
   }
@@ -153,6 +166,7 @@ export default function App() {
   const [catalog, setCatalog] = useState<SwipeSpot[]>([]);
   const [refineCatalog, setRefineCatalog] = useState<SwipeSpot[]>([]);
   const [exploreSpots, setExploreSpots] = useState<Recommendation[]>([]);
+  const [homeFeaturedSpots, setHomeFeaturedSpots] = useState<Recommendation[]>(EXPLORE_SPOTS);
   const [swipeDeck, setSwipeDeck] = useState<SwipeSpot[]>([]);
   const [refining, setRefining] = useState(false);
   const [diagnosisComplete, setDiagnosisComplete] = useState(isDiagnosisComplete);
@@ -164,6 +178,7 @@ export default function App() {
     readStoredRecommendations,
   );
   const [profileSummary, setProfileSummary] = useState(readStoredProfileSummary);
+  const [planMessage, setPlanMessage] = useState("");
   const [isFetchDone, setIsFetchDone] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [chatThreads, setChatThreads] = useState<
@@ -178,16 +193,26 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    void loadSpotCatalogBundle(30).then(({ docs, swipeSpots, exploreSpots }) => {
-      if (!active) return;
-      if (swipeSpots.length > 0) {
-        setCatalog(swipeSpots);
-        setRefineCatalog(swipeSpots);
-      }
-      setExploreSpots(exploreSpots);
-      setRecommendations((prev) => refreshRecommendationImages(prev, docs));
-      preloadImages(exploreSpots.slice(0, 3).map((s) => s.image));
-    });
+    void loadSpotCatalogBundle(30, getAllSupportedDestinations()).then(
+      ({ docs, swipeSpots, exploreSpots: loadedExploreSpots }) => {
+        if (!active) return;
+
+        const featured = loadedExploreSpots.length > 0 ? loadedExploreSpots : EXPLORE_SPOTS;
+        setHomeFeaturedSpots(featured);
+        setExploreSpots(featured);
+
+        if (swipeSpots.length > 0) {
+          setCatalog(swipeSpots);
+          setRefineCatalog(swipeSpots);
+        } else {
+          setCatalog(SWIPE_SPOTS);
+          setRefineCatalog([...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE]);
+        }
+
+        setRecommendations((prev) => refreshRecommendationImages(prev, docs));
+        preloadImages(featured.slice(0, 3).map((spot) => spot.image));
+      },
+    );
     return () => {
       active = false;
     };
@@ -317,13 +342,18 @@ export default function App() {
     setNopes([]);
     setRecommendations([]);
     setProfileSummary("");
+    setPlanMessage("");
     setRefining(false);
     setRunId((id) => id + 1);
     setStep("swipe");
   }, [catalog]);
 
-  const selectDestination = useCallback((loc: string) => {
-    setLocation(loc);
+  const selectDestination = useCallback((locations: string[]) => {
+    const destinations = resolveTripDestinations(locations);
+    if (destinations.length > 0) {
+      setCurrentDestinations(destinations);
+    }
+    setLocation(locations.join("、"));
     setStep("memory");
   }, []);
 
@@ -373,6 +403,7 @@ export default function App() {
 
     async function fetchPlan() {
       try {
+        const destinations = getCurrentDestinations();
         const res = await fetch(`${API_BASE}/v1/personalized/plan`, {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -381,10 +412,12 @@ export default function App() {
             nopes,
             userId: VISITOR_ID,
             timeBudget: "4時間",
-            origin: "小諸駅",
+            origin:
+              destinations.length === 1 && destinations[0]?.area === "小諸市"
+                ? "小諸駅"
+                : formatDestinationLabel(destinations),
             travelMemory,
-            prefecture: DESTINATION_PREFECTURE,
-            area: DESTINATION_AREA,
+            destinations,
           }),
         });
 
@@ -396,15 +429,26 @@ export default function App() {
         }
 
         const mapped: Recommendation[] = (data.recommendations ?? [])
-          .map((r) => planItemToRecommendation(r))
+          .map((r) => planItemToRecommendation(r, destinations))
           .filter((r): r is Recommendation => r !== null);
 
-        setRecommendations(mapped);
+        const { docs } = await loadSpotCatalogBundle(100, destinations);
+        if (!active) return;
+
+        const primary = destinations[0] ?? getCurrentDestination();
+        const finalRecommendations =
+          mapped.length > 0
+            ? mapped
+            : docs.map((doc) => documentToRecommendation(doc, primary));
+
+        setRecommendations(refreshRecommendationImages(finalRecommendations, docs));
         setProfileSummary(data.profileSummary ?? "");
+        setPlanMessage(data.result ?? "");
         setIsFetchDone(true);
       } catch (e: unknown) {
         if (active) {
           setApiError(getErrorMessage(e, "ネットワークエラーが発生しました。"));
+          setIsFetchDone(true);
         }
       }
     }
@@ -531,8 +575,7 @@ export default function App() {
         <WelcomeScreen
           onStartDiagnosis={beginSwipe}
           onOpenSpot={openSpotDetail}
-          exploreSpots={exploreSpots}
-          recommendations={recommendations}
+          featuredSpots={homeFeaturedSpots}
         />
       )}
 
@@ -581,7 +624,8 @@ export default function App() {
       {step === "recommendations" && (
         <RecommendationsScreen
           recommendations={recommendations}
-          exploreSpots={exploreSpots}
+          exploreSpots={exploreSpots.length > 0 ? exploreSpots : homeFeaturedSpots}
+          destinationArea={formatDestinationLabel(getCurrentDestinations())}
           diagnosisComplete={diagnosisComplete}
           userId={VISITOR_ID}
           onStartDiagnosis={beginSwipe}
@@ -589,6 +633,7 @@ export default function App() {
           onGoHome={() => setStep("welcome")}
           onOpenSpot={openSpotDetail}
           profileSummary={profileSummary}
+          emptyMessage={planMessage}
         />
       )}
 

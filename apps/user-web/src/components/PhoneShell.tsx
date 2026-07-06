@@ -20,7 +20,7 @@ export function PhoneShell({
     <div className="flex min-h-svh justify-center bg-[#e2e8f0]">
       <div
         ref={shellRef}
-        className="relative flex min-h-svh w-full max-w-[500px] flex-col overflow-x-clip bg-(--page) md:rounded-xl sm:shadow-[0_0_60px_rgba(15,23,42,0.18)] sm:ring-1 sm:ring-black/5"
+        className="relative flex min-h-svh w-full max-w-[500px] flex-col overflow-x-clip bg-(--page) sm:shadow-[0_0_60px_rgba(15,23,42,0.18)] sm:ring-1 sm:ring-black/5"
       >
         {children}
       </div>

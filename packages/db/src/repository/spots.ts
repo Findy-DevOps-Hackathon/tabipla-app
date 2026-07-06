@@ -1,5 +1,6 @@
-import { and, arrayContains, asc, desc, eq, gt, ilike, or, sql } from "drizzle-orm";
+import { and, arrayContains, asc, desc, eq, gt, ilike, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "../client.js";
+import { buildDestinationMatchClauses, NOTO_UMBRELLA_AREA } from "../destinationMatching.js";
 import { type NewSpotRow, type SpotRow, spots } from "../schema.js";
 
 /**
@@ -80,11 +81,19 @@ export async function upsertSpots(db: Database, inputs: NewSpotRow[]): Promise<S
 }
 
 /** 管理画面向け一覧クエリのオプション。 */
+export type SpotDestinationFilter = {
+  area: string;
+  prefecture: string;
+};
+
+/** 管理画面向け一覧クエリのオプション。 */
 export type ListSpotsOptions = {
   q?: string;
   category?: string;
   prefecture?: string;
   area?: string;
+  /** 複数エリア（area/prefecture の組）で絞り込む。指定時は prefecture/area は無視。 */
+  destinations?: SpotDestinationFilter[];
   offset?: number;
   limit?: number;
   sort?: "updatedAt" | "name";
@@ -103,6 +112,7 @@ export async function listSpots(
     category,
     prefecture,
     area,
+    destinations,
     offset = 0,
     limit = 20,
     sort = "updatedAt",
@@ -111,8 +121,27 @@ export async function listSpots(
 
   const conditions = [];
   if (category) conditions.push(arrayContains(spots.category, [category]));
-  if (prefecture) conditions.push(eq(spots.prefecture, prefecture));
-  if (area) conditions.push(eq(spots.area, area));
+  if (destinations?.length) {
+    const destinationCondition = or(
+      ...buildDestinationMatchClauses(destinations).map((clause) => {
+        if (clause.legacyPrefectureOnly) {
+          return and(
+            eq(spots.prefecture, clause.prefecture),
+            or(isNull(spots.area), eq(spots.area, ""), eq(spots.area, NOTO_UMBRELLA_AREA)),
+          );
+        }
+        const base = and(eq(spots.area, clause.area), eq(spots.prefecture, clause.prefecture));
+        if (clause.legacyAddressCity) {
+          return and(base, ilike(spots.address, `%${clause.legacyAddressCity}%`));
+        }
+        return base;
+      }),
+    );
+    if (destinationCondition) conditions.push(destinationCondition);
+  } else {
+    if (prefecture) conditions.push(eq(spots.prefecture, prefecture));
+    if (area) conditions.push(eq(spots.area, area));
+  }
   if (q) {
     const pattern = `%${q}%`;
     conditions.push(

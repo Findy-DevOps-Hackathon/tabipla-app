@@ -2,8 +2,12 @@ import { useState } from "react";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
 import { ChevronLeftIcon } from "../components/icons.tsx";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
+import { useAutoResizeTextarea } from "../lib/useAutoResizeTextarea.ts";
 
 const MEMORY_MAX = 200;
+/** 6行相当の初期高さ（text-base × leading 1.6 + p-4） */
+const MEMORY_TEXTAREA_MIN_HEIGHT = 186;
+const MEMORY_TEXTAREA_MAX_HEIGHT = 240;
 
 type MemoryScreenProps = {
   /** 戻る操作。 */
@@ -18,6 +22,10 @@ type MemoryScreenProps = {
  */
 export function MemoryScreen({ onBack, onContinue }: MemoryScreenProps) {
   const [memoryText, setMemoryText] = useState("");
+  const memoryInputRef = useAutoResizeTextarea({
+    minHeight: MEMORY_TEXTAREA_MIN_HEIGHT,
+    maxHeight: MEMORY_TEXTAREA_MAX_HEIGHT,
+  });
 
   const handleContinue = () => {
     onContinue(memoryText);
@@ -37,14 +45,14 @@ export function MemoryScreen({ onBack, onContinue }: MemoryScreenProps) {
           <ChevronLeftIcon className="size-[18px]" />
           <span className="text-[14px]">戻る</span>
         </button>
-        <p className="bg-linear-to-r from-[#23ac73] to-[#0aa19b] bg-clip-text text-[16px] font-extrabold text-transparent">
+        <p className="bg-linear-to-r from-[#23ac73] to-[#0aa19b] bg-clip-text text-[24px] font-extrabold text-transparent">
           tabipla
         </p>
         <div className="w-12" aria-hidden /> {/* バランス用ダミー */}
       </div>
 
       {/* メインコンテンツ */}
-      <div className="relative flex flex-1 flex-col justify-center px-6 gap-6 py-4">
+      <div className="relative flex flex-1 flex-col justify-center px-6 gap-6 py-4 pb-10">
         <div className="flex flex-col gap-2 text-center">
           <h2 className="text-[18px] tracking-wider font-extrabold text-[#0f172a]">
             あなたの求める観光を教えてください
@@ -54,12 +62,13 @@ export function MemoryScreen({ onBack, onContinue }: MemoryScreenProps) {
         {/* 自由記述テキストエリア */}
         <div className="flex flex-col gap-1.5 w-full">
           <textarea
+            ref={memoryInputRef}
             value={memoryText}
             onChange={(e) => setMemoryText(e.target.value.slice(0, MEMORY_MAX))}
             maxLength={MEMORY_MAX}
             placeholder="例）建築を楽しむ旅行や、その土地の文化に触れる旅行がしたい。"
-            rows={6}
-            className="w-full rounded-2xl border border-slate-200 p-4 text-base leading-[1.6] shadow-inner focus:border-teal-600 focus:outline-hidden focus:ring-1 focus:ring-teal-600 bg-white/90 placeholder:text-slate-400"
+            rows={1}
+            className="w-full resize-none overflow-hidden rounded-2xl border border-slate-200 p-4 text-base leading-[1.6] shadow-inner focus:border-teal-600 focus:outline-hidden focus:ring-1 focus:ring-teal-600 bg-white/90 placeholder:text-slate-400"
           />
           <p
             className={`text-[11px] text-right ${memoryText.length >= MEMORY_MAX ? "text-rose-400" : "text-slate-400"}`}
@@ -70,11 +79,11 @@ export function MemoryScreen({ onBack, onContinue }: MemoryScreenProps) {
       </div>
 
       {/* 下部アクションボタンエリア */}
-      <div className="relative flex flex-col gap-4 border-t border-slate-100 bg-white px-6 pb-8 pt-4 shrink-0">
+      <div className="relative flex flex-col gap-4 border-t border-slate-100 px-6 pb-8 pt-4 shrink-0">
         <button
           type="button"
           onClick={handleContinue}
-          className={`${PRIMARY_BUTTON} h-16 tracking-wider w-full text-[15px] font-bold shadow-md hover:bg-teal-700 active:scale-[0.99] transition`}
+          className={`${PRIMARY_BUTTON} h-16 tracking-wider w-full text-[15px] font-bold shadow-lg shadow-teal-500/20  hover:bg-teal-700 active:scale-[0.99] transition`}
         >
           次へ進む
         </button>

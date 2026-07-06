@@ -24,7 +24,7 @@ import {
   type ManualFormDraft,
   useSpotAddDraft,
 } from "../context/SpotAddDraftContext.tsx";
-import { extractAreaFromAddress } from "../lib/address.ts";
+import { extractAreaFromAddress, resolveSpotArea } from "../lib/address.ts";
 import {
   MAX_SPOT_CATEGORIES,
   normalizeCategories,
@@ -39,7 +39,7 @@ import {
   parseHighlightsText,
   trimSpotDescription,
 } from "../lib/format.ts";
-import { getFixedPrefecture, MUNICIPALITY } from "../master/index.ts";
+import { getFixedPrefecture, getMunicipality } from "../master/index.ts";
 import type { Spot } from "../types.ts";
 
 const MAX_DESCRIPTION_LENGTH = MAX_SPOT_DESCRIPTION_LENGTH;
@@ -88,10 +88,11 @@ function appendImageCacheBuster(imageUrl: string): string {
 }
 
 export default function SpotFormPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const municipality = getMunicipality();
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
-  const { manualDraft, setManualDraft, resetManualDraft } = useSpotAddDraft();
+  const { manualDraft, setManualDraft, resetManualDraft, setDataOperationBusy } = useSpotAddDraft();
   const [editForm, setEditForm] = useState<FormState>(emptyForm);
   const form = embedded ? manualDraft : editForm;
   const setForm = embedded ? setManualDraft : setEditForm;
@@ -99,6 +100,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string>();
   const [showDelete, setShowDelete] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
@@ -115,6 +117,14 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const coordsManualRef = useRef(false);
   const nameLookupSkipRef = useRef(isEdit);
+
+  const formBusy = saving || deleting;
+
+  useEffect(() => {
+    if (!embedded) return;
+    setDataOperationBusy(formBusy);
+    return () => setDataOperationBusy(false);
+  }, [embedded, formBusy, setDataOperationBusy]);
 
   useEffect(() => {
     if (!id) return;
@@ -133,7 +143,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
           area:
             spot.area ??
             (extractAreaFromAddress(spot.address ?? "", getFixedPrefecture()) ||
-              MUNICIPALITY.defaultArea),
+              municipality.defaultArea),
           lat: spot.location?.lat != null ? String(spot.location.lat) : "",
           lon: spot.location?.lon != null ? String(spot.location.lon) : "",
           imageUrl: spot.imageUrl,
@@ -144,7 +154,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
       })
       .catch(() => setLoadError("観光地の読み込みに失敗しました"))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, municipality.defaultArea]);
 
   useEffect(() => {
     const address = form.address.trim();
@@ -176,7 +186,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
       setPlaceLookupMiss(false);
       void lookupPlaceByName(name, {
         prefecture: getFixedPrefecture(),
-        municipality: MUNICIPALITY.name,
+        municipality: municipality.name,
       })
         .then((result) => {
           if (nameLookupSkipRef.current) return;
@@ -190,7 +200,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
 
             const address = result.address ?? prev.address;
             const area = address
-              ? extractAreaFromAddress(address, getFixedPrefecture()) || MUNICIPALITY.defaultArea
+              ? extractAreaFromAddress(address, getFixedPrefecture()) || municipality.defaultArea
               : prev.area;
 
             coordsManualRef.current = true;
@@ -216,7 +226,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [form.name, setForm]);
+  }, [form.name, setForm, municipality.name, municipality.defaultArea]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -234,8 +244,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     () => toFormSnapshot(form, pendingImageFile),
     [form, pendingImageFile],
   );
-  const isDirty =
-    baseline !== null && !formSnapshotsEqual(baseline, currentSnapshot);
+  const isDirty = baseline !== null && !formSnapshotsEqual(baseline, currentSnapshot);
 
   const leaveForm = () => {
     if (embedded) {
@@ -246,6 +255,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   };
 
   const handleCancel = () => {
+    if (formBusy) return;
     if (isDirty) {
       setShowDiscardConfirm(true);
       return;
@@ -256,7 +266,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const spotGenerateParams = () => ({
     name: form.name.trim(),
     prefecture: getFixedPrefecture(),
-    municipality: MUNICIPALITY.name,
+    municipality: municipality.name,
     address: form.address.trim() || undefined,
   });
 
@@ -364,7 +374,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     setForm((prev) => ({
       ...prev,
       address: value,
-      area: derivedArea || (value.trim() ? MUNICIPALITY.defaultArea : prev.area),
+      area: derivedArea || (value.trim() ? municipality.defaultArea : prev.area),
     }));
     setErrors((prev) => ({ ...prev, address: undefined }));
   };
@@ -385,7 +395,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
 
   const buildSpot = (): Spot => {
     const address = form.address.trim();
-    const area = form.area.trim() || MUNICIPALITY.defaultArea;
+    const area = resolveSpotArea(form.area, address, getFixedPrefecture(), form.name);
     const highlights = parseHighlightsText(form.highlights);
 
     return {
@@ -430,11 +440,15 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
 
   const handleDelete = async () => {
     if (!id) return;
+    setDeleting(true);
     try {
       await deleteSpot(id);
+      setShowDelete(false);
       navigate("/spots");
     } catch {
       setToast("削除に失敗しました");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -486,6 +500,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
         )}
 
         <div className="mx-auto w-full pb-8">
+          <fieldset disabled={formBusy} className="min-w-0 border-0 p-0">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="lg:col-span-2 flex flex-col gap-2">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -529,7 +544,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               pendingFile={pendingImageFile}
               onImageUrlChange={(imageUrl) => setField("imageUrl", imageUrl)}
               onPendingFileChange={setPendingImageFile}
-              disabled={saving}
+              disabled={formBusy}
               generating={generatingImage}
               onGenerate={() => void handleGenerateImage()}
               generateMiss={imageGenerateMiss}
@@ -549,7 +564,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 <button
                   type="button"
                   className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={generatingDescription || form.name.trim().length < 2}
+                  disabled={formBusy || generatingDescription || form.name.trim().length < 2}
                   onClick={() => void handleGenerateDescription()}
                 >
                   {generatingDescription ? "作成中…" : "AIで作成"}
@@ -587,7 +602,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 <button
                   type="button"
                   className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={generatingHighlights || form.name.trim().length < 2}
+                  disabled={formBusy || generatingHighlights || form.name.trim().length < 2}
                   onClick={() => void handleGenerateHighlights()}
                 >
                   {generatingHighlights ? "作成中…" : "AIで作成"}
@@ -646,6 +661,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
             {isEdit ? (
               <Button
                 type="button"
+                disabled={formBusy}
                 className="bg-transparent text-[#dc2626]! border border-[#dc2626]! hover:bg-transparent! hover:opacity-50"
                 onClick={() => setShowDelete(true)}
               >
@@ -655,28 +671,33 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               <div />
             )}
             <div className="flex gap-3">
-              <Button variant="secondary" onClick={handleCancel}>
+              <Button variant="secondary" disabled={formBusy} onClick={handleCancel}>
                 キャンセル
               </Button>
-              <Button disabled={saving} onClick={() => void handleSave()}>
+              <Button disabled={formBusy} onClick={() => void handleSave()}>
                 {saving ? "保存中…" : "保存して公開"}
               </Button>
             </div>
           </div>
+          </fieldset>
         </div>
       </div>
 
-      <Modal open={showDelete} title="観光地を削除しますか？" onClose={() => setShowDelete(false)}>
+      <Modal
+        open={showDelete}
+        title="観光地を削除しますか？"
+        onClose={() => !formBusy && setShowDelete(false)}
+      >
         <p className="text-sm text-[#475569]">
           「{form.name}
           」を削除すると、旅行者向けアプリからも非表示になります。この操作は取り消せません。
         </p>
         <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => setShowDelete(false)}>
+          <Button variant="secondary" disabled={formBusy} onClick={() => setShowDelete(false)}>
             キャンセル
           </Button>
-          <Button variant="danger" onClick={() => void handleDelete()}>
-            削除する
+          <Button variant="danger" disabled={formBusy} onClick={() => void handleDelete()}>
+            {deleting ? "削除中…" : "削除する"}
           </Button>
         </div>
       </Modal>
@@ -684,16 +705,16 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
       <Modal
         open={showDiscardConfirm}
         title="変更を破棄しますか？"
-        onClose={() => setShowDiscardConfirm(false)}
+        onClose={() => !formBusy && setShowDiscardConfirm(false)}
       >
         <p className="text-sm text-[#475569]">
           保存していない変更があります。このページを離れると、入力内容は失われます。
         </p>
         <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => setShowDiscardConfirm(false)}>
+          <Button variant="secondary" disabled={formBusy} onClick={() => setShowDiscardConfirm(false)}>
             編集を続ける
           </Button>
-          <Button variant="danger" onClick={leaveForm}>
+          <Button variant="danger" disabled={formBusy} onClick={leaveForm}>
             破棄して戻る
           </Button>
         </div>

@@ -1,13 +1,19 @@
 import type { ReactNode } from "react";
+import {
+  ADMIN_CONTENT_MAX_WIDTH_CLASS,
+  ADMIN_TABLE_MAX_WIDTH_CLASS,
+} from "../../lib/layout.ts";
 import { Sidebar } from "./Sidebar.tsx";
 
 type Props = {
   title: string;
   syncBadge?: boolean;
+  /** 表形式レイアウト向けにコンテンツ幅を広げる */
+  wide?: boolean;
   children: ReactNode;
 };
 
-export function AdminShell({ title, syncBadge, children }: Props) {
+export function AdminShell({ title, syncBadge, wide, children }: Props) {
   return (
     <div className="flex h-screen overflow-hidden bg-[#f1f6fb]">
       <Sidebar />
@@ -22,8 +28,12 @@ export function AdminShell({ title, syncBadge, children }: Props) {
             )}
           </div>
         </header>
-        <main className="flex-1 overflow-auto bg-[#f1f6fb]">
-          <div className="mx-auto w-full max-w-[960px]">{children}</div>
+        <main className="flex-1 overflow-auto bg-[#f1f6fb] [scrollbar-gutter:stable]">
+          <div
+            className={`mx-auto w-full ${wide ? ADMIN_TABLE_MAX_WIDTH_CLASS : ADMIN_CONTENT_MAX_WIDTH_CLASS}`}
+          >
+            {children}
+          </div>
         </main>
       </div>
     </div>

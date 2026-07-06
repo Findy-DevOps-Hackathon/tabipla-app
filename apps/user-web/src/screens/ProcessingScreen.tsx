@@ -54,7 +54,7 @@ export function ProcessingScreen({
       <GridBackdrop />
 
       <div className="relative flex h-14 items-center justify-center pt-6">
-        <p className="bg-linear-to-r from-[#23ac73] to-[#0aa19b] bg-clip-text text-[16px] font-extrabold text-transparent">
+        <p className="bg-linear-to-r from-[#23ac73] to-[#0aa19b] bg-clip-text text-[24px] font-extrabold text-transparent">
           tabipla
         </p>
       </div>

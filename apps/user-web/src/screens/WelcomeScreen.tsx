@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
 import { ChevronRightIcon } from "../components/icons.tsx";
 import { SpotImage } from "../components/SpotImage.tsx";
-import { RECOMMENDATIONS, type Recommendation } from "../data/spots.ts";
+import { EXPLORE_SPOTS, type Recommendation } from "../data/spots.ts";
 import { preloadImage } from "../lib/preloadImage.ts";
 import { spotPreviewText } from "../lib/spotMapper.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
@@ -12,20 +12,10 @@ const FEATURED_CARD_MAX_W = "max-w-[300px]";
 const FEATURED_CARD_IMAGE_H = "h-[230px]";
 
 /** ホーム中央カードを切り替える間隔（ミリ秒）。 */
-const FEATURED_ROTATE_MS = 2500;
+const FEATURED_ROTATE_MS = 3000;
 
 /** カードの入れ替えアニメーションの長さ（ミリ秒、CSS と一致させる）。 */
 const FEATURED_SWAP_MS = 1100;
-
-function buildFeaturedSpots(
-  recommendations: Recommendation[],
-  exploreSpots: Recommendation[],
-): Recommendation[] {
-  if (recommendations.length > 0) {
-    return [...recommendations].sort((a, b) => b.match - a.match);
-  }
-  return exploreSpots;
-}
 
 /**
  * ホーム中央のおすすめスポットカードの「見た目」1枚分。
@@ -94,8 +84,8 @@ type WelcomeScreenProps = {
   onStartDiagnosis: () => void;
   /** 中央のおすすめカードをタップしたとき。スポット詳細を開く。 */
   onOpenSpot: (spot: Recommendation) => void;
-  exploreSpots?: Recommendation[];
-  recommendations?: Recommendation[];
+  /** ホーム中央カード用スポット（旅先選択とは独立）。 */
+  featuredSpots?: Recommendation[];
 };
 
 /**
@@ -107,10 +97,9 @@ type WelcomeScreenProps = {
 export function WelcomeScreen({
   onStartDiagnosis,
   onOpenSpot,
-  exploreSpots = [],
-  recommendations = RECOMMENDATIONS,
+  featuredSpots = EXPLORE_SPOTS,
 }: WelcomeScreenProps) {
-  const featuredSpots = buildFeaturedSpots(recommendations, exploreSpots);
+  const featuredSpotsList = featuredSpots.length > 0 ? featuredSpots : EXPLORE_SPOTS;
   // ホーム中央に置くおすすめ観光スポット。一定時間ごとに次の候補へ外枠ごと入れ替える。
   const [featuredIndex, setFeaturedIndex] = useState(0);
   // 入れ替え中に左へ送り出している前のカードのインデックス（null なら入れ替えなし）。
@@ -118,16 +107,16 @@ export function WelcomeScreen({
   const indexRef = useRef(0);
 
   useEffect(() => {
-    if (featuredSpots.length <= 1) return;
+    if (featuredSpotsList.length <= 1) return;
     const timer = window.setInterval(() => {
       const current = indexRef.current;
-      const next = (current + 1) % featuredSpots.length;
+      const next = (current + 1) % featuredSpotsList.length;
       indexRef.current = next;
       setLeavingIndex(current);
       setFeaturedIndex(next);
     }, FEATURED_ROTATE_MS);
     return () => window.clearInterval(timer);
-  }, [featuredSpots.length]);
+  }, [featuredSpotsList.length]);
 
   // アニメーション終了後に前のカードを取り除く。
   useEffect(() => {
@@ -136,19 +125,19 @@ export function WelcomeScreen({
     return () => window.clearTimeout(timer);
   }, [leavingIndex]);
 
-  const featured = featuredSpots[featuredIndex];
+  const featured = featuredSpotsList[featuredIndex];
   const leaving =
     leavingIndex !== null && leavingIndex !== featuredIndex
-      ? featuredSpots[leavingIndex]
+      ? featuredSpotsList[leavingIndex]
       : undefined;
 
   useEffect(() => {
     if (!featured?.image) return;
     preloadImage(featured.image);
-    if (featuredSpots.length <= 1) return;
-    const next = featuredSpots[(featuredIndex + 1) % featuredSpots.length];
+    if (featuredSpotsList.length <= 1) return;
+    const next = featuredSpotsList[(featuredIndex + 1) % featuredSpotsList.length];
     if (next?.image) preloadImage(next.image);
-  }, [featured?.image, featuredIndex, featuredSpots]);
+  }, [featured?.image, featuredIndex, featuredSpotsList]);
 
   return (
     <div className="relative flex h-screen flex-col overflow-hidden bg-(--page)">

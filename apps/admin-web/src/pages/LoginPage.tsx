@@ -23,7 +23,7 @@ export default function LoginPage() {
     setSubmitting(true);
     void loginApi(email, password)
       .then((res) => {
-        setAuthSession(res.token);
+        setAuthSession(res.token, res.user);
         navigate("/spots");
       })
       .catch((err: unknown) => {

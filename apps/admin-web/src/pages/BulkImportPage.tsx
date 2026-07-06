@@ -1,5 +1,5 @@
 import { Loader2, Upload } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { bulkImportSpots } from "../api.ts";
 import { Button } from "../components/ui/Button.tsx";
@@ -68,7 +68,7 @@ function parseCsv(text: string): ParsedRow[] {
 
 export default function BulkImportPage() {
   const navigate = useNavigate();
-  const { importDraft, setImportDraft } = useSpotAddDraft();
+  const { importDraft, setImportDraft, setDataOperationBusy } = useSpotAddDraft();
   const { step, rows, result } = importDraft;
 
   const patchImport = (patch: Partial<ImportDraft>) => {
@@ -77,6 +77,11 @@ export default function BulkImportPage() {
 
   const [toast, setToast] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    setDataOperationBusy(importing);
+    return () => setDataOperationBusy(false);
+  }, [importing, setDataOperationBusy]);
 
   const validRows = rows.filter((r) => !r.error);
   const errorRows = rows.filter((r) => r.error);
@@ -209,14 +214,14 @@ export default function BulkImportPage() {
               </table>
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => patchImport({ step: 1 })}>
+              <Button variant="secondary" disabled={importing} onClick={() => patchImport({ step: 1 })}>
                 戻る
               </Button>
               <Button
                 disabled={validRows.length === 0 || importing}
                 onClick={() => void handleImport()}
               >
-                取り込みを実行
+                {importing ? "取り込み中…" : "取り込みを実行"}
               </Button>
             </div>
           </div>

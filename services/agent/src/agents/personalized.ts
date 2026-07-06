@@ -42,7 +42,7 @@ export async function personalizedPlan(
     return {
       profileSummary: summarizeProfile(profile),
       recommendations: [],
-      result: "小諸市の観光スポットが登録されていません。",
+      result: "観光スポットが登録されていません。",
     };
   }
 
@@ -69,6 +69,7 @@ export async function personalizedPlan(
       travelMemory,
     },
     userId,
+    catalog,
   );
 
   // ディベートによって決定したスポットを優先してスコアリング

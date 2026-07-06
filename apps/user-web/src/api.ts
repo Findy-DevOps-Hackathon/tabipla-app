@@ -1,6 +1,12 @@
 import type { SearchMode, SearchResponse, SpotDocument } from "./types.ts";
-import { API_BASE, DESTINATION_AREA, DESTINATION_PREFECTURE } from "./config.ts";
-import { isDestinationSpot } from "./lib/destination.ts";
+import { API_BASE } from "./config.ts";
+import {
+  decodeDestinationsQuery,
+  encodeDestinationsQuery,
+  getCurrentDestinations,
+  isDestinationSpot,
+  type TripDestination,
+} from "./lib/destination.ts";
 
 /**
  * backend-api への検索リクエストを担う薄いクライアント。
@@ -29,8 +35,6 @@ async function parseApiError(res: Response): Promise<never> {
 }
 
 export async function searchSpots(params: SearchParams): Promise<SearchResponse> {
-  // 既定はキーワード + Embedding のハイブリッド検索。
-  // 「探す」では表記ゆれや言い換えにも強くしたいため keyword 単独ではなく hybrid を既定にする。
   const mode = params.mode ?? "hybrid";
 
   if (mode === "keyword") {
@@ -70,6 +74,7 @@ export async function searchSpots(params: SearchParams): Promise<SearchResponse>
 export type FetchSpotsParams = {
   prefecture?: string;
   area?: string;
+  destinations?: TripDestination[];
   limit?: number;
   offset?: number;
   q?: string;
@@ -82,11 +87,18 @@ type PublicSpotsResponse = {
   spots: SpotDocument[];
 };
 
-/** ユーザー向け公開スポット一覧（GET /v1/spots）。既定は小諸市のみ。 */
+/** ユーザー向け公開スポット一覧（GET /v1/spots）。 */
 export async function fetchPublicSpots(params: FetchSpotsParams = {}): Promise<SpotDocument[]> {
+  const destinations = params.destinations ?? getCurrentDestinations();
   const search = new URLSearchParams();
-  search.set("prefecture", params.prefecture ?? DESTINATION_PREFECTURE);
-  search.set("area", params.area ?? DESTINATION_AREA);
+
+  if (destinations.length > 0) {
+    search.set("destinations", encodeDestinationsQuery(destinations));
+  } else {
+    search.set("prefecture", params.prefecture ?? "長野県");
+    search.set("area", params.area ?? "小諸市");
+  }
+
   if (params.limit !== undefined) search.set("limit", String(params.limit));
   if (params.offset !== undefined) search.set("offset", String(params.offset));
   if (params.q) search.set("q", params.q);
@@ -98,7 +110,12 @@ export async function fetchPublicSpots(params: FetchSpotsParams = {}): Promise<S
 
   if (!res.ok) await parseApiError(res);
   const data = (await res.json()) as PublicSpotsResponse;
-  return (data.spots ?? []).filter(isDestinationSpot);
+  const filterDestinations =
+    params.destinations ??
+    (params.area && params.prefecture
+      ? [{ area: params.area, prefecture: params.prefecture }]
+      : destinations);
+  return (data.spots ?? []).filter((spot) => isDestinationSpot(spot, filterDestinations));
 }
 
 type SpotDetailResponse = {
@@ -119,3 +136,5 @@ export async function fetchSpotById(id: string, signal?: AbortSignal): Promise<S
   }
   return data.spot;
 }
+
+export { decodeDestinationsQuery, encodeDestinationsQuery };

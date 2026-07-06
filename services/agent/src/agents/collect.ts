@@ -12,7 +12,7 @@ import { CHAT_MODEL } from "../modelConfig.js";
 // tags/sources 等が欠落しやすい）。欠落で収集全体を失敗させないよう、非必須項目には
 // デフォルトを与える。必須は name/description のみ。
 /** 1回の AI 収集で要求できる最大件数。 */
-export const MAX_COLLECT_TARGET_COUNT = 50;
+export const MAX_COLLECT_TARGET_COUNT = 30;
 
 const DESCRIPTION_MAX = 200;
 const HIGHLIGHT_MAX = 30;
@@ -95,7 +95,7 @@ export const collectAgent = new LlmAgent({
 - 文体は「です・ます」調で統一。
 - highlights（おすすめポイント）: 必ず3件。宣伝的なキャッチコピーは禁止。URLは含めない。
 - category: 次のいずれか1つだけを付与する — ${SPOT_CATEGORIES.map((c) => `"${c}"`).join(" | ")}
-- area: 市区町村名
+- area: 市区町村名（例: 七尾市、輪島市）。「能登半島」のような広域名は使わない。各スポットの所在地に応じた正式な市区町村名を書く。
 - prefecture: 都道府県名
 - address: できるだけ正確な住所。不明なら "{都道府県}{市区町村名}" のみ
 - tags: 特徴を表すタグ（3〜5個）例: ["紅葉","城址","公園"]

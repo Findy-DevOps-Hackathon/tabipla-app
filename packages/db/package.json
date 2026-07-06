@@ -26,7 +26,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "seed": "tsx --env-file-if-exists=.env src/seed.ts",
-    "seed:export": "tsx --env-file-if-exists=.env src/seedExport.ts"
+    "seed:export": "tsx --env-file-if-exists=.env src/seedExport.ts",
+    "backfill:noto-areas": "tsx --env-file-if-exists=.env src/backfillNotoSpotAreas.ts"
   },
   "engines": {
     "node": ">=22"

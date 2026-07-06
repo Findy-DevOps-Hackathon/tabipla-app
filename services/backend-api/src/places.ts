@@ -1,4 +1,9 @@
 import {
+  extractNotoAreaFromAddress,
+  NOTO_MUNICIPALITY_AREAS,
+  NOTO_UMBRELLA_AREA,
+} from "@tabipla/db";
+import {
   geocodeViaGoogle,
   getGoogleMapsApiKey,
   type NominatimHit,
@@ -7,13 +12,25 @@ import {
 
 type MunicipalityContext = { prefecture: string; municipality: string };
 
+function isNotoRegionContext(context: MunicipalityContext): boolean {
+  return (
+    context.prefecture === "石川県" &&
+    (context.municipality === NOTO_UMBRELLA_AREA ||
+      (NOTO_MUNICIPALITY_AREAS as readonly string[]).includes(context.municipality))
+  );
+}
+
 /** 住所が指定自治体内かどうか（都道府県・市区町村名の両方を含むか）。 */
 function isAddressInMunicipality(address: string | undefined, context: MunicipalityContext): boolean {
   if (!address?.trim()) return false;
   const normalized = address.replace(/\s+/g, "");
-  return (
-    normalized.includes(context.prefecture) && normalized.includes(context.municipality)
-  );
+  if (!normalized.includes(context.prefecture.replace(/\s+/g, ""))) return false;
+
+  if (isNotoRegionContext(context)) {
+    return extractNotoAreaFromAddress(normalized) !== "";
+  }
+
+  return normalized.includes(context.municipality);
 }
 
 /** スポット名検索の結果（管理画面フォーム自動入力用） */
@@ -253,11 +270,14 @@ function pickNominatimHit(
   context: { prefecture: string; municipality: string },
 ): NominatimHit | null {
   const normalizedName = name.trim();
-  const inArea = hits.filter(
-    (hit) =>
-      hit.display_name?.includes(context.prefecture) &&
-      hit.display_name.includes(context.municipality),
-  );
+  const inArea = hits.filter((hit) => {
+    const display = hit.display_name ?? "";
+    if (!display.includes(context.prefecture)) return false;
+    if (isNotoRegionContext(context)) {
+      return extractNotoAreaFromAddress(display) !== "";
+    }
+    return display.includes(context.municipality);
+  });
   const candidates = inArea.length > 0 ? inArea : hits;
 
   return (

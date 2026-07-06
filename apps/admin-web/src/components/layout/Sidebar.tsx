@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { List, LogOut, MapPinPlus } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { logout } from "../../auth.ts";
-import { MUNICIPALITY } from "../../master/index.ts";
+import { getMunicipality } from "../../master/index.ts";
 import { AdminLogo } from "../AdminLogo.tsx";
 
 type NavItem = {
@@ -30,6 +30,7 @@ const navItems: NavItem[] = [
 export function Sidebar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const municipality = getMunicipality();
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col justify-between overflow-hidden bg-[#0f172a] p-4 text-white">
@@ -42,7 +43,7 @@ export function Sidebar() {
           </div>
         </div>
         <div className="flex items-center gap-2 rounded-lg bg-white/5 p-3">
-          <span className="text-sm">{MUNICIPALITY.name}</span>
+          <span className="text-sm">{municipality.name}</span>
         </div>
         <nav className="flex flex-col gap-1">
           <p className="px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-[#94a3b8]">

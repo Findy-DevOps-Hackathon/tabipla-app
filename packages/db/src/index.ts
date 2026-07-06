@@ -7,6 +7,19 @@
  */
 
 export type { CreateDatabaseOptions, Database } from "./client.js";
+export {
+  buildDestinationMatchClauses,
+  extractNotoAreaFromAddress,
+  inferNotoAreaFromName,
+  isIncompleteNotoSpot,
+  isNotoMunicipality,
+  NOTO_MUNICIPALITY_AREAS,
+  NOTO_UMBRELLA_AREA,
+  resolveSpotArea,
+  spotMatchesDestinations,
+  type DestinationFilter,
+  type DestinationMatchClause,
+} from "./destinationMatching.js";
 // クライアント
 export { createDatabase } from "./client.js";
 export { hashPassword, verifyPassword } from "./password.js";

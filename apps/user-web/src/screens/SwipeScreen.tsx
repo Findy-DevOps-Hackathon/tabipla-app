@@ -220,7 +220,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
         <div className="flex flex-col gap-3 px-4 pt-3">
           <div className="flex items-center justify-between">
             <div className="flex items-baseline gap-2">
-              <p className="bg-linear-to-r from-[#23ac73] to-[#0aa19b] bg-clip-text text-[18px] font-extrabold text-transparent">
+              <p className="bg-linear-to-r from-[#23ac73] to-[#0aa19b] bg-clip-text text-[24px] font-extrabold text-transparent">
                 tabipla
               </p>
               {refine && (
