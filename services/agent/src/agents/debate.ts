@@ -70,30 +70,28 @@ export interface DebateInput {
 
 export async function runDebate(input: DebateInput, userId = "demo"): Promise<DebateResult> {
   if (process.env.USE_MOCK !== "0") {
+    const picks = KOMORO_SPOTS.slice(0, 3);
+    const pickNames = picks.map((s) => s.name).join("、");
     return {
       debate: [
         {
           agent: "recommend",
-          thought:
-            "ユーザーの好みを考慮し、代表的な観光スポットである懐古園と、グルメとして停車場ガーデン、マンズワイン小諸ワイナリーを推薦します。",
-          message: "懐古園、停車場ガーデン、小諸ワイナリーの3箇所をベースに提案します！",
+          thought: `ユーザーの好みを考慮し、${pickNames} を推薦します。`,
+          message: `${pickNames} の3箇所をベースに提案します！`,
         },
         {
           agent: "route",
-          thought:
-            "小諸駅発として、懐古園と停車場ガーデンは駅至近、小諸ワイナリーへは車で10分程度。時間予算内に余裕で収まります。",
+          thought: `${input.origin} 発として、3箇所は小諸市内で移動しやすく、時間予算内に収まります。`,
           message: "ルートチェック完了。移動時間・滞在時間ともに問題ありません。",
         },
         {
           agent: "introduce",
-          thought:
-            "紹介スタイルに合わせ、歴史のロマンと千曲川の絶景ワインバレーの魅力をアピールしてまとめます。",
-          message: "歴史散策、ガーデンランチ、ワイナリーを巡る大人旅プランで合意しましょう！",
+          thought: "紹介スタイルに合わせ、各スポットの魅力をバランスよく組み合わせてまとめます。",
+          message: "3箇所を巡る小諸プランで合意しましょう！",
         },
       ],
-      finalSpots: ["s1", "s3", "s4"],
-      summary:
-        "懐古園で歴史を感じた後、駅前の停車場ガーデンでのランチ、最後にマンズワイン小諸ワイナリーでぶどう畑の美しい景色とワインを楽しむプランです。",
+      finalSpots: picks.map((s) => s.id),
+      summary: `${pickNames} を巡る、小諸の定番観光プランです。`,
     };
   }
   const runner = new InMemoryRunner({ agent: debateAgent });

@@ -1,4 +1,4 @@
-import { copyFile, mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createDatabase } from "./client.js";
 import {
@@ -100,9 +100,11 @@ async function main(): Promise<void> {
     await mkdir(SEED_IMAGES_DIR, { recursive: true });
 
     let imageCount = 0;
+    const keepFilenames = new Set<string>();
     for (const spot of seedSpots) {
       const filename = seedImageFilename(spot.imageUrl);
       if (!filename) continue;
+      keepFilenames.add(filename);
       const source = join(uploadDir, filename);
       try {
         await copyFile(source, join(SEED_IMAGES_DIR, filename));
@@ -110,6 +112,12 @@ async function main(): Promise<void> {
       } catch {
         console.warn(`[db] seed:export 画像をスキップ: ${source}`);
       }
+    }
+
+    for (const file of await readdir(SEED_IMAGES_DIR).catch(() => [] as string[])) {
+      if (keepFilenames.has(file)) continue;
+      await unlink(join(SEED_IMAGES_DIR, file));
+      console.info(`[db] seed:export 未参照画像を削除: ${file}`);
     }
 
     const manifest: SeedManifest = {

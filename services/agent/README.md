@@ -8,7 +8,7 @@ ADKエージェント層。`@google/adk`（LlmAgent + FunctionTool + InMemoryRun
 - `src/agents/` … LlmAgent（recommend / unchiku / introduce / debate）＋ run(ask)
 - `src/tools/` … FunctionTool（search/travel/unchiku）＋ `tracker.ts`（ループ監視） ＋ `dataSources.ts`（mock↔本物切替）
 - `src/personalize.ts` … スワイプ好み学習（決定的）
-- `src/fixtures/spots.ts` … 仮データ（後で db/search-core へ）
+- `src/fixtures/spots.ts` … `packages/db/seed-data/spots.json` から読み込むカタログ
 - `src/sceneSvg.ts` … カード用の生成SVG風景
 - `src/server.ts` … API（`/`=スワイプUI, `/dev`=開発パネル, `/v1/*`）
 

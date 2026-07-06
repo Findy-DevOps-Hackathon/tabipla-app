@@ -31,24 +31,8 @@ export const travelTimesMock: TravelTimesFn = async (i) => {
   });
 };
 
-// 本物(B2)までは fixture + backend-api フォールバック。
+// 本物(B2)までは backend-api フォールバック。
 export const getUnchikuSourceMock: GetUnchikuSourceFn = async ({ spotId }) => {
-  const fixtureFacts: Record<string, string[]> = {
-    s1: [
-      "小諸城は城下町より低い位置にある「穴城」として知られる。",
-      "島崎藤村が小諸義塾で教鞭をとった。",
-    ],
-    s2: ["高峰高原は標高約2000mに位置する。"],
-    s4: [
-      "小諸を含む東信州は日照時間が長く降水量が少なく、ワイン用ぶどうの栽培に向いた気候とされる。",
-    ],
-    s5: ["信州そばは長野県を代表する郷土料理として知られる。"],
-    s6: ["中棚荘は文豪・島崎藤村ゆかりの宿として知られる。"],
-  };
-  if (fixtureFacts[spotId]) {
-    return { spotId, facts: fixtureFacts[spotId] };
-  }
-
   const facts = await fetchSpotFactsFromBackend(spotId);
   return { spotId, facts };
 };
