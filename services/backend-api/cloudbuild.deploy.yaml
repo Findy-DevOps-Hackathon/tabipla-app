@@ -1,0 +1,47 @@
+# backend-api: Docker ビルド → Cloud Run デプロイ（Secret Manager 連携）
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - services/backend-api/Dockerfile
+      - -t
+      - ${_IMAGE}
+      - .
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - infra/cloud-build/deploy-backend-api.sh
+    env:
+      - PROJECT_ID=${PROJECT_ID}
+      - _REGION=${_REGION}
+      - _SERVICE=${_SERVICE}
+      - _IMAGE=${_IMAGE}
+      - _CORS_ORIGINS=${_CORS_ORIGINS}
+      - _GCS_BUCKET=${_GCS_BUCKET}
+      - _GCS_PUBLIC_BASE_URL=${_GCS_PUBLIC_BASE_URL}
+      - _GCS_OBJECT_PREFIX=${_GCS_OBJECT_PREFIX}
+      - _ES_NODE=${_ES_NODE}
+      - _ES_INDEX=${_ES_INDEX}
+      - _ES_VECTOR_DIMS=${_ES_VECTOR_DIMS}
+      - _EMBEDDING_PROVIDER=${_EMBEDDING_PROVIDER}
+
+images:
+  - ${_IMAGE}
+
+substitutions:
+  _REGION: asia-northeast1
+  _SERVICE: tabipla-backend-api
+  _IMAGE: gcr.io/${PROJECT_ID}/tabipla-backend-api
+  _CORS_ORIGINS: https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com
+  _GCS_BUCKET: ""
+  _GCS_PUBLIC_BASE_URL: ""
+  _GCS_OBJECT_PREFIX: spots
+  _ES_NODE: ""
+  _ES_INDEX: ""
+  _ES_VECTOR_DIMS: ""
+  _EMBEDDING_PROVIDER: ""
+
+options:
+  logging: CLOUD_LOGGING_ONLY
