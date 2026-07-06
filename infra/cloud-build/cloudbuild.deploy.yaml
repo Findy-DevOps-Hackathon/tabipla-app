@@ -1,0 +1,82 @@
+# main 向け: agent → backend-api の順で Cloud Run へ自動デプロイ
+# トリガー例: branch=main, included-files=services/**,packages/**
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build-agent
+    args:
+      - build
+      - -f
+      - services/agent/Dockerfile
+      - -t
+      - gcr.io/${PROJECT_ID}/tabipla-agent
+      - .
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-agent
+    waitFor: [build-agent]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        RUN_ENV_VARS="GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},USE_MOCK=${_USE_MOCK}"
+        gcloud run deploy tabipla-agent \
+          --project="${PROJECT_ID}" \
+          --region="${_REGION}" \
+          --image="gcr.io/${PROJECT_ID}/tabipla-agent" \
+          --allow-unauthenticated \
+          --port=8080 \
+          --memory=1Gi \
+          --cpu=1 \
+          --timeout=300 \
+          --min-instances=0 \
+          --max-instances=5 \
+          --set-env-vars="$${RUN_ENV_VARS}"
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-backend
+    waitFor: [deploy-agent]
+    args:
+      - build
+      - -f
+      - services/backend-api/Dockerfile
+      - -t
+      - gcr.io/${PROJECT_ID}/tabipla-backend-api
+      - .
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-backend
+    waitFor: [build-backend]
+    entrypoint: bash
+    args:
+      - infra/cloud-build/deploy-backend-api.sh
+    env:
+      - PROJECT_ID=${PROJECT_ID}
+      - _REGION=${_REGION}
+      - _CORS_ORIGINS=${_CORS_ORIGINS}
+      - _GCS_BUCKET=${_GCS_BUCKET}
+      - _GCS_PUBLIC_BASE_URL=${_GCS_PUBLIC_BASE_URL}
+      - _GCS_OBJECT_PREFIX=${_GCS_OBJECT_PREFIX}
+      - _ES_NODE=${_ES_NODE}
+      - _ES_INDEX=${_ES_INDEX}
+      - _ES_VECTOR_DIMS=${_ES_VECTOR_DIMS}
+      - _EMBEDDING_PROVIDER=${_EMBEDDING_PROVIDER}
+
+images:
+  - gcr.io/${PROJECT_ID}/tabipla-agent
+  - gcr.io/${PROJECT_ID}/tabipla-backend-api
+
+substitutions:
+  _REGION: asia-northeast1
+  _USE_MOCK: "1"
+  _CORS_ORIGINS: https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com
+  _GCS_BUCKET: ""
+  _GCS_PUBLIC_BASE_URL: ""
+  _GCS_OBJECT_PREFIX: spots
+  _ES_NODE: ""
+  _ES_INDEX: ""
+  _ES_VECTOR_DIMS: ""
+  _EMBEDDING_PROVIDER: ""
+
+options:
+  logging: CLOUD_LOGGING_ONLY

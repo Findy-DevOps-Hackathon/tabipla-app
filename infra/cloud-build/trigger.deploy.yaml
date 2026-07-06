@@ -1,0 +1,25 @@
+name: tabipla-deploy-services
+description: Deploy agent and backend-api to Cloud Run on main push
+repositoryEventConfig:
+  repository: projects/tabipla-user-web/locations/asia-northeast1/connections/github-tabipla/repositories/Findy-DevOps-Hackathon-tabipla-app
+  push:
+    branch: ^main$
+filename: infra/cloud-build/cloudbuild.deploy.yaml
+includedFiles:
+  - services/**
+  - packages/**
+  - infra/cloud-build/**
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - package.json
+substitutions:
+  _REGION: asia-northeast1
+  _USE_MOCK: "1"
+  _CORS_ORIGINS: https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com
+  _GCS_BUCKET: ""
+  _GCS_PUBLIC_BASE_URL: ""
+  _GCS_OBJECT_PREFIX: spots
+  _ES_NODE: ""
+  _ES_INDEX: ""
+  _ES_VECTOR_DIMS: ""
+  _EMBEDDING_PROVIDER: ""
