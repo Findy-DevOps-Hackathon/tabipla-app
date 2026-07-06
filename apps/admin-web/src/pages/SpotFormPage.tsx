@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createSpot,
@@ -9,6 +9,7 @@ import {
   geocodeAddress,
   getSpot,
   lookupPlaceByName,
+  resolveReferenceImageForGenerate,
   spotImageResultToFile,
   updateSpot,
   uploadSpotImage,
@@ -47,6 +48,45 @@ type FormState = ManualFormDraft;
 
 const emptyForm = emptyManualFormDraft;
 
+type FormSnapshot = {
+  name: string;
+  description: string;
+  highlights: string;
+  categories: string[];
+  address: string;
+  area: string;
+  lat: string;
+  lon: string;
+  imageUrl?: string;
+  hasPendingImage: boolean;
+};
+
+function toFormSnapshot(form: FormState, pendingImageFile: File | null): FormSnapshot {
+  return {
+    name: form.name.trim(),
+    description: form.description.trim(),
+    highlights: form.highlights.trim(),
+    categories: [...form.categories].sort(),
+    address: form.address.trim(),
+    area: form.area.trim(),
+    lat: form.lat.trim(),
+    lon: form.lon.trim(),
+    imageUrl: form.imageUrl?.split("?")[0],
+    hasPendingImage: pendingImageFile !== null,
+  };
+}
+
+function formSnapshotsEqual(a: FormSnapshot, b: FormSnapshot): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+const emptyFormSnapshot = toFormSnapshot(emptyManualFormDraft(), null);
+
+function appendImageCacheBuster(imageUrl: string): string {
+  const sep = imageUrl.includes("?") ? "&" : "?";
+  return `${imageUrl}${sep}v=${Date.now()}`;
+}
+
 export default function SpotFormPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -61,6 +101,8 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const [saving, setSaving] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string>();
   const [showDelete, setShowDelete] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [editBaseline, setEditBaseline] = useState<FormSnapshot | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [lookingUpPlace, setLookingUpPlace] = useState(false);
   const [generatingDescription, setGeneratingDescription] = useState(false);
@@ -81,7 +123,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     getSpot(id)
       .then((spot) => {
         coordsManualRef.current = true;
-        setEditForm({
+        const loadedForm: FormState = {
           id: spot.id,
           name: spot.name,
           description: spot.description,
@@ -95,7 +137,9 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
           lat: spot.location?.lat != null ? String(spot.location.lat) : "",
           lon: spot.location?.lon != null ? String(spot.location.lon) : "",
           imageUrl: spot.imageUrl,
-        });
+        };
+        setEditForm(loadedForm);
+        setEditBaseline(toFormSnapshot(loadedForm, null));
         setUpdatedAt(spot.updatedAt);
       })
       .catch(() => setLoadError("観光地の読み込みに失敗しました"))
@@ -185,6 +229,30 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     setField("name", value);
   };
 
+  const baseline = isEdit ? editBaseline : emptyFormSnapshot;
+  const currentSnapshot = useMemo(
+    () => toFormSnapshot(form, pendingImageFile),
+    [form, pendingImageFile],
+  );
+  const isDirty =
+    baseline !== null && !formSnapshotsEqual(baseline, currentSnapshot);
+
+  const leaveForm = () => {
+    if (embedded) {
+      resetManualDraft();
+    }
+    setPendingImageFile(null);
+    navigate("/spots");
+  };
+
+  const handleCancel = () => {
+    if (isDirty) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    leaveForm();
+  };
+
   const spotGenerateParams = () => ({
     name: form.name.trim(),
     prefecture: getFixedPrefecture(),
@@ -247,45 +315,43 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   };
 
   const handleGenerateImage = async () => {
-    const name = form.name.trim();
-    if (name.length < 2) {
-      setErrors((prev) => ({ ...prev, name: "観光地名を入力してください" }));
-      return;
-    }
-
     setGeneratingImage(true);
     setImageGenerateMiss(false);
 
     try {
-      const description = form.description.trim();
-      const highlights = parseHighlightsText(form.highlights);
-      if (description.length < 20 && !highlights.some((item) => item.length >= 5)) {
-        setErrors((prev) => ({
-          ...prev,
-          description: "参考イラストを生成する前に、紹介文またはおすすめポイントを入力してください。",
-        }));
+      const params = spotGenerateParams();
+      const spotName = params.name || "観光スポット";
+      const referenceImage = await resolveReferenceImageForGenerate({
+        pendingFile: pendingImageFile,
+        imageUrl: form.imageUrl,
+        spotId: isEdit ? id : undefined,
+      });
+      if (!referenceImage) {
+        setImageGenerateMiss(true);
         return;
       }
-
       const image = await generateSpotImage({
-        ...spotGenerateParams(),
-        description: description || undefined,
-        highlights,
-        category: form.categories,
+        name: spotName,
+        prefecture: params.prefecture,
+        municipality: params.municipality,
+        address: params.address,
+        referenceImage,
       });
-      const file = spotImageResultToFile(image, name);
+      const file = spotImageResultToFile(image, spotName);
 
       if (isEdit && id) {
         const spot = await uploadSpotImage(id, file);
-        setField("imageUrl", spot.imageUrl);
-        setPendingImageFile(null);
+        if (spot.imageUrl) {
+          setField("imageUrl", appendImageCacheBuster(spot.imageUrl));
+        }
+        setPendingImageFile(file);
       } else {
         setPendingImageFile(file);
       }
     } catch (e) {
       setImageGenerateMiss(true);
       if (e instanceof Error && e.message) {
-        setErrors((prev) => ({ ...prev, description: e.message }));
+        setToast(e.message);
       }
     } finally {
       setGeneratingImage(false);
@@ -466,7 +532,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               disabled={saving}
               generating={generatingImage}
               onGenerate={() => void handleGenerateImage()}
-              generateDisabled={form.name.trim().length < 2}
               generateMiss={imageGenerateMiss}
             />
             <div className="lg:col-span-2">
@@ -590,7 +655,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               <div />
             )}
             <div className="flex gap-3">
-              <Button variant="secondary" onClick={() => navigate("/spots")}>
+              <Button variant="secondary" onClick={handleCancel}>
                 キャンセル
               </Button>
               <Button disabled={saving} onClick={() => void handleSave()}>
@@ -612,6 +677,24 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
           </Button>
           <Button variant="danger" onClick={() => void handleDelete()}>
             削除する
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={showDiscardConfirm}
+        title="変更を破棄しますか？"
+        onClose={() => setShowDiscardConfirm(false)}
+      >
+        <p className="text-sm text-[#475569]">
+          保存していない変更があります。このページを離れると、入力内容は失われます。
+        </p>
+        <div className="mt-6 flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setShowDiscardConfirm(false)}>
+            編集を続ける
+          </Button>
+          <Button variant="danger" onClick={leaveForm}>
+            破棄して戻る
           </Button>
         </div>
       </Modal>

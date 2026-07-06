@@ -40,7 +40,7 @@ export function ensureGeminiVertexLocation(): void {
     process.env.GEMINI_VERTEX_LOCATION?.trim() || DEFAULT_GEMINI_VERTEX_LOCATION;
   console.warn(
     `[agent] GOOGLE_CLOUD_LOCATION=${current} は ${CHAT_MODEL} 非対応のため ${fallback} に切り替えます。` +
-      " Imagen は SPOT_IMAGE_LOCATION で別指定できます。",
+      " スポット画像は SPOT_IMAGE_LOCATION / SPOT_IMAGE_MODEL で別指定できます。",
   );
   process.env.GOOGLE_CLOUD_LOCATION = fallback;
 }

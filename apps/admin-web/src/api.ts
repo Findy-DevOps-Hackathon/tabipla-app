@@ -1,5 +1,6 @@
 import { getAuthToken, logout } from "./auth.ts";
 import { AGENT_BASE, API_BASE } from "./config.ts";
+import { resolveSpotImageSrc } from "./lib/spotImage.ts";
 import type { BulkImportResponse, Spot, SpotListResponse } from "./types.ts";
 
 const BASE = API_BASE;
@@ -143,6 +144,63 @@ export async function readSpotImageFile(
   return { mimeType: file.type, data };
 }
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        reject(new Error("画像の読み込みに失敗しました"));
+        return;
+      }
+      const base64 = result.split(",")[1];
+      if (!base64) {
+        reject(new Error("画像の読み込みに失敗しました"));
+        return;
+      }
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error("画像の読み込みに失敗しました"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** イラスト生成用に、アップロード済み画像を referenceImage 形式で取得する。 */
+export async function resolveReferenceImageForGenerate(params: {
+  pendingFile?: File | null;
+  imageUrl?: string;
+  spotId?: string;
+}): Promise<{ mimeType: string; data: string } | undefined> {
+  if (params.pendingFile) {
+    return readSpotImageFile(params.pendingFile);
+  }
+
+  const cleanUrl = params.imageUrl?.split("?")[0]?.trim();
+  if (!cleanUrl) return undefined;
+
+  const src = resolveSpotImageSrc({ id: params.spotId ?? "preview", imageUrl: cleanUrl });
+  if (!src) return undefined;
+
+  const headers = new Headers(authHeaders());
+  const res = await fetch(src, { headers, cache: "no-store" });
+  if (!res.ok) {
+    throw new Error("アップロード画像の取得に失敗しました");
+  }
+
+  const blob = await res.blob();
+  if (blob.size > SPOT_IMAGE_MAX_BYTES) {
+    throw new Error("画像サイズは 5MB 以下にしてください。");
+  }
+
+  const mimeType = blob.type || "image/jpeg";
+  if (!SPOT_IMAGE_ACCEPT.split(",").includes(mimeType)) {
+    throw new Error("JPEG / PNG / WebP のみアップロードできます。");
+  }
+
+  const data = await blobToBase64(blob);
+  return { mimeType, data };
+}
+
 /** スポット画像をアップロードする。 */
 export async function uploadSpotImage(spotId: string, file: File): Promise<Spot> {
   const data = await readFileAsBase64(file);
@@ -252,10 +310,9 @@ export type GenerateSpotImageParams = {
   name: string;
   prefecture: string;
   municipality: string;
-  description?: string;
-  highlights?: string[];
-  category?: string | string[];
-  tags?: string[];
+  address?: string;
+  /** アップロード済み写真を参考にイラスト化する場合に指定 */
+  referenceImage?: { mimeType: string; data: string };
 };
 
 export type GenerateSpotImageResult = {
@@ -287,20 +344,19 @@ export async function uploadSpotImageBase64(
 export async function generateSpotImage(
   params: GenerateSpotImageParams,
 ): Promise<GenerateSpotImageResult> {
-  const name = params.name.trim();
+  const name = params.name.trim() || (params.referenceImage ? "観光スポット" : "");
   if (!name) throw new Error("観光地名を入力してください");
 
   const res = await fetch(`${AGENT_BASE}/v1/generate-spot-image`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    cache: "no-store",
     body: JSON.stringify({
       name,
       prefecture: params.prefecture,
       municipality: params.municipality,
-      description: params.description?.trim() || undefined,
-      highlights: params.highlights,
-      category: params.category,
-      tags: params.tags,
+      address: params.address?.trim() || undefined,
+      referenceImage: params.referenceImage,
     }),
   });
   const body = (await res.json().catch(() => null)) as

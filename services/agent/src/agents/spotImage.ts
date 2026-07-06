@@ -1,8 +1,11 @@
-import { InMemoryRunner, LlmAgent, stringifyContent } from "@google/adk";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import sharp from "sharp";
-import { z } from "zod";
-import { CHAT_MODEL } from "../modelConfig.js";
+import { findReferencePhoto, tryFindReferencePhoto } from "./spotReferencePhoto.js";
+import {
+  formatVisualBriefForPrompt,
+  researchSpotVisualBrief,
+  type SpotVisualBrief,
+} from "./spotVisualBrief.js";
 
 const SPOT_IMAGE_WIDTH = 1600;
 const SPOT_IMAGE_HEIGHT = 1100;
@@ -15,270 +18,138 @@ export type SpotImageInput = {
   name: string;
   prefecture: string;
   municipality: string;
-  description?: string;
-  highlights?: string[];
-  category?: string | string[];
-  tags?: string[];
+  address?: string;
+  /** 管理画面からアップロードされた参考写真（base64）。指定時は Web 検索を使わずイラスト化する。 */
+  referenceImage?: {
+    mimeType: string;
+    data: string;
+  };
 };
 
 export type SpotImageResult = {
   mimeType: string;
   data: string;
   prompt: string;
+  referencePhotoUrl?: string;
 };
 
-const imageBriefSchema = z.object({
-  landmark: z.string().min(1).max(100),
-  visualElements: z.string().min(1).max(200),
-  setting: z.string().min(1).max(150),
-  /** Imagen へ渡す英語プロンプト（日本語文字禁止・画像内テキスト描画指示禁止）。 */
-  imagenPrompt: z.string().min(40).max(480),
-});
+export type SpotImageReferenceMode = "auto" | "text-only" | "photo";
 
-type ImageBrief = z.infer<typeof imageBriefSchema>;
-
-/** Imagen 向けの文字排除サフィックス（英語のみ）。 */
-const NO_TEXT_SUFFIX_EN =
-  "Wordless illustration only. Zero text anywhere: no letters, numbers, kanji, hiragana, katakana, romaji, signage, posters, banners, logos, captions, labels, menus, maps, watermarks, or typography. Blank plain surfaces only.";
-
-/** 入力にない要素の創作・推測を禁止する忠実性サフィックス。 */
-const FIDELITY_SUFFIX_EN =
-  "Depict only real features explicitly supported by the provided spot description, highlights, and tags. Do not invent, guess, embellish, or substitute landmarks, buildings, monuments, terrain, vegetation, food, or cultural elements that are not stated. Stay faithful to the actual place; avoid generic, fictional, or misleading tourist imagery.";
-
-/**
- * 参考画像に合わせた水彩スケッチブック風スタイル（Imagen プロンプトに常に付与）。
- * 穏やかな海岸スケッチのような: 細いインク線、淡い水彩、パステル調、紙の質感、広い空。
- */
-const SKETCHBOOK_STYLE_EN = [
-  "Serene Japanese travel sketchbook watercolor illustration on textured cream paper.",
-  "Delicate fine ink and pencil outlines with soft transparent watercolor washes and light colored pencil touches.",
-  "Muted pastel palette: pale blue sky, sandy beige, soft grey, earthy tan, natural pine green, gentle turquoise water tones.",
-  "Soft diffused daylight like an overcast day, calm peaceful atmosphere, no harsh shadows, no bold saturated colors.",
-  "Airy open composition with a wide pale sky, generous negative space, low horizon, hand-drawn imperfect lines.",
-  "Slightly simplified but recognizably faithful forms based on the provided factual description, charming and intimate, not photorealistic, not a photograph, not 3D CGI, not anime.",
-  "Optional tiny distant human figures for scale only, no facial detail.",
-].join(" ");
-
-const spotImageBriefAgent = new LlmAgent({
-  name: "spot_image_brief_agent",
-  model: CHAT_MODEL,
-  description: "観光スポットイラスト用の描画指示を抽出する",
-  instruction: `あなたは観光イラストの描画指示を作るアシスタントです。
-入力された観光スポットについて JSON を返します。
-
-【最重要: 事実に基づく描写】
-- 入力の紹介文・おすすめポイント・タグに書かれた内容**だけ**を描く
-- 入力にない建物・名所・地形・シンボル・料理・文化要素は**追加しない**
-- 推測・創作・一般化で補完しない（別の観光地風の汎用風景も禁止）
-- 不明な部分は省略する。嘘や誇張で埋めない
-
-【参考スタイル（Imagen 側で自動付与するため imagenPrompt に書かない）】
-穏やかな日本の旅行スケッチブック風水彩。細いインク線、淡い透明水彩、色鉛筆、パステル調、紙の質感、広い空、柔らかい光。
-
-【ルール】
-- landmark: スポットの正式名称（入力 name をそのまま・日本語可）
-- visualElements: **入力に根拠のある**具体物を日本語で3〜5個（読点区切り）。看板・標識は含めない
-- setting: 場所と雰囲気（日本語1文）。入力の説明から導ける範囲のみ
-- imagenPrompt: Imagen 用の**被写体描写のみ**（英語・220字以内）
-  - **日本語文字（漢字・ひらがな・カタカナ）を一切含めない**
-  - スポット名を画像内に描く・綴る指示をしない（名前の文字列をプロンプトに書かない）
-  - 場所は英語表記（例: Komoro City, Nagano Prefecture, Japan）
-  - 見た目だけ: 入力で言及された建物の形、門、石垣、滝、庭園、樹木、食べ物など**固有物のみ**
-  - スタイル・画材・「no text」・忠実性の注意書きは書かない（サーバーが付与する）
-  - 例: "Historic castle gate and mossy stone walls in a hillside park, pine trees and cherry blossoms. Komoro City, Nagano Prefecture, Japan."
-- 入力にない別スポット・別地域の要素は追加しない`,
-  outputSchema: imageBriefSchema,
-  generateContentConfig: {
-    thinkingConfig: { thinkingBudget: 0 },
-    maxOutputTokens: 1024,
-  },
-});
-
-const CATEGORY_VISUALS: Record<string, string> = {
-  自然: "周囲の自然",
-  "歴史・文化": "歴史的建造物の外観",
-  都市: "施設の外観",
-  芸術: "美術館・展示空間",
-  食: "名物料理や店の外観",
-  "レジャー・スポーツ": "施設の外観",
-  イベント: "催しの装飾",
-  ショッピング: "店舗の外観",
-};
-
-function normalizeCategory(value?: string | string[]): string | undefined {
-  if (!value) return undefined;
-  const items = (Array.isArray(value) ? value : [value]).map((s) => s.trim()).filter(Boolean);
-  return items[0];
+function spotLocationLabel(prefecture: string, municipality: string): string {
+  return `${prefecture.trim()}${municipality.trim()}`;
 }
 
-/** ヒューリスティックな描画指示（LLM 失敗時のフォールバック）。 */
-export function buildVisualSubjects(input: SpotImageInput): string {
-  const name = input.name.trim();
-  const parts: string[] = [name];
+/** 文字・看板・標識を一切描かない旨（最重要）。 */
+const NO_TEXT_RULES = [
+  "【最重要・文字禁止】画像内に一切の文字を描かないこと。",
+  "看板、標識、ポスター、のぼり、メニュー、地図、案内板、店名、ロゴ、キャプション、水印、タイポグラフィはすべて禁止。",
+  "漢字・ひらがな・カタカナ・アルファベット・数字・記号も一切禁止。",
+  "文字が写り込みそうな場所（看板、扉、ポスター、垂れ幕など）は空白の面、無地、または抽象的な模様に置き換える。",
+  "文字のないイラストのみを出力する。",
+].join("\n");
 
-  for (const highlight of (input.highlights ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 3)) {
-    if (!parts.includes(highlight)) parts.push(highlight);
-  }
+/** 旅行スケッチブック風イラストの共通プロンプト本文。 */
+function buildSketchBookPromptBody(
+  spot: string,
+  location: string,
+  brief: SpotVisualBrief | null,
+  wikipediaIntro: string | null,
+): string {
+  const subjectLine = brief?.subject
+    ? `${spot}（${location}）を主役にし、主役は「${brief.subject}」とする。`
+    : `${spot}（${location}）を主役にし、特徴的な建物・自然・名物を描く。`;
 
-  for (const tag of (input.tags ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 2)) {
-    if (!parts.includes(tag)) parts.push(tag);
-  }
+  const elementsLine =
+    brief && brief.keyElements.length > 0
+      ? `次の要素を必ず含める（省略禁止）: ${brief.keyElements.join("、")}。`
+      : "";
 
-  const description = input.description?.trim();
-  if (description) {
-    const firstSentence = description.split(/[。．.!?\n]/)[0]?.trim();
-    if (firstSentence && firstSentence.length <= 80 && !parts.includes(firstSentence)) {
-      parts.push(firstSentence);
-    }
-  }
+  const compositionLine = brief?.composition ? `構図指示（厳守）: ${brief.composition}。` : "";
 
-  if (parts.length < 3) {
-    const category = normalizeCategory(input.category);
-    const hint = category ? CATEGORY_VISUALS[category] : undefined;
-    if (hint && !parts.includes(hint)) parts.push(hint);
-  }
+  const atmosphereLine = brief?.atmosphere ? `雰囲気（厳守）: ${brief.atmosphere}。` : "";
 
-  return parts.join("、");
+  const avoidLine =
+    brief && brief.avoidElements.length > 0
+      ? `【禁止】次は絶対に描かない: ${brief.avoidElements.join("、")}。`
+      : "";
+
+  const briefBlock = formatVisualBriefForPrompt(brief, wikipediaIntro);
+
+  return [
+    "日本の旅行スケッチブックに描かれたような観光イラスト。",
+    subjectLine,
+    elementsLine,
+    compositionLine,
+    atmosphereLine,
+    avoidLine,
+    "細めの手描きインク線、少しかすれた線、透明水彩と色鉛筆による着彩。",
+    "完全に写実的にはせず、形を少し単純化する。",
+    "落ち着いた温かい色合い、紙の質感、ゆったりした余白。",
+    "旅先で偶然見つけた風景を記録したような親しみのある雰囲気。",
+    "人物を入れる場合は小さく、顔の詳細は描き込まない。",
+    "観光パンフレット、写真、3DCG、過度にリアルな表現にはしない。",
+    "横長のWebサイト用イラスト。",
+    NO_TEXT_RULES,
+    briefBlock,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
-/** Imagen プロンプトに日本語地名を渡すと文字として描画されやすいため英語に変換。 */
-function englishPlaceLabel(prefecture: string, municipality: string): string {
-  const pairs: Record<string, string> = {
-    長野県小諸市: "Komoro City, Nagano Prefecture, Japan",
-    長野県: "Nagano Prefecture, Japan",
-  };
-  return pairs[`${prefecture}${municipality}`] ?? pairs[prefecture] ?? "Japan";
+function getSpotImageReferenceMode(): SpotImageReferenceMode {
+  const mode = process.env.SPOT_IMAGE_REFERENCE_MODE?.trim().toLowerCase();
+  if (mode === "photo") return "photo";
+  if (mode === "text-only") return "text-only";
+  return "auto";
 }
 
-const CATEGORY_VISUALS_EN: Record<string, string> = {
-  自然: "natural scenery, trees, mountains, water",
-  "歴史・文化": "historic gate, stone walls, castle ruins, traditional architecture",
-  都市: "townscape, public building, plaza",
-  芸術: "art museum exterior, gallery space",
-  食: "local specialty food still life, market stall without labels",
-  "レジャー・スポーツ": "outdoor leisure facility, open field",
-  イベント: "festival decorations without writing",
-  ショッピング: "shopping street facades with blank signboards",
-};
-
-function buildEnglishSubject(input: SpotImageInput, brief?: Partial<ImageBrief>): string {
-  const place = englishPlaceLabel(input.prefecture, input.municipality);
-  const category = normalizeCategory(input.category);
-  const visualEn =
-    brief?.visualElements && !/[\u3040-\u30ff\u4e00-\u9faf]/.test(brief.visualElements)
-      ? brief.visualElements
-      : (category ? CATEGORY_VISUALS_EN[category] : undefined) ??
-        "distinctive local tourist landmark and surroundings";
-
-  return `Depict this specific place in ${place}, showing ${visualEn}.`;
+/** テキストのみ生成向けプロンプト。 */
+export function buildTextOnlyPrompt(
+  input: SpotImageInput,
+  brief: SpotVisualBrief | null = null,
+  wikipediaIntro: string | null = null,
+): string {
+  const spot = input.name.trim();
+  const location = spotLocationLabel(input.prefecture, input.municipality);
+  const addressLine = input.address?.trim() ? `\n住所: ${input.address.trim()}` : "";
+  return `${buildSketchBookPromptBody(spot, location, brief, wikipediaIntro)}${addressLine}\n\n${spot}の観光イラストを作成して`;
 }
 
-function assembleImagenPrompt(subject: string): string {
-  return ensureNoTextSuffix(
-    `${SKETCHBOOK_STYLE_EN} ${subject.trim()} ${FIDELITY_SUFFIX_EN}`,
-  );
+/** 参考写真ベース生成向けプロンプト（1枚目=スポット写真）。 */
+export function buildStylizePrompt(
+  input: SpotImageInput,
+  brief: SpotVisualBrief | null = null,
+  wikipediaIntro: string | null = null,
+): string {
+  const spot = input.name.trim();
+  const location = spotLocationLabel(input.prefecture, input.municipality);
+  return [
+    "添付した参考写真をもとに、以下のスタイルでイラスト化してください。",
+    "参考写真の構図・建物・地形・木々の配置は維持し、描き方だけ変えてください。",
+    "参考写真にない建物や物体は追加しないでください。",
+    "参考写真に写っている看板・文字・標識はすべて除去し、無地の面に置き換えてください。",
+    "調査結果の必須要素がある場合は、参考写真と矛盾しない範囲で反映してください。",
+    "",
+    buildSketchBookPromptBody(spot, location, brief, wikipediaIntro),
+    "",
+    `${spot}の観光イラストを作成して`,
+  ].join("\n");
 }
 
-function ensureNoTextSuffix(prompt: string): string {
-  const lower = prompt.toLowerCase();
-  if (lower.includes("no text") && lower.includes("wordless")) return prompt.trim();
-  return `${prompt.trim()} ${NO_TEXT_SUFFIX_EN}`;
-}
-
-function heuristicBrief(input: SpotImageInput): ImageBrief {
-  const landmark = input.name.trim();
-  const visualElements = buildVisualSubjects(input);
-  const setting = `${input.prefecture}${input.municipality}にある「${landmark}」の風景として描く`;
-  return {
-    landmark,
-    visualElements,
-    setting,
-    imagenPrompt: buildEnglishSubject(input),
-  };
-}
-
-function buildBriefPrompt(input: SpotImageInput): string {
-  const category = normalizeCategory(input.category) ?? "不明";
-  const highlights = (input.highlights ?? []).filter(Boolean).join(" / ") || "なし";
-  const tags = (input.tags ?? []).filter(Boolean).join("、") || "なし";
-  return `スポット名: ${input.name.trim()}
-所在地: ${input.prefecture}${input.municipality}
-カテゴリ: ${category}
-紹介文: ${input.description?.trim() || "なし"}
-おすすめポイント: ${highlights}
-タグ: ${tags}`;
-}
-
-async function runBriefAgentOnce(prompt: string): Promise<string> {
-  const runner = new InMemoryRunner({ agent: spotImageBriefAgent });
-  const session = await runner.sessionService.createSession({
-    appName: runner.appName,
-    userId: "admin",
-  });
-
-  let final = "";
-  for await (const event of runner.runAsync({
-    userId: "admin",
-    sessionId: session.id,
-    newMessage: { role: "user", parts: [{ text: prompt }] },
-  })) {
-    const t = stringifyContent(event).trim();
-    if (t) final = t;
-  }
-  return final;
-}
-
-async function resolveImageBrief(input: SpotImageInput): Promise<ImageBrief> {
-  try {
-    const final = await runBriefAgentOnce(buildBriefPrompt(input));
-    if (!final) return heuristicBrief(input);
-    const parsed = imageBriefSchema.safeParse(JSON.parse(final));
-    if (parsed.success) {
-      return {
-        ...parsed.data,
-        landmark: input.name.trim() || parsed.data.landmark,
-        imagenPrompt: parsed.data.imagenPrompt.trim(),
-      };
-    }
-  } catch {
-    // fall through
-  }
-  return heuristicBrief(input);
-}
-
-/** Imagen 向けプロンプト（英語のみ・参考水彩スケッチスタイル付き）。 */
-export function buildSpotImagePrompt(_input: SpotImageInput, brief: ImageBrief): string {
-  return assembleImagenPrompt(brief.imagenPrompt);
+function getSpotImageLocation(): string {
+  return process.env.SPOT_IMAGE_LOCATION?.trim() || "global";
 }
 
 function getGenAiClient(): GoogleGenAI {
   const project = process.env.GOOGLE_CLOUD_PROJECT?.trim();
-  const location =
-    process.env.SPOT_IMAGE_LOCATION?.trim() ||
-    process.env.GOOGLE_CLOUD_LOCATION?.trim() ||
-    "asia-northeast1";
   if (!project) {
     throw new Error("GOOGLE_CLOUD_PROJECT が未設定です。");
   }
-  return new GoogleGenAI({
-    vertexai: true,
-    project,
-    location,
-  });
+  return new GoogleGenAI({ vertexai: true, project, location: getSpotImageLocation() });
 }
 
-function getImageModel(): string {
-  return process.env.SPOT_IMAGE_MODEL?.trim() || "imagen-3.0-generate-001";
-}
-
-const SPOT_IMAGE_NEGATIVE_PROMPT =
-  "text, letters, words, numbers, typography, captions, labels, signage, signboard, poster, banner, logo, watermark, kanji, hiragana, katakana, writing, menu, map, book, newspaper, speech bubble, subtitle, invented landmark, fictional architecture, wrong building, fantasy castle, generic scenery, unrelated location, made-up monument, inaccurate representation, misleading tourist postcard, photorealistic, hyperrealistic, 3d render, cgi, anime, manga, bold saturated colors, harsh shadows, dark moody, oil painting, digital art";
-
-/** 創作を防ぐため、紹介文またはおすすめポイントが十分あるか確認する。 */
-export function hasFactualImageBasis(input: SpotImageInput): boolean {
-  const description = input.description?.trim() ?? "";
-  if (description.length >= 20) return true;
-  return (input.highlights ?? []).some((item) => item.trim().length >= 5);
+function getSpotImageModel(): string {
+  return process.env.SPOT_IMAGE_MODEL?.trim() || "gemini-3-pro-image";
 }
 
 async function cropToSpotAspect(imageBytes: Buffer): Promise<Buffer> {
@@ -288,32 +159,69 @@ async function cropToSpotAspect(imageBytes: Buffer): Promise<Buffer> {
     .toBuffer();
 }
 
-async function generateLiveSpotImage(
-  input: SpotImageInput,
-  brief: ImageBrief,
-): Promise<SpotImageResult> {
-  const prompt = buildSpotImagePrompt(input, brief);
-  const ai = getGenAiClient();
-  const response = await ai.models.generateImages({
-    model: getImageModel(),
-    prompt,
-    config: {
-      numberOfImages: 1,
-      aspectRatio: "16:9",
-      // imagen-3.0-generate-001 は negativePrompt 対応。未対応モデルでは無視される。
-      negativePrompt: SPOT_IMAGE_NEGATIVE_PROMPT,
-      enhancePrompt: false,
-    } as Parameters<GoogleGenAI["models"]["generateImages"]>[0]["config"],
-  });
+async function prepareReferenceForSketch(reference: Buffer): Promise<Buffer> {
+  return sharp(reference)
+    .modulate({ saturation: 0.9, brightness: 1.02 })
+    .jpeg({ quality: 92 })
+    .toBuffer();
+}
 
-  const rawBytes = response.generatedImages?.[0]?.image?.imageBytes;
-  if (!rawBytes) {
-    throw new Error("画像生成モデルから画像が返りませんでした");
+const UPLOAD_REFERENCE_MAX_BYTES = 8 * 1024 * 1024;
+const UPLOAD_REFERENCE_MIN_BYTES = 8_000;
+
+function parseUploadedReference(referenceImage: {
+  mimeType: string;
+  data: string;
+}): { buffer: Buffer; mimeType: string; sourceUrl: string } {
+  const mimeType = referenceImage.mimeType.trim().toLowerCase();
+  if (!/^image\/(jpeg|png|webp)$/.test(mimeType)) {
+    throw new Error("referenceImage.mimeType は image/jpeg / image/png / image/webp のみ対応です");
   }
 
-  const source =
-    typeof rawBytes === "string" ? Buffer.from(rawBytes, "base64") : Buffer.from(rawBytes);
-  const buffer = await cropToSpotAspect(source);
+  const data = referenceImage.data.trim();
+  if (!data) {
+    throw new Error("referenceImage.data が空です");
+  }
+
+  const buffer = Buffer.from(data, "base64");
+  if (buffer.length < UPLOAD_REFERENCE_MIN_BYTES || buffer.length > UPLOAD_REFERENCE_MAX_BYTES) {
+    throw new Error("referenceImage のサイズが不正です（8KB〜8MB）");
+  }
+
+  return { buffer, mimeType, sourceUrl: "upload" };
+}
+
+async function generateFromGeminiContent(
+  parts: Array<{ inlineData: { mimeType: string; data: string } } | { text: string }>,
+  logContext: string,
+): Promise<Omit<SpotImageResult, "prompt" | "referencePhotoUrl">> {
+  const ai = getGenAiClient();
+  const model = getSpotImageModel();
+
+  console.info(
+    `[spot-image] generateContent model=${model} location=${getSpotImageLocation()} ${logContext}`,
+  );
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: [{ role: "user", parts }],
+    config: {
+      responseModalities: [Modality.IMAGE],
+      imageConfig: {
+        aspectRatio: "16:9",
+        imageSize: "2K",
+      },
+    },
+  });
+
+  const imageData = response.data;
+  if (!imageData) {
+    const finishReason = response.candidates?.[0]?.finishReason ?? "unknown";
+    throw new Error(`Gemini 画像モデルから画像が返りませんでした (finishReason=${finishReason})`);
+  }
+
+  const rawBytes = Buffer.from(imageData, "base64");
+  const buffer = await cropToSpotAspect(rawBytes);
   if (buffer.length > 5 * 1024 * 1024) {
     throw new Error("生成画像が 5MB を超えました");
   }
@@ -321,34 +229,113 @@ async function generateLiveSpotImage(
   return {
     mimeType: SPOT_IMAGE_MIME,
     data: buffer.toString("base64"),
-    prompt,
   };
 }
 
-/** スポット用スケッチ風イラストを生成する（16:11 WebP）。 */
+async function generateTextOnlySpotImage(
+  input: SpotImageInput,
+  brief: SpotVisualBrief | null,
+  wikipediaIntro: string | null,
+): Promise<SpotImageResult> {
+  const prompt = buildTextOnlyPrompt(input, brief, wikipediaIntro);
+  const generated = await generateFromGeminiContent([{ text: prompt }], "mode=text-only");
+  return { ...generated, prompt };
+}
+
+async function stylizeReferencePhoto(
+  input: SpotImageInput,
+  reference: { buffer: Buffer; mimeType: string; sourceUrl: string },
+  brief: SpotVisualBrief | null,
+  wikipediaIntro: string | null,
+): Promise<SpotImageResult> {
+  const prompt = buildStylizePrompt(input, brief, wikipediaIntro);
+  const preparedReference = await prepareReferenceForSketch(reference.buffer);
+
+  const generated = await generateFromGeminiContent(
+    [
+      {
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: preparedReference.toString("base64"),
+        },
+      },
+      { text: prompt },
+    ],
+    `mode=photo ref=${reference.sourceUrl}`,
+  );
+
+  return {
+    ...generated,
+    prompt,
+    referencePhotoUrl: reference.sourceUrl,
+  };
+}
+
+/** スポット用スケッチ風イラストを生成する（既定: auto → 調査 → 参考写真 or text-only）。 */
 export async function generateSpotImage(input: SpotImageInput): Promise<SpotImageResult> {
   const name = input.name?.trim();
   if (!name || !input.prefecture?.trim() || !input.municipality?.trim()) {
     throw new Error("name, prefecture, municipality は必須です");
   }
-  if (!hasFactualImageBasis(input)) {
-    throw new Error(
-      "正確なイラストを生成するため、紹介文（20字以上）またはおすすめポイントを入力してから生成してください。",
-    );
-  }
 
-  // 旧モック（汎用 SVG）はスポットと無関係なため廃止。Imagen のみ使用。
-  const brief = await resolveImageBrief(input);
-
+  const mode = getSpotImageReferenceMode();
   const MAX_ATTEMPTS = 2;
   let lastError: unknown;
+
+  const searchInput = {
+    name,
+    prefecture: input.prefecture.trim(),
+    municipality: input.municipality.trim(),
+    address: input.address?.trim() || undefined,
+  };
+
+  const { brief, wikipediaIntro } = await researchSpotVisualBrief(searchInput);
+
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const result = await generateLiveSpotImage(input, brief);
+      if (input.referenceImage) {
+        const reference = parseUploadedReference(input.referenceImage);
+        const result = await stylizeReferencePhoto(input, reference, brief, wikipediaIntro);
+        console.info(`[spot-image] ${name} model=${getSpotImageModel()} mode=upload`);
+        console.info(`[spot-image] ${name} prompt: ${result.prompt.slice(0, 240)}…`);
+        return result;
+      }
+
+      if (mode === "text-only") {
+        const result = await generateTextOnlySpotImage(input, brief, wikipediaIntro);
+        console.info(`[spot-image] ${name} model=${getSpotImageModel()} mode=text-only`);
+        console.info(`[spot-image] ${name} prompt: ${result.prompt.slice(0, 240)}…`);
+        return result;
+      }
+
+      if (mode === "photo") {
+        const reference = await findReferencePhoto(searchInput);
+        const result = await stylizeReferencePhoto(input, reference, brief, wikipediaIntro);
+        console.info(`[spot-image] ${name} model=${getSpotImageModel()} mode=photo ref=${reference.sourceUrl}`);
+        console.info(`[spot-image] ${name} prompt: ${result.prompt.slice(0, 240)}…`);
+        return result;
+      }
+
+      // auto: 参考写真が取れれば photo、なければ text-only（調査結果付き）
+      const reference = await tryFindReferencePhoto(searchInput);
+      if (reference) {
+        const result = await stylizeReferencePhoto(input, reference, brief, wikipediaIntro);
+        console.info(`[spot-image] ${name} model=${getSpotImageModel()} mode=auto→photo ref=${reference.sourceUrl}`);
+        console.info(`[spot-image] ${name} prompt: ${result.prompt.slice(0, 240)}…`);
+        return result;
+      }
+
+      console.info(`[spot-image] ${name} mode=auto→text-only (no reference photo)`);
+      const result = await generateTextOnlySpotImage(input, brief, wikipediaIntro);
+      console.info(`[spot-image] ${name} model=${getSpotImageModel()} mode=auto→text-only`);
       console.info(`[spot-image] ${name} prompt: ${result.prompt.slice(0, 240)}…`);
       return result;
     } catch (error) {
       lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `[spot-image] ${name} mode=${mode} attempt ${attempt}/${MAX_ATTEMPTS} failed: ${message}`,
+      );
       if (attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, 1500 * attempt));
       }

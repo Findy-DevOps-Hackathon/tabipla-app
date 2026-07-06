@@ -71,13 +71,13 @@ export function CollectSpotImageCell({
       <div className="grid grid-cols-2 gap-1.5">
         <button
           type="button"
-          disabled={zoneDisabled}
+          disabled={zoneDisabled || !src}
           onClick={onGenerate}
-          title="AI イラストを作成"
+          title="アップロード画像をイラスト化"
           className="inline-flex cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md border border-[#e2e8f0] bg-white px-1 py-1.5 text-[10px] font-medium text-[#475569] transition enabled:hover:border-[#2563eb] enabled:hover:bg-[#eff6ff] enabled:hover:text-[#2563eb] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Sparkles className="size-3 shrink-0" aria-hidden />
-          {busy === "generate" ? "作成中" : "AI作成"}
+          {busy === "generate" ? "作成中" : "イラスト化"}
         </button>
         <button
           type="button"

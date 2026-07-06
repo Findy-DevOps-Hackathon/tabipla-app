@@ -265,10 +265,7 @@ export default function CollectPage() {
         name: spot.name,
         prefecture: spot.prefecture || prefecture,
         municipality,
-        description: spot.description,
-        highlights: spot.highlights,
-        category: spot.categories,
-        tags: spot.tags,
+        referenceImage: spot.pendingImage,
       });
       updateSpot(index, {
         pendingImage: { mimeType: image.mimeType, data: image.data },
