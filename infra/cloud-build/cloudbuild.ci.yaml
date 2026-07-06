@@ -1,0 +1,18 @@
+# lint (Biome) + typecheck（PR / push 向け CI）
+steps:
+  - name: node:22-bookworm
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        corepack enable
+        corepack prepare pnpm@10.30.3 --activate
+        pnpm install --frozen-lockfile
+        echo "=== biome check ==="
+        pnpm check
+        echo "=== typecheck ==="
+        pnpm typecheck
+
+options:
+  logging: CLOUD_LOGGING_ONLY

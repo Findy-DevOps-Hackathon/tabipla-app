@@ -12,9 +12,13 @@ fi
 REGION="${GOOGLE_CLOUD_LOCATION:-asia-northeast1}"
 CONNECTION="${CLOUD_BUILD_CONNECTION:-github-tabipla}"
 REPO="${CLOUD_BUILD_REPOSITORY:-Findy-DevOps-Hackathon-tabipla-app}"
-BRANCH="${CLOUD_BUILD_BRANCH:-^main$}"
+MAIN_BRANCH="${CLOUD_BUILD_BRANCH:-^main$}"
 
 REPO_RESOURCE="projects/${PROJECT}/locations/${REGION}/connections/${CONNECTION}/repositories/${REPO}"
+SERVICE_ACCOUNT="projects/${PROJECT}/serviceAccounts/tabipla-cloudbuild-deploy@${PROJECT}.iam.gserviceaccount.com"
+
+CI_INCLUDED_FILES="apps/**,services/**,packages/**,biome.json,pnpm-lock.yaml,pnpm-workspace.yaml,package.json,**/tsconfig*.json,infra/cloud-build/cloudbuild.ci.yaml"
+DEPLOY_INCLUDED_FILES="services/**,packages/**,infra/cloud-build/**,pnpm-lock.yaml,pnpm-workspace.yaml,package.json"
 
 GCS_BUCKET=""
 GCS_PUBLIC_BASE_URL=""
@@ -36,10 +40,6 @@ if ! gcloud builds connections describe "$CONNECTION" \
   echo "     https://console.cloud.google.com/cloud-build/repositories/2nd-gen?project=${PROJECT}" >&2
   echo "  2. GitHub を接続し、接続名 '${CONNECTION}' で ${REPO} をリンク" >&2
   echo "  3. 再度このスクリプトを実行" >&2
-  echo "" >&2
-  echo "接続名 / リポジトリ名は環境変数で上書きできます:" >&2
-  echo "  CLOUD_BUILD_CONNECTION=${CONNECTION}" >&2
-  echo "  CLOUD_BUILD_REPOSITORY=${REPO}" >&2
   exit 1
 fi
 
@@ -51,19 +51,17 @@ if ! gcloud builds repositories describe "$REPO" \
   exit 1
 fi
 
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
-SERVICE_ACCOUNT="projects/${PROJECT}/serviceAccounts/tabipla-cloudbuild-deploy@${PROJECT}.iam.gserviceaccount.com"
-
-create_or_update_trigger() {
+create_or_update_push_trigger() {
   local name="$1"
   local config="$2"
-  shift 2
+  local branch_pattern="$3"
+  shift 3
   local -a extra_args=("$@")
 
   if gcloud builds triggers describe "$name" \
     --project="$PROJECT" \
     --region="$REGION" >/dev/null 2>&1; then
-    echo "Updating trigger '${name}'..."
+    echo "Updating push trigger '${name}'..."
     local -a sub_args=()
     for arg in "${extra_args[@]}"; do
       if [[ "$arg" == --substitutions=* ]]; then
@@ -76,19 +74,19 @@ create_or_update_trigger() {
       --project="$PROJECT" \
       --region="$REGION" \
       --repository="$REPO_RESOURCE" \
-      --branch-pattern="$BRANCH" \
+      --branch-pattern="$branch_pattern" \
       --build-config="$config" \
       --service-account="$SERVICE_ACCOUNT" \
       "${sub_args[@]}" \
       --quiet
   else
-    echo "Creating trigger '${name}'..."
+    echo "Creating push trigger '${name}'..."
     gcloud builds triggers create github \
       --name="$name" \
       --project="$PROJECT" \
       --region="$REGION" \
       --repository="$REPO_RESOURCE" \
-      --branch-pattern="$BRANCH" \
+      --branch-pattern="$branch_pattern" \
       --build-config="$config" \
       --service-account="$SERVICE_ACCOUNT" \
       "${extra_args[@]}" \
@@ -97,37 +95,88 @@ create_or_update_trigger() {
   echo "  ✓ ${name}"
 }
 
-SUBS="_REGION=${REGION},_USE_MOCK=1"
+create_or_update_pr_trigger() {
+  local name="$1"
+  local config="$2"
+  local pr_pattern="$3"
+  shift 3
+  local -a extra_args=("$@")
+
+  if gcloud builds triggers describe "$name" \
+    --project="$PROJECT" \
+    --region="$REGION" >/dev/null 2>&1; then
+    echo "Updating PR trigger '${name}'..."
+    gcloud builds triggers update github "$name" \
+      --project="$PROJECT" \
+      --region="$REGION" \
+      --repository="$REPO_RESOURCE" \
+      --pull-request-pattern="$pr_pattern" \
+      --build-config="$config" \
+      --service-account="$SERVICE_ACCOUNT" \
+      --comment-control=COMMENTS_ENABLED \
+      "${extra_args[@]}" \
+      --quiet
+  else
+    echo "Creating PR trigger '${name}'..."
+    gcloud builds triggers create github \
+      --name="$name" \
+      --project="$PROJECT" \
+      --region="$REGION" \
+      --repository="$REPO_RESOURCE" \
+      --pull-request-pattern="$pr_pattern" \
+      --build-config="$config" \
+      --service-account="$SERVICE_ACCOUNT" \
+      --comment-control=COMMENTS_ENABLED \
+      "${extra_args[@]}" \
+      --quiet
+  fi
+  echo "  ✓ ${name}"
+}
+
+DEPLOY_SUBS="_REGION=${REGION},_USE_MOCK=1"
 if [[ -n "${GCS_BUCKET:-}" ]]; then
-  SUBS="${SUBS},_GCS_BUCKET=${GCS_BUCKET}"
+  DEPLOY_SUBS="${DEPLOY_SUBS},_GCS_BUCKET=${GCS_BUCKET}"
 fi
 if [[ -n "${GCS_PUBLIC_BASE_URL:-}" ]]; then
-  SUBS="${SUBS},_GCS_PUBLIC_BASE_URL=${GCS_PUBLIC_BASE_URL}"
+  DEPLOY_SUBS="${DEPLOY_SUBS},_GCS_PUBLIC_BASE_URL=${GCS_PUBLIC_BASE_URL}"
 fi
 if [[ -n "${GCS_OBJECT_PREFIX:-}" ]]; then
-  SUBS="${SUBS},_GCS_OBJECT_PREFIX=${GCS_OBJECT_PREFIX}"
+  DEPLOY_SUBS="${DEPLOY_SUBS},_GCS_OBJECT_PREFIX=${GCS_OBJECT_PREFIX}"
 fi
 
 echo "Project:    ${PROJECT}"
 echo "Region:     ${REGION}"
 echo "Connection: ${CONNECTION}"
 echo "Repository: ${REPO}"
-echo "Branch:     ${BRANCH}"
 echo ""
 
-# agent → backend-api の順でデプロイ（重複トリガーを避けるため 1 本化）
-create_or_update_trigger \
+echo "=== CI triggers ==="
+create_or_update_pr_trigger \
+  tabipla-ci \
+  infra/cloud-build/cloudbuild.ci.yaml \
+  "$MAIN_BRANCH" \
+  --included-files="$CI_INCLUDED_FILES"
+
+create_or_update_push_trigger \
+  tabipla-ci-push \
+  infra/cloud-build/cloudbuild.ci.yaml \
+  ".*" \
+  --included-files="$CI_INCLUDED_FILES"
+
+echo ""
+echo "=== CD trigger ==="
+create_or_update_push_trigger \
   tabipla-deploy-services \
   infra/cloud-build/cloudbuild.deploy.yaml \
-  --included-files="services/**,packages/**,infra/cloud-build/**,pnpm-lock.yaml,pnpm-workspace.yaml,package.json" \
-  --substitutions="${SUBS}"
+  "$MAIN_BRANCH" \
+  --included-files="$DEPLOY_INCLUDED_FILES" \
+  --substitutions="${DEPLOY_SUBS}"
 
 echo ""
 echo "=== Triggers setup complete ==="
 echo ""
-echo "手動実行:"
-echo "  gcloud builds triggers run tabipla-deploy-services --branch=main --region=${REGION} --project=${PROJECT}"
+echo "CI 手動実行:"
+echo "  gcloud builds submit . --config=infra/cloud-build/cloudbuild.ci.yaml --region=${REGION} --project=${PROJECT}"
 echo ""
-echo "個別デプロイ（手動 submit）:"
-echo "  gcloud builds submit . --config=services/agent/cloudbuild.deploy.yaml --substitutions=_IMAGE=gcr.io/${PROJECT}/tabipla-agent"
-echo "  gcloud builds submit . --config=services/backend-api/cloudbuild.deploy.yaml --substitutions=_IMAGE=gcr.io/${PROJECT}/tabipla-backend-api"
+echo "CD 手動実行:"
+echo "  gcloud builds triggers run tabipla-deploy-services --branch=main --region=${REGION} --project=${PROJECT}"
