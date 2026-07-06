@@ -52,7 +52,7 @@ if ! gcloud builds repositories describe "$REPO" \
 fi
 
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
-SERVICE_ACCOUNT="projects/${PROJECT}/serviceAccounts/${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+SERVICE_ACCOUNT="projects/${PROJECT}/serviceAccounts/tabipla-cloudbuild-deploy@${PROJECT}.iam.gserviceaccount.com"
 
 create_or_update_trigger() {
   local name="$1"
@@ -98,7 +98,6 @@ create_or_update_trigger() {
 }
 
 SUBS="_REGION=${REGION},_USE_MOCK=1"
-SUBS="${SUBS},_CORS_ORIGINS=https://tabipla-admin-web.web.app%2Chttps://tabipla-admin-web.firebaseapp.com%2Chttps://tabipla-user-web.web.app%2Chttps://tabipla-user-web.firebaseapp.com"
 if [[ -n "${GCS_BUCKET:-}" ]]; then
   SUBS="${SUBS},_GCS_BUCKET=${GCS_BUCKET}"
 fi
