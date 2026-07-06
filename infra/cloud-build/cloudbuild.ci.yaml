@@ -1,6 +1,19 @@
-# lint (Biome) + typecheck（PR / push 向け CI）
+# lint / typecheck / audit / secret scan（PR / push 向け CI）
 steps:
+  - name: ghcr.io/gitleaks/gitleaks:v8.24.2
+    id: secret-scan
+    entrypoint: gitleaks
+    args:
+      - detect
+      - --source=/workspace
+      - --config=/workspace/.gitleaks.toml
+      - --redact
+      - --verbose
+      - --exit-code=1
+
   - name: node:22-bookworm
+    id: quality-checks
+    waitFor: [secret-scan]
     entrypoint: bash
     args:
       - -c
@@ -13,6 +26,8 @@ steps:
         pnpm check
         echo "=== typecheck ==="
         pnpm typecheck
+        echo "=== dependency audit (high+) ==="
+        pnpm audit --audit-level=high
 
 options:
   logging: CLOUD_LOGGING_ONLY

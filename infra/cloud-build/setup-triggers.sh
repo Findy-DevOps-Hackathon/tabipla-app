@@ -17,7 +17,7 @@ MAIN_BRANCH="${CLOUD_BUILD_BRANCH:-^main$}"
 REPO_RESOURCE="projects/${PROJECT}/locations/${REGION}/connections/${CONNECTION}/repositories/${REPO}"
 SERVICE_ACCOUNT="projects/${PROJECT}/serviceAccounts/tabipla-cloudbuild-deploy@${PROJECT}.iam.gserviceaccount.com"
 
-CI_INCLUDED_FILES="apps/**,services/**,packages/**,biome.json,pnpm-lock.yaml,pnpm-workspace.yaml,package.json,**/tsconfig*.json,infra/cloud-build/cloudbuild.ci.yaml"
+CI_INCLUDED_FILES="apps/**,services/**,packages/**,biome.json,pnpm-lock.yaml,pnpm-workspace.yaml,package.json,**/tsconfig*.json,infra/cloud-build/cloudbuild.ci.yaml,.gitleaks.toml"
 DEPLOY_INCLUDED_FILES="services/**,packages/**,infra/cloud-build/**,pnpm-lock.yaml,pnpm-workspace.yaml,package.json"
 
 GCS_BUCKET=""
