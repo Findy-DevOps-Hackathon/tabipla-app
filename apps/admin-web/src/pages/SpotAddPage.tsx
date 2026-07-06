@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { AdminShell } from "../components/layout/AdminShell.tsx";
 import { SegmentedControl } from "../components/ui/SegmentedControl.tsx";
 import { type AddTab, useSpotAddDraft } from "../context/SpotAddDraftContext.tsx";
+import { ADMIN_TAB_BAR_CLASS } from "../lib/layout.ts";
 import BulkImportPage from "./BulkImportPage.tsx";
 import CollectPage from "./CollectPage.tsx";
 import SpotFormPage from "./SpotFormPage.tsx";
@@ -21,9 +22,13 @@ function parseTab(param: string | null): AddTab {
 
 export default function SpotAddPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { lastTab, setLastTab } = useSpotAddDraft();
+  const { lastTab, setLastTab, collectDraft, importDraft, dataOperationBusy } = useSpotAddDraft();
   const tabParam = searchParams.get("tab");
   const tab = tabParam ? parseTab(tabParam) : lastTab;
+  const wide =
+    (tab === "collect" && collectDraft.step === "preview") ||
+    (tab === "import" && importDraft.step === 2);
+  const tabsLocked = dataOperationBusy || collectDraft.step === "registering";
 
   useEffect(() => {
     if (!tabParam && lastTab !== "manual") {
@@ -38,9 +43,16 @@ export default function SpotAddPage() {
   };
 
   return (
-    <AdminShell title="観光地追加">
-      <div className="px-8 py-12">
-        <SegmentedControl value={tab} onChange={setTab} items={ADD_TABS} className="max-w-lg" />
+    <AdminShell title="観光地追加" wide={wide}>
+      <div className={ADMIN_TAB_BAR_CLASS}>
+        <div className="w-full max-w-lg">
+          <SegmentedControl
+            value={tab}
+            onChange={setTab}
+            items={ADD_TABS}
+            disabled={tabsLocked}
+          />
+        </div>
       </div>
       <div hidden={tab !== "manual"}>
         <SpotFormPage embedded />

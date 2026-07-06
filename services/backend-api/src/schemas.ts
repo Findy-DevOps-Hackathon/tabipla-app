@@ -362,6 +362,7 @@ export const listPublicSpotsSchema = {
       category: { type: "string", maxLength: 128 },
       prefecture: { type: "string", maxLength: 64 },
       area: { type: "string", maxLength: 256 },
+      destinations: { type: "string", maxLength: 4096 },
       offset: { type: "integer", minimum: 0 },
       limit: { type: "integer", minimum: 1, maximum: 100 },
       sort: { type: "string", enum: ["updatedAt", "name"] },

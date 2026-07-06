@@ -4,11 +4,11 @@ import {
   ChevronRight,
   Download,
   MapPin,
+  MapPinPlus,
   Pencil,
   RefreshCw,
   Search,
   Trash2,
-  Upload,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
@@ -19,7 +19,8 @@ import { Button } from "../components/ui/Button.tsx";
 import { Modal, Toast } from "../components/ui/Modal.tsx";
 import { getCategoryStyle, normalizeCategories } from "../lib/categories.ts";
 import { CSV_HEADER, spotToCsvRow } from "../lib/format.ts";
-import { resolveSpotImageSrc } from "../lib/spotImage.ts";
+import { ADMIN_TABLE_PAGE_CLASS } from "../lib/layout.ts";
+import { resolveSpotImageSrc, SPOT_IMAGE_PLACEHOLDER } from "../lib/spotImage.ts";
 import { getFixedPrefecture } from "../master/index.ts";
 import { PAGE_SIZE, type Spot } from "../types.ts";
 
@@ -27,7 +28,7 @@ type Status = "loading" | "success" | "empty" | "error";
 
 /** チェックボックス + 画像 + 観光地名 + カテゴリ + 紹介文 + おすすめポイント + 操作 */
 const TABLE_GRID_COLS =
-  "grid-cols-[16px_3.5rem_minmax(0,1.1fr)_minmax(0,0.85fr)_minmax(0,1.3fr)_minmax(0,1.1fr)_5rem]";
+  "grid-cols-[16px_5rem_minmax(0,1.1fr)_minmax(0,0.85fr)_minmax(0,1.3fr)_minmax(0,1.1fr)_5rem]";
 
 export default function SpotListPage() {
   const navigate = useNavigate();
@@ -130,8 +131,8 @@ export default function SpotListPage() {
   };
 
   return (
-    <AdminShell title="観光地一覧">
-      <div className="py-6">
+    <AdminShell title="観光地一覧" wide>
+      <div className={ADMIN_TABLE_PAGE_CLASS}>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex w-full max-w-[220px] flex-wrap items-center gap-2">
             <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-[#e2e8f0] bg-white px-3">
@@ -139,6 +140,7 @@ export default function SpotListPage() {
               <input
                 type="search"
                 value={q}
+                disabled={deleting}
                 onChange={(e) => {
                   setPage(1);
                   setQ(e.target.value);
@@ -153,6 +155,7 @@ export default function SpotListPage() {
               <Button
                 variant="secondary"
                 className="border-red-400 text-red-500 enabled:hover:bg-white"
+                disabled={deleting}
                 onClick={() => setBulkDeleteOpen(true)}
               >
                 <Trash2 className="mr-2 size-4" />
@@ -161,7 +164,7 @@ export default function SpotListPage() {
             )}
             <Button
               variant="secondary"
-              disabled={selected.size === 0}
+              disabled={selected.size === 0 || deleting}
               onClick={() => void handleExport()}
               className={
                 selected.size === 0
@@ -185,7 +188,7 @@ export default function SpotListPage() {
                 {[0, 1, 2, 3, 4, 5, 6].map((j) => (
                   <div
                     key={j}
-                    className={`animate-pulse rounded bg-[#e2e8f0] ${j === 1 ? "aspect-16/11 w-14" : "h-4 w-full"}`}
+                    className={`animate-pulse rounded bg-[#e2e8f0] ${j === 1 ? "aspect-16/11 w-20" : "h-4 w-full"}`}
                   />
                 ))}
               </div>
@@ -200,15 +203,12 @@ export default function SpotListPage() {
             </div>
             <h2 className="text-lg font-bold text-[#0f172a]">登録された観光地はありません</h2>
             <p className="mt-2 max-w-md text-sm text-[#64748b]">
-              まだ観光地が登録されていません。サンプルデータを取り込むか、新規登録から始めてください。
+              観光地追加から、個別登録・CSV一括登録・AI登録で追加できます。
             </p>
-            <div className="mt-6 flex gap-3">
-              <Button onClick={() => navigate("/spots/new")}>+ 観光地追加</Button>
-              <Button variant="secondary" onClick={() => navigate("/spots/new?tab=import")}>
-                <Upload className="mr-2 size-4" />
-                CSV 一括取り込み
-              </Button>
-            </div>
+            <Button className="mt-6" onClick={() => navigate("/spots/new")}>
+              <MapPinPlus className="mr-2 size-4" />
+              観光地追加
+            </Button>
           </div>
         )}
 
@@ -236,6 +236,7 @@ export default function SpotListPage() {
               <input
                 type="checkbox"
                 aria-label="全選択"
+                disabled={deleting}
                 checked={selected.size === spots.length && spots.length > 0}
                 onChange={(e) => {
                   setSelected(e.target.checked ? new Set(spots.map((s) => s.id)) : new Set());
@@ -246,7 +247,7 @@ export default function SpotListPage() {
               <span>観光地名</span>
               <span>カテゴリ</span>
               <span>紹介文</span>
-              <span>おすすめポイント</span>
+              <span>　おすすめポイント</span>
               <span className="text-right">操作</span>
             </div>
 
@@ -259,6 +260,7 @@ export default function SpotListPage() {
               >
                 <input
                   type="checkbox"
+                  disabled={deleting}
                   checked={selected.has(spot.id)}
                   onChange={(e) => {
                     const next = new Set(selected);
@@ -269,12 +271,16 @@ export default function SpotListPage() {
                   className="size-4 rounded border-[#e2e8f0]"
                 />
                 <SpotListThumbnail spot={spot} />
-                <Link
-                  to={`/spots/${spot.id}/edit`}
-                  className="cursor-pointer truncate text-sm font-medium text-[#2563eb] hover:underline"
-                >
-                  {spot.name}
-                </Link>
+                {deleting ? (
+                  <span className="truncate text-sm font-medium text-[#94a3b8]">{spot.name}</span>
+                ) : (
+                  <Link
+                    to={`/spots/${spot.id}/edit`}
+                    className="cursor-pointer truncate text-sm font-medium text-[#2563eb] hover:underline"
+                  >
+                    {spot.name}
+                  </Link>
+                )}
                 <span className="inline-flex flex-wrap gap-1">
                   {normalizeCategories(spot.category).map((cat) => (
                     <span
@@ -293,6 +299,7 @@ export default function SpotListPage() {
                   <button
                     type="button"
                     aria-label={`${spot.name} を編集`}
+                    disabled={deleting}
                     onClick={() => navigate(`/spots/${spot.id}/edit`)}
                     className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-[#94a3b8] transition hover:bg-[#e2e8f0] hover:text-[#2563eb]"
                   >
@@ -301,6 +308,7 @@ export default function SpotListPage() {
                   <button
                     type="button"
                     aria-label={`${spot.name} を削除`}
+                    disabled={deleting}
                     onClick={() => setDeleteTarget(spot)}
                     className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-[#94a3b8] transition hover:bg-[#fef2f2] hover:text-[#dc2626]"
                   >
@@ -315,15 +323,15 @@ export default function SpotListPage() {
                 {pageStart}–{pageEnd} / {total}件
               </p>
               <div className="flex gap-2">
-                <PageBtn disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                <PageBtn disabled={deleting || page <= 1} onClick={() => setPage((p) => p - 1)}>
                   <ChevronLeft className="size-4" />
                 </PageBtn>
                 {Array.from({ length: Math.min(3, totalPages) }, (_, i) => i + 1).map((n) => (
-                  <PageBtn key={n} active={page === n} onClick={() => setPage(n)}>
+                  <PageBtn key={n} active={page === n} disabled={deleting} onClick={() => setPage(n)}>
                     {n}
                   </PageBtn>
                 ))}
-                <PageBtn disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                <PageBtn disabled={deleting || page >= totalPages} onClick={() => setPage((p) => p + 1)}>
                   <ChevronRight className="size-4" />
                 </PageBtn>
               </div>
@@ -375,22 +383,26 @@ export default function SpotListPage() {
 }
 
 function SpotListThumbnail({ spot }: { spot: Spot }) {
-  const src = resolveSpotImageSrc(spot);
+  const { id, imageUrl } = spot;
+  const initialSrc = resolveSpotImageSrc({ id, imageUrl }) ?? SPOT_IMAGE_PLACEHOLDER;
+  const [src, setSrc] = useState(initialSrc);
+
+  useEffect(() => {
+    setSrc(resolveSpotImageSrc({ id, imageUrl }) ?? SPOT_IMAGE_PLACEHOLDER);
+  }, [id, imageUrl]);
+
   return (
-    <div className="relative aspect-16/11 w-14 shrink-0 overflow-hidden rounded-md border border-[#e2e8f0] bg-[#f1f5f9]">
-      {src ? (
-        <img
-          src={src}
-          alt=""
-          className="absolute inset-0 size-full object-cover"
-          loading="lazy"
-          decoding="async"
-        />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center text-[10px] text-[#94a3b8]">
-          未設定
-        </div>
-      )}
+    <div className="relative aspect-16/11 w-20 shrink-0 overflow-hidden rounded-md border border-[#e2e8f0] bg-[#f1f5f9]">
+      <img
+        src={src}
+        alt=""
+        className="absolute inset-0 size-full object-cover"
+        loading="lazy"
+        decoding="async"
+        onError={() => {
+          if (src !== SPOT_IMAGE_PLACEHOLDER) setSrc(SPOT_IMAGE_PLACEHOLDER);
+        }}
+      />
     </div>
   );
 }

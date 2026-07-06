@@ -17,7 +17,6 @@ type SpotImageFieldProps = {
   disabled?: boolean;
   generating?: boolean;
   onGenerate?: () => void;
-  generateDisabled?: boolean;
   generateMiss?: boolean;
 };
 
@@ -31,7 +30,6 @@ export function SpotImageField({
   disabled = false,
   generating = false,
   onGenerate,
-  generateDisabled = false,
   generateMiss = false,
 }: SpotImageFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -133,14 +131,17 @@ export function SpotImageField({
             <button
               type="button"
               className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={generating || generateDisabled || zoneDisabled}
+              disabled={!hasImage || generating || zoneDisabled}
               onClick={onGenerate}
             >
-              {generating ? "生成中…" : "参考イラストを生成"}
+              {generating ? "生成中…" : "アップロード画像をイラスト化"}
             </button>
-            {generateMiss && (
+            {!hasImage && (
+              <p className="text-xs text-[#64748b]">先に写真をアップロードしてください</p>
+            )}
+            {generateMiss && hasImage && (
               <p className="text-xs text-[#64748b]">
-                参考イラストを生成できませんでした。紹介文を入力するか、実際の写真をアップロードしてください。
+                イラスト化に失敗しました。別の写真をアップロードするか、もう一度お試しください。
               </p>
             )}
           </>
@@ -189,7 +190,9 @@ export function SpotImageField({
               />
             )}
             <Loader2 className="relative z-10 size-10 animate-spin text-[#2563eb]" aria-hidden />
-            <p className="relative z-10 mt-4 font-medium text-[#0f172a]">参考イラストを生成中…</p>
+            <p className="relative z-10 mt-4 font-medium text-[#0f172a]">
+              アップロード画像をイラスト化中…
+            </p>
           </>
         ) : deleting ? (
           <>
@@ -241,15 +244,11 @@ export function SpotImageField({
             </p>
             <p className="mt-2 text-sm text-[#64748b]">JPEG / PNG / WebP・最大 5MB</p>
             <p className="mt-2 text-xs text-[#94a3b8]">
-              正確な表示のため、可能な限り実際の写真をアップロードしてください
+              写真をアップロードすると「アップロード画像をイラスト化」が使えるようになります
             </p>
           </div>
         )}
       </label>
-
-      {!spotId && pendingFile && (
-        <p className="text-xs text-[#64748b]">保存時に画像をアップロードします。</p>
-      )}
 
       {error && <p className="text-xs text-[#dc2626]">{error}</p>}
     </div>

@@ -21,7 +21,9 @@ COPY services/agent/package.json ./services/agent/
 RUN pnpm install --frozen-lockfile --filter @tabipla/agent --prod
 
 COPY --from=build /app/services/agent/dist ./services/agent/dist
+COPY packages/db/seed-data ./packages/db/seed-data
 
 WORKDIR /app/services/agent
+COPY services/agent/assets ./assets
 EXPOSE 8080
 CMD ["node", "dist/server.js"]

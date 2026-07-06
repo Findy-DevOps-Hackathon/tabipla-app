@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import type { SpotCategory } from "../lib/categories.ts";
-import { MUNICIPALITY } from "../master/index.ts";
+import { getMunicipality } from "../master/index.ts";
 import type { Spot } from "../types.ts";
 
 export type AddTab = "manual" | "collect" | "import";
@@ -60,7 +60,7 @@ export function emptyManualFormDraft(): ManualFormDraft {
     highlights: "",
     categories: [],
     address: "",
-    area: MUNICIPALITY.defaultArea,
+    area: getMunicipality().defaultArea,
     lat: "",
     lon: "",
   };
@@ -96,6 +96,9 @@ type SpotAddDraftContextValue = {
   resetCollectDraft: () => void;
   importDraft: ImportDraft;
   setImportDraft: React.Dispatch<React.SetStateAction<ImportDraft>>;
+  /** 保存・登録・削除など DB 処理中は true（タブ切替などを抑止） */
+  dataOperationBusy: boolean;
+  setDataOperationBusy: (busy: boolean) => void;
 };
 
 const SpotAddDraftContext = createContext<SpotAddDraftContextValue | null>(null);
@@ -105,6 +108,7 @@ export function SpotAddDraftProvider({ children }: { children: ReactNode }) {
   const [manualDraft, setManualDraft] = useState<ManualFormDraft>(emptyManualFormDraft);
   const [collectDraft, setCollectDraft] = useState<CollectDraft>(initialCollectDraft);
   const [importDraft, setImportDraft] = useState<ImportDraft>(initialImportDraft);
+  const [dataOperationBusy, setDataOperationBusy] = useState(false);
 
   const resetManualDraft = useCallback(() => setManualDraft(emptyManualFormDraft()), []);
   const resetCollectDraft = useCallback(() => setCollectDraft(initialCollectDraft()), []);
@@ -121,12 +125,15 @@ export function SpotAddDraftProvider({ children }: { children: ReactNode }) {
       resetCollectDraft,
       importDraft,
       setImportDraft,
+      dataOperationBusy,
+      setDataOperationBusy,
     }),
     [
       lastTab,
       manualDraft,
       collectDraft,
       importDraft,
+      dataOperationBusy,
       resetManualDraft,
       resetCollectDraft,
     ],

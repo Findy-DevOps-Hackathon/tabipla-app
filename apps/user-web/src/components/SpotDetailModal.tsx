@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { Recommendation } from "../data/spots.ts";
-import { AI_GUIDE_LOADING_TEXT, formatAiGuideAnswer, isAiGuideLoadingMessage } from "../lib/aiGuide.ts";
+import {
+  AI_GUIDE_LOADING_TEXT,
+  formatAiGuideAnswer,
+  isAiGuideLoadingMessage,
+} from "../lib/aiGuide.ts";
 import { copyToClipboard } from "../lib/clipboard.ts";
 import { buildSpotShareUrl } from "../lib/spotLink.ts";
 import { useAutoResizeTextarea } from "../lib/useAutoResizeTextarea.ts";
@@ -392,8 +396,7 @@ export function SpotDetailModal({
 
                   const el = e.currentTarget;
                   const { selectionStart, selectionEnd, value } = el;
-                  const atEnd =
-                    selectionStart === value.length && selectionEnd === value.length;
+                  const atEnd = selectionStart === value.length && selectionEnd === value.length;
 
                   e.preventDefault();
 

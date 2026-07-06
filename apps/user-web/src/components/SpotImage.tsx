@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { SPOT_IMAGE_PLACEHOLDER } from "../lib/spotMapper.ts";
+
 export type SpotImageProps = {
   src: string;
   alt: string;
@@ -18,15 +21,26 @@ export function SpotImage({
   lazy,
   draggable,
 }: SpotImageProps) {
+  const [resolvedSrc, setResolvedSrc] = useState(src || SPOT_IMAGE_PLACEHOLDER);
+
+  useEffect(() => {
+    setResolvedSrc(src || SPOT_IMAGE_PLACEHOLDER);
+  }, [src]);
+
   return (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt}
       className={className}
       draggable={draggable}
       decoding="async"
       fetchPriority={priority ? "high" : undefined}
       loading={lazy ? "lazy" : priority ? "eager" : undefined}
+      onError={() => {
+        if (resolvedSrc !== SPOT_IMAGE_PLACEHOLDER) {
+          setResolvedSrc(SPOT_IMAGE_PLACEHOLDER);
+        }
+      }}
     />
   );
 }

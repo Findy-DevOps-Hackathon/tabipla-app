@@ -1,5 +1,8 @@
 import { fetchPublicSpots, fetchSpotById } from "../api.ts";
-import { DESTINATION_AREA, DESTINATION_PREFECTURE } from "../config.ts";
+import {
+  getCurrentDestinations,
+  type TripDestination,
+} from "./destination.ts";
 import {
   documentToRecommendation,
   documentToSwipeSpot,
@@ -9,11 +12,6 @@ import {
 import type { Recommendation, SwipeSpot } from "../data/spots.ts";
 import type { SpotDocument } from "../types.ts";
 
-const DEFAULT_SPOT_QUERY = {
-  prefecture: DESTINATION_PREFECTURE,
-  area: DESTINATION_AREA,
-} as const;
-
 export type SpotCatalogBundle = {
   docs: SpotDocument[];
   swipeSpots: SwipeSpot[];
@@ -21,13 +19,17 @@ export type SpotCatalogBundle = {
 };
 
 /** GET /v1/spots を1回だけ呼び、スワイプ・探索・画像更新用データをまとめて返す。 */
-export async function loadSpotCatalogBundle(limit = 30): Promise<SpotCatalogBundle> {
+export async function loadSpotCatalogBundle(
+  limit = 30,
+  destinations: TripDestination[] = getCurrentDestinations(),
+): Promise<SpotCatalogBundle> {
   try {
-    const docs = await fetchPublicSpots({ ...DEFAULT_SPOT_QUERY, limit });
+    const docs = await fetchPublicSpots({ destinations, limit });
+    const primary = destinations[0];
     return {
       docs,
-      swipeSpots: docs.map(documentToSwipeSpot),
-      exploreSpots: docs.map(documentToRecommendation),
+      swipeSpots: docs.map((doc) => documentToSwipeSpot(doc, primary)),
+      exploreSpots: docs.map((doc) => documentToRecommendation(doc, primary)),
     };
   } catch {
     return { docs: [], swipeSpots: [], exploreSpots: [] };

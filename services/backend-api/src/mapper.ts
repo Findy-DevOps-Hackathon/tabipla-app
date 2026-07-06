@@ -1,4 +1,5 @@
 import type { NewSpotRow, SpotRow } from "@tabipla/db";
+import { resolveSpotArea } from "@tabipla/db";
 import type { SpotDocument } from "@tabipla/search-core";
 
 /**
@@ -59,13 +60,15 @@ export function toSpotDocument(row: SpotRow): SpotDocument {
  * - createdAt / updatedAt は DB 既定（now()）に委ねるため引き継がない。
  */
 export function toNewSpotRow(doc: SpotDocument): NewSpotRow {
+  const prefecture = doc.prefecture ?? null;
+  const area = resolveSpotArea(doc.area, doc.address, prefecture);
   return {
     id: doc.id,
     name: doc.name,
     description: doc.description,
     category: normalizeCategories(doc.category),
-    area: doc.area ?? null,
-    prefecture: doc.prefecture ?? null,
+    area,
+    prefecture,
     address: doc.address ?? null,
     tags: doc.tags ?? null,
     highlights: doc.highlights ?? null,
@@ -84,15 +87,22 @@ export function toNewSpotRow(doc: SpotDocument): NewSpotRow {
  * - id / createdAt は既存値を保持する（id は不変、createdAt は作成日時を維持）。
  */
 export function mergeSpotRow(existing: SpotRow, patch: SpotPatch): NewSpotRow {
+  const prefecture = patch.prefecture ?? existing.prefecture;
+  const address = patch.address ?? existing.address;
+  const area = resolveSpotArea(
+    patch.area !== undefined ? patch.area : existing.area,
+    address,
+    prefecture,
+  );
   return {
     id: existing.id,
     name: patch.name ?? existing.name,
     description: patch.description ?? existing.description,
     category:
       patch.category !== undefined ? normalizeCategories(patch.category) : existing.category,
-    area: patch.area ?? existing.area,
-    prefecture: patch.prefecture ?? existing.prefecture,
-    address: patch.address ?? existing.address,
+    area,
+    prefecture,
+    address,
     tags: patch.tags ?? existing.tags,
     highlights: patch.highlights ?? existing.highlights,
     lat: patch.location ? patch.location.lat : existing.lat,

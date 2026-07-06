@@ -18,15 +18,16 @@ import { municipalities } from "./schema.js";
  *
  * 管理ユーザー:
  *   email: seed-data/admin-users.json 参照
- *   password: ADMIN_SEED_PASSWORD 環境変数（未設定時 test-admin-password）
+ *   admin@example.com: ADMIN_KOMORO_SEED_PASSWORD（未設定時 test-admin-password）
+ *   その他: ADMIN_SEED_PASSWORD（未設定時 Zaq12wsx#）
  */
 async function main(): Promise<void> {
   const bundle = await loadSeedBundle();
   const db = createDatabase();
 
   try {
-    const seedPassword = process.env.ADMIN_SEED_PASSWORD ?? "test-admin-password";
-    const passwordHash = await hashPassword(seedPassword);
+    const komoroPassword = process.env.ADMIN_KOMORO_SEED_PASSWORD ?? "test-admin-password";
+    const defaultPassword = process.env.ADMIN_SEED_PASSWORD ?? "Zaq12wsx#";
 
     for (const municipality of bundle.municipalities) {
       await db
@@ -36,9 +37,11 @@ async function main(): Promise<void> {
     }
 
     for (const adminUser of bundle.adminUsers) {
+      const password =
+        adminUser.email === "admin@example.com" ? komoroPassword : defaultPassword;
       await upsertAdminUser(db, {
         ...adminUser,
-        passwordHash,
+        passwordHash: await hashPassword(password),
       });
     }
 
@@ -59,8 +62,10 @@ async function main(): Promise<void> {
         `スポット ${rows.length} 件（画像 ${imageCount} 件）、クーポン ${counts.coupons} 件、` +
         `蘊蓄 ${counts.unchikuFacts} 件を upsert しました。`,
     );
-    if (bundle.adminUsers[0]) {
-      console.log("[db] ログイン:", bundle.adminUsers[0].email, "/", seedPassword);
+    for (const adminUser of bundle.adminUsers) {
+      const password =
+        adminUser.email === "admin@example.com" ? komoroPassword : defaultPassword;
+      console.log("[db] ログイン:", adminUser.email, "/", password);
     }
   } finally {
     await db.$client.end();

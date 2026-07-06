@@ -496,35 +496,39 @@ app.post("/v1/describe-spot", async (c) => {
   }
 });
 
-// スポット用スケッチ風イラスト生成（Imagen → 16:11 WebP）
+// スポット用スケッチ風イラスト生成（既定: テキストのみ / photo モード時は参考写真検索）
 app.post("/v1/generate-spot-image", async (c) => {
-  const { name, municipality, prefecture, description, highlights, category, tags } =
-    await c.req.json<{
-      name: string;
-      municipality: string;
-      prefecture: string;
-      description?: string;
-      highlights?: string[];
-      category?: string | string[];
-      tags?: string[];
-    }>();
+  const { name, municipality, prefecture, address, referenceImage } = await c.req.json<{
+    name: string;
+    municipality: string;
+    prefecture: string;
+    address?: string;
+    referenceImage?: { mimeType?: string; data?: string };
+  }>();
 
   const trimmedName = name?.trim();
   if (!trimmedName || !municipality?.trim() || !prefecture?.trim()) {
     return c.json({ error: "name, municipality, prefecture は必須です" }, 400);
   }
 
+  const uploadedReference =
+    referenceImage?.data?.trim() && referenceImage?.mimeType?.trim()
+      ? {
+          mimeType: referenceImage.mimeType.trim(),
+          data: referenceImage.data.trim(),
+        }
+      : undefined;
+
   try {
+    console.info(
+      `[spot-image] generate request: name="${trimmedName}" ${prefecture}${municipality}${uploadedReference ? " ref=upload" : ""}`,
+    );
     const result = await generateSpotImage({
       name: trimmedName,
       municipality: municipality.trim(),
       prefecture: prefecture.trim(),
-      description: description?.trim() || undefined,
-      highlights: Array.isArray(highlights)
-        ? highlights.map((s) => String(s).trim()).filter(Boolean)
-        : undefined,
-      category,
-      tags: Array.isArray(tags) ? tags.map((s) => String(s).trim()).filter(Boolean) : undefined,
+      address: address?.trim() || undefined,
+      referenceImage: uploadedReference,
     });
     return c.json(result);
   } catch (e) {

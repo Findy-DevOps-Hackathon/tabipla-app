@@ -20,11 +20,7 @@ import {
   type CollectedSpotDraft,
   useSpotAddDraft,
 } from "../context/SpotAddDraftContext.tsx";
-import { extractAreaFromAddress } from "../lib/address.ts";
-import {
-  COLLECT_TARGET_OPTIONS,
-  MAX_COLLECT_TARGET_COUNT,
-} from "../lib/collect.ts";
+import { extractAreaFromAddress, resolveSpotArea } from "../lib/address.ts";
 import {
   getCategoryStyle,
   MAX_SPOT_CATEGORIES,
@@ -32,6 +28,7 @@ import {
   SPOT_CATEGORIES,
   type SpotCategory,
 } from "../lib/categories.ts";
+import { COLLECT_TARGET_OPTIONS, MAX_COLLECT_TARGET_COUNT } from "../lib/collect.ts";
 import {
   enforceHighlightsText,
   MAX_SPOT_DESCRIPTION_LENGTH,
@@ -41,7 +38,8 @@ import {
   parseHighlightsText,
   trimSpotDescription,
 } from "../lib/format.ts";
-import { MUNICIPALITY, type Prefecture } from "../master/index.ts";
+import { ADMIN_TABLE_PAGE_CLASS } from "../lib/layout.ts";
+import { getFixedPrefecture, getMunicipality, type Prefecture } from "../master/index.ts";
 
 type CollectedSpot = CollectedSpotDraft;
 
@@ -57,10 +55,10 @@ function nameKey(name: string): string {
     .trim();
 }
 
-/** 指定エリアの登録済み観光地名を取得する（重複収集・二重登録の防止用）。 */
-async function fetchExistingNames(municipality: string): Promise<string[]> {
-  const res = await listSpots({ limit: 1000 });
-  return res.spots.filter((s) => !s.area || s.area === municipality).map((s) => s.name);
+/** 登録済み観光地名を取得する（重複収集・二重登録の防止用）。 */
+async function fetchExistingNames(): Promise<string[]> {
+  const res = await listSpots({ limit: 1000, prefecture: getFixedPrefecture() });
+  return res.spots.map((s) => s.name);
 }
 
 /** 収集直後に Places lookup で住所・座標を補完する（個別登録と同じ API）。 */
@@ -76,7 +74,12 @@ async function enrichCollectedSpot(
 
   if (lookup) {
     const address = lookup.address?.trim() || spot.address;
-    const area = address ? extractAreaFromAddress(address, prefecture) || spot.area : spot.area;
+    const area = resolveSpotArea(
+      address ? extractAreaFromAddress(address, prefecture) || spot.area : spot.area,
+      address,
+      prefecture,
+      spot.name,
+    );
     return {
       ...rest,
       description,
@@ -105,6 +108,7 @@ async function enrichCollectedSpot(
     description,
     highlights: normalizeHighlights(spot.highlights ?? []),
     categories: baseCategories,
+    area: resolveSpotArea(spot.area, spot.address, prefecture, spot.name),
     selected: true,
     location: location ?? undefined,
   };
@@ -127,8 +131,7 @@ export default function CollectPage() {
   };
 
   // 担当エリアはログイン自治体に固定（都道府県・市区町村は選ばせない）。
-  const prefecture = MUNICIPALITY.prefecture;
-  const municipality = MUNICIPALITY.name;
+  const { prefecture, name: municipality } = getMunicipality();
   // インライン編集中の観光地（spots 配列のインデックス）。null なら非編集。
   const [editing, setEditing] = useState<number | null>(null);
   const [editingBackup, setEditingBackup] = useState<CollectedSpot | null>(null);
@@ -145,6 +148,7 @@ export default function CollectPage() {
   const imageProgressPercent =
     spots.length > 0 ? Math.round((imageReadyCount / spots.length) * 100) : 0;
   const isImageBusy = imageBusy !== null;
+  const isRegistering = step === "registering";
 
   const categories = useMemo(() => {
     const counts = new Map<string, number>();
@@ -224,7 +228,7 @@ export default function CollectPage() {
     }
     patchCollect({ step: "collecting" });
     try {
-      const excludeNames = await fetchExistingNames(municipality);
+      const excludeNames = await fetchExistingNames();
       const collected = await collectSpots({
         municipality,
         prefecture,
@@ -265,10 +269,7 @@ export default function CollectPage() {
         name: spot.name,
         prefecture: spot.prefecture || prefecture,
         municipality,
-        description: spot.description,
-        highlights: spot.highlights,
-        category: spot.categories,
-        tags: spot.tags,
+        referenceImage: spot.pendingImage,
       });
       updateSpot(index, {
         pendingImage: { mimeType: image.mimeType, data: image.data },
@@ -313,7 +314,7 @@ export default function CollectPage() {
     patchCollect({ step: "registering" });
     try {
       // 収集中に他の経路で登録された分も含め、直前の最新状態で二重登録を防ぐ
-      const existingKeys = new Set((await fetchExistingNames(municipality)).map(nameKey));
+      const existingKeys = new Set((await fetchExistingNames()).map(nameKey));
       const newSpots = selected.filter((s) => !existingKeys.has(nameKey(s.name)));
       if (newSpots.length === 0) {
         setToast("選択した観光地はすべて登録済みです");
@@ -329,8 +330,8 @@ export default function CollectPage() {
         ...(normalizeCategories(s.categories).length
           ? { category: normalizeCategories(s.categories) }
           : {}),
-        area: s.area,
-        prefecture: s.prefecture,
+        area: resolveSpotArea(s.area, s.address, prefecture, s.name),
+        prefecture: s.prefecture || prefecture,
         address: s.address,
         tags: s.tags,
         ...(s.location ? { location: s.location } : {}),
@@ -467,12 +468,13 @@ export default function CollectPage() {
       )}
 
       {(step === "preview" || step === "registering") && (
-        <div className={pageShell}>
+        <div className={ADMIN_TABLE_PAGE_CLASS}>
           <div className={cardShell}>
             <div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
+                  disabled={isRegistering}
                   onClick={() => patchCollect({ categoryFilter: null })}
                   className={`cursor-pointer rounded-full px-3 py-1 text-[13px] transition ${
                     categoryFilter === null
@@ -486,6 +488,7 @@ export default function CollectPage() {
                   <button
                     key={cat}
                     type="button"
+                    disabled={isRegistering}
                     onClick={() =>
                       patchCollect({ categoryFilter: categoryFilter === cat ? null : cat })
                     }
@@ -507,6 +510,7 @@ export default function CollectPage() {
                   <input
                     type="checkbox"
                     aria-label="表示中をすべて選択"
+                    disabled={isRegistering}
                     checked={
                       visibleSpots.length > 0 && visibleSpots.every(({ spot }) => spot.selected)
                     }
@@ -518,7 +522,7 @@ export default function CollectPage() {
                   <span>カテゴリ</span>
                   <span>住所</span>
                   <span>紹介文</span>
-                  <span>おすすめポイント</span>
+                  <span>　おすすめポイント</span>
                   <span className="text-right">操作</span>
                 </div>
 
@@ -534,6 +538,7 @@ export default function CollectPage() {
                       key={`edit-${index}`}
                       className="border-b border-[#e2e8f0] bg-[#f8fafc] p-4 last:border-0"
                     >
+                      <fieldset disabled={isRegistering} className="min-w-0 border-0 p-0">
                       <div className="flex flex-wrap gap-2">
                         <input
                           type="text"
@@ -548,7 +553,7 @@ export default function CollectPage() {
                         <CollectSpotImageCell
                           spot={spot}
                           busy={imageBusy?.index === index ? imageBusy.kind : null}
-                          disabled={step === "registering" || isImageBusy}
+                          disabled={step === "registering" || isImageBusy || isRegistering}
                           onGenerate={() => void handleGenerateSpotImage(index)}
                           onUpload={(file) => void handleUploadSpotImage(index, file)}
                           onRemove={() => handleRemoveSpotImage(index)}
@@ -627,30 +632,32 @@ export default function CollectPage() {
                         />
                       </div>
                       <div className="mt-3 flex justify-end gap-3">
-                        <Button variant="secondary" onClick={cancelEditing}>
+                        <Button variant="secondary" disabled={isRegistering} onClick={cancelEditing}>
                           キャンセル
                         </Button>
-                        <Button onClick={finishEditing}>完了</Button>
+                        <Button disabled={isRegistering} onClick={finishEditing}>完了</Button>
                       </div>
+                      </fieldset>
                     </div>
                   ) : (
                     <div
                       key={`row-${index}`}
-                      className={`grid ${COLLECT_TABLE_GRID_COLS} items-start gap-4 border-b border-[#e2e8f0] px-5 py-4 last:border-0 ${
+                      className={`grid ${COLLECT_TABLE_GRID_COLS} items-center gap-4 border-b border-[#e2e8f0] px-5 py-4 last:border-0 ${
                         idx % 2 === 1 ? "bg-[#f8fafc]" : "bg-white"
                       } ${spot.selected ? "" : "opacity-45"}`}
                     >
                       <input
                         type="checkbox"
                         checked={spot.selected}
+                        disabled={isRegistering}
                         onChange={() => toggleOne(index)}
                         aria-label={spot.selected ? "選択を外す" : "選択する"}
-                        className="size-4 rounded mt-0.5 border-[#e2e8f0]"
+                        className="size-4 rounded border-[#e2e8f0]"
                       />
                       <CollectSpotImageCell
                         spot={spot}
                         busy={imageBusy?.index === index ? imageBusy.kind : null}
-                        disabled={step === "registering" || isImageBusy}
+                        disabled={step === "registering" || isImageBusy || isRegistering}
                         onGenerate={() => void handleGenerateSpotImage(index)}
                         onUpload={(file) => void handleUploadSpotImage(index, file)}
                         onRemove={() => handleRemoveSpotImage(index)}
@@ -677,9 +684,10 @@ export default function CollectPage() {
                       <CollectHighlights highlights={spot.highlights} />
                       <button
                         type="button"
+                        disabled={isRegistering}
                         onClick={() => startEditing(index)}
                         aria-label={`${spot.name} を編集`}
-                        className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center self-center rounded-full text-[#94a3b8] transition hover:bg-[#e2e8f0] hover:text-[#2563eb]"
+                        className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-[#94a3b8] transition hover:bg-[#e2e8f0] hover:text-[#2563eb]"
                       >
                         <Pencil className="size-4" />
                       </button>
@@ -704,14 +712,14 @@ export default function CollectPage() {
                 )}
               </div>
               <div className="flex gap-6">
-                <Button variant="secondary" onClick={() => setAbortConfirmOpen(true)}>
+                <Button variant="secondary" disabled={isRegistering} onClick={() => setAbortConfirmOpen(true)}>
                   キャンセル
                 </Button>
                 <Button
-                  disabled={selectedCount === 0 || step === "registering" || isImageBusy}
+                  disabled={selectedCount === 0 || isRegistering || isImageBusy}
                   onClick={() => void handleRegister()}
                 >
-                  {step === "registering" ? (
+                  {isRegistering ? (
                     <>
                       <Loader2 className="mr-1.5 size-4 animate-spin" />
                       登録中…
@@ -750,16 +758,16 @@ export default function CollectPage() {
       <Modal
         open={abortConfirmOpen}
         title="収集結果の登録をやめますか？"
-        onClose={() => setAbortConfirmOpen(false)}
+        onClose={() => !isRegistering && setAbortConfirmOpen(false)}
       >
         <p className="text-sm text-[#475569]">
           AIが提案した観光地の一覧を破棄し、収集の最初に戻ります。編集内容は保存されません。
         </p>
         <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => setAbortConfirmOpen(false)}>
+          <Button variant="secondary" disabled={isRegistering} onClick={() => setAbortConfirmOpen(false)}>
             戻る
           </Button>
-          <Button variant="danger" onClick={abortCollectPreview}>
+          <Button variant="danger" disabled={isRegistering} onClick={abortCollectPreview}>
             破棄する
           </Button>
         </div>

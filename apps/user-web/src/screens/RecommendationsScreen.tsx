@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { SpotImage } from "../components/SpotImage.tsx";
+import { AiGuideAvatar } from "../components/AiGuideAvatar.tsx";
+import { AiGuideSpeechBubble } from "../components/AiGuideSpeechBubble.tsx";
 import { CardsIcon, ChevronRightIcon, MapPinIcon } from "../components/icons.tsx";
+import { SpotImage } from "../components/SpotImage.tsx";
 import { RECOMMENDATIONS_PAGE_SIZE, type Recommendation } from "../data/spots.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 import { isVisited } from "../lib/visited.ts";
@@ -9,6 +11,8 @@ type RecommendationsScreenProps = {
   recommendations: Recommendation[];
   /** API から取得した探索用スポット（診断前）。 */
   exploreSpots?: Recommendation[];
+  /** 探索スポット見出し用のエリア名。 */
+  destinationArea?: string;
   /** 好み診断を完了済みか。 */
   diagnosisComplete: boolean;
   /** ユーザーの ID。 */
@@ -23,6 +27,8 @@ type RecommendationsScreenProps = {
   onOpenSpot: (recommendation: Recommendation) => void;
   /** AI がまとめた好みの概要 */
   profileSummary?: string;
+  /** おすすめが空のときに表示する補足メッセージ */
+  emptyMessage?: string;
 };
 
 /**
@@ -66,6 +72,7 @@ function buildPreferenceSentence(summary: string): string {
 export function RecommendationsScreen({
   recommendations,
   exploreSpots = [],
+  destinationArea = "小諸市",
   diagnosisComplete,
   userId,
   onStartDiagnosis,
@@ -73,6 +80,7 @@ export function RecommendationsScreen({
   onGoHome,
   onOpenSpot,
   profileSummary = "",
+  emptyMessage = "",
 }: RecommendationsScreenProps) {
   const listSource = diagnosisComplete ? recommendations : exploreSpots;
   const [initiallyVisitedIds] = useState<Set<string>>(
@@ -132,28 +140,12 @@ export function RecommendationsScreen({
         </div>
 
         {/* ① AIによる好みの概要 */}
-        {diagnosisComplete && profileSummary && (
-          <div className="relative overflow-hidden rounded-2xl border border-white/60 bg-linear-to-br from-[#ecfdf5] via-white to-[#eef2ff] p-px shadow-[0_8px_30px_-12px_rgba(10,161,155,0.45)]">
-            {/* 装飾用グロー */}
-            <div className="pointer-events-none absolute -right-10 -top-12 size-32 rounded-full bg-[#0aa19b]/20 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-12 -left-8 size-28 rounded-full bg-[#23ac73]/15 blur-3xl" />
-
-            <div className="relative rounded-[15px] bg-white/70 p-4 backdrop-blur-sm">
-              <div className="mb-3 flex items-center gap-2.5">
-                <div className="flex flex-col">
-                  <p className="text-[14px] font-extrabold tracking-tight text-[#0f172a]">
-                    好みの傾向
-                  </p>
-                  <p className="text-[10.5px] font-medium text-slate-400">
-                    回答結果から診断しました
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-[13px] leading-relaxed text-slate-600">
-                {buildPreferenceSentence(profileSummary)}
-              </p>
-            </div>
+        {diagnosisComplete && profileSummary && visibleRecommendations.length > 0 && (
+          <div className="flex items-end gap-1">
+            <AiGuideAvatar size={40} className="shrink-0" />
+            <AiGuideSpeechBubble>
+              <span className="text-[13px]">{buildPreferenceSentence(profileSummary)}</span>
+            </AiGuideSpeechBubble>
           </div>
         )}
 
@@ -176,7 +168,7 @@ export function RecommendationsScreen({
         )}
 
         {!diagnosisComplete && visibleRecommendations.length > 0 && (
-          <p className="text-[12px] font-semibold text-[#64748b]">小諸のスポット</p>
+          <p className="text-[12px] font-semibold text-[#64748b]">{destinationArea}のスポット</p>
         )}
 
         {!diagnosisComplete && visibleRecommendations.length > 0 && (
@@ -241,15 +233,23 @@ export function RecommendationsScreen({
         )}
 
         {diagnosisComplete && visibleRecommendations.length === 0 && (
-          <div className="flex flex-1 flex-col items-center justify-center gap-5 py-16 text-center">
-            <p className="text-[15px] font-bold text-[#0f172a]">
-              おすすめのスポットが見つかりませんでした
-            </p>
-            <p className="text-[13px] text-[#64748b]">もう一度好み診断を行ってください。</p>
+          <div className="flex flex-1 flex-col justify-center gap-8 py-16">
+            <div className="flex items-end gap-1">
+              <AiGuideAvatar size={44} className="shrink-0" />
+              <AiGuideSpeechBubble>
+                <span className="text-[13px] font-bold text-[#0f172a]">
+                  おすすめのスポットが見つかりませんでした
+                </span>
+                <span className="text-[13px]">
+                  {emptyMessage ||
+                    `${destinationArea}の観光スポットが登録されていないか、選択した条件に合うスポットがありません。`}
+                </span>
+              </AiGuideSpeechBubble>
+            </div>
             <button
               type="button"
               onClick={onGoHome}
-              className={`${PRIMARY_BUTTON} h-16 tracking-wider mt-2 px-6 py-3 text-[14px]`}
+              className={`${PRIMARY_BUTTON} h-16 tracking-wider px-6 py-3 text-[14px]`}
             >
               ホームに戻る
               <ChevronRightIcon className="size-5" />
@@ -298,7 +298,7 @@ export function RecommendationsScreen({
                     </button>
                   </article>
 
-                  {(index + 1) % 10 === 0 && (
+                  {(index + 1) % 10 === 0 && visibleRecommendations.length > 10 && (
                     <div className="col-span-2 py-2">
                       <button
                         type="button"
@@ -323,14 +323,26 @@ export function RecommendationsScreen({
         )}
 
         {visibleRecommendations.length > 0 && !hasMore && (
-          <button
-            type="button"
-            onClick={onGoHome}
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white py-3 text-[14px] font-semibold text-[#475569] transition active:scale-[0.98] active:bg-[#f1f5f9]"
-          >
-            ホームに戻る
-            <ChevronRightIcon className="size-4" />
-          </button>
+          <div className="mt-2 flex flex-col gap-3">
+            {diagnosisComplete && visibleRecommendations.length <= 10 && (
+              <button
+                type="button"
+                onClick={onRestart}
+                className={`${PRIMARY_BUTTON} relative h-14 w-full overflow-hidden text-[15px] tracking-[1.2px]`}
+              >
+                <CardsIcon className="pointer-events-none absolute left-4 top-1/2 size-20 -translate-y-1/2 text-white/30 opacity-50" />
+                <span className="relative text-shadow-md">好みをより深く設定する</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onGoHome}
+              className="flex w-full items-center justify-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white py-3 text-[14px] font-semibold text-[#475569] transition active:scale-[0.98] active:bg-[#f1f5f9]"
+            >
+              ホームに戻る
+              <ChevronRightIcon className="size-4" />
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -50,6 +50,24 @@ import {
 /** user-web 向け公開 API の既定エリア（現状は小諸市のみ）。 */
 const PUBLIC_SPOT_PREFECTURE = "長野県";
 const PUBLIC_SPOT_AREA = "小諸市";
+
+type DestinationFilter = { area: string; prefecture: string };
+
+function parseDestinationsQuery(value?: string): DestinationFilter[] {
+  if (!value?.trim()) return [];
+  return value
+    .split(",")
+    .map((pair) => {
+      const [area, prefecture] = pair.split(":");
+      if (!area || !prefecture) return null;
+      return {
+        area: decodeURIComponent(area),
+        prefecture: decodeURIComponent(prefecture),
+      };
+    })
+    .filter((dest): dest is DestinationFilter => dest !== null);
+}
+
 import {
   bulkSpotsSchema,
   createSpotSchema,
@@ -661,15 +679,29 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       category?: string;
       prefecture?: string;
       area?: string;
+      destinations?: string;
       offset?: number;
       limit?: number;
       sort?: "updatedAt" | "name";
       order?: "asc" | "desc";
     };
   }>("/v1/spots", { schema: listPublicSpotsSchema }, async (req) => {
-    const prefecture = req.query.prefecture ?? PUBLIC_SPOT_PREFECTURE;
-    const area = req.query.area ?? PUBLIC_SPOT_AREA;
-    const { rows, total } = await listSpots(db, { ...req.query, prefecture, area });
+    const parsedDestinations = parseDestinationsQuery(req.query.destinations);
+    const destinations =
+      parsedDestinations.length > 0
+        ? parsedDestinations
+        : req.query.prefecture && req.query.area
+          ? [{ prefecture: req.query.prefecture, area: req.query.area }]
+          : [{ prefecture: PUBLIC_SPOT_PREFECTURE, area: PUBLIC_SPOT_AREA }];
+    const { rows, total } = await listSpots(db, {
+      q: req.query.q,
+      category: req.query.category,
+      destinations,
+      offset: req.query.offset,
+      limit: req.query.limit,
+      sort: req.query.sort,
+      order: req.query.order,
+    });
     return {
       total,
       count: rows.length,
@@ -683,9 +715,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     async (req, reply) => {
       const dbSpot = await getSpotById(db, req.params.id);
       if (!dbSpot) {
-        return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
-      }
-      if (dbSpot.area !== PUBLIC_SPOT_AREA || dbSpot.prefecture !== PUBLIC_SPOT_PREFECTURE) {
         return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
       }
 
@@ -800,11 +829,19 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       travelMemory?: string;
       prefecture?: string;
       area?: string;
+      destinations?: DestinationFilter[];
     };
 
-    const prefecture = body.prefecture ?? PUBLIC_SPOT_PREFECTURE;
-    const area = body.area ?? PUBLIC_SPOT_AREA;
-    const { rows: dbRows } = await listSpots(db, { prefecture, area, limit: 100 });
+    const destinations =
+      body.destinations && body.destinations.length > 0
+        ? body.destinations
+        : [
+            {
+              area: body.area ?? PUBLIC_SPOT_AREA,
+              prefecture: body.prefecture ?? PUBLIC_SPOT_PREFECTURE,
+            },
+          ];
+    const { rows: dbRows } = await listSpots(db, { destinations, limit: 100 });
     const catalog = dbRows.map(toAgentCatalogSpot);
     const rowById = new Map(dbRows.map((row) => [row.id, row]));
     const rowByName = new Map(dbRows.map((row) => [row.name, row]));
@@ -814,18 +851,27 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       return {
         profileSummary: "まだ好みが少なめ（もう少しスワイプすると精度が上がります）",
         recommendations: [],
-        result: `${area}の観光スポットが登録されていません。`,
+        result: `${destinations.map((dest) => dest.area).join("・")}の観光スポットが登録されていません。`,
       };
     }
 
-    const res = await fetch(`${agentApiUrl}/v1/personalized/plan`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        ...body,
-        catalog,
-      }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${agentApiUrl}/v1/personalized/plan`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...body,
+          catalog,
+        }),
+      });
+    } catch (error) {
+      req.log.error({ err: error }, "personalized/plan: agent への接続に失敗しました");
+      return reply.code(503).send({
+        error:
+          "AIエージェントサービスに接続できません。services/agent (8080) が起動しているか確認してください。",
+      });
+    }
     const data = (await res.json()) as {
       error?: string;
       recommendations?: Record<string, unknown>[];

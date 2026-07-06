@@ -1,6 +1,7 @@
 import type { Recommendation, SpotCategory, SwipeSpot } from "../data/spots.ts";
 import type { SpotDocument } from "../types.ts";
-import { API_BASE, DESTINATION_AREA, DESTINATION_PREFECTURE } from "../config.ts";
+import { API_BASE } from "../config.ts";
+import { getCurrentDestination, getCurrentDestinations, isDestinationSpot, type TripDestination } from "./destination.ts";
 
 /** 管理画面カテゴリ → user-web 表示用バッジカテゴリ。 */
 const ADMIN_TO_DISPLAY: Record<string, SpotCategory> = {
@@ -57,12 +58,15 @@ export function spotImageUrl(doc: Pick<SpotDocument, "id" | "imageUrl">): string
 }
 
 /** SpotDocument → スワイプ用スポット。 */
-export function documentToSwipeSpot(doc: SpotDocument): SwipeSpot {
+export function documentToSwipeSpot(
+  doc: SpotDocument,
+  dest: TripDestination = getCurrentDestination(),
+): SwipeSpot {
   return {
     id: doc.id,
     name: doc.name,
-    prefecture: doc.prefecture ?? DESTINATION_PREFECTURE,
-    area: doc.area ?? DESTINATION_AREA,
+    prefecture: doc.prefecture ?? dest.prefecture,
+    area: doc.area ?? dest.area,
     category: displayCategory(doc),
     description: doc.description,
     highlights: doc.highlights ?? [],
@@ -72,9 +76,12 @@ export function documentToSwipeSpot(doc: SpotDocument): SwipeSpot {
 }
 
 /** SpotDocument → おすすめ一覧用（診断前の探索表示）。 */
-export function documentToRecommendation(doc: SpotDocument): Recommendation {
+export function documentToRecommendation(
+  doc: SpotDocument,
+  dest: TripDestination = getCurrentDestination(),
+): Recommendation {
   return {
-    ...documentToSwipeSpot(doc),
+    ...documentToSwipeSpot(doc, dest),
     reason: "",
     match: 0,
     memberOnly: false,
@@ -96,15 +103,29 @@ export function planItemToRecommendation(item: {
   memberOnly?: boolean;
   image?: string;
   imageUrl?: string;
-}): Recommendation | null {
-  if (item.area && item.area !== DESTINATION_AREA) return null;
-  if (item.prefecture && item.prefecture !== DESTINATION_PREFECTURE) return null;
+  address?: string;
+}, destinations: TripDestination[] = getCurrentDestinations()): Recommendation | null {
+  if (item.area && item.prefecture) {
+    if (
+      !isDestinationSpot(
+        { area: item.area, prefecture: item.prefecture, address: item.address },
+        destinations,
+      )
+    ) {
+      return null;
+    }
+  }
+
+  const dest =
+    destinations.find(
+      (candidate) => item.area === candidate.area && item.prefecture === candidate.prefecture,
+    ) ?? getCurrentDestination();
 
   return {
     id: item.id,
     name: item.name,
-    prefecture: item.prefecture ?? DESTINATION_PREFECTURE,
-    area: item.area ?? DESTINATION_AREA,
+    prefecture: item.prefecture ?? dest.prefecture,
+    area: item.area ?? dest.area,
     category: displayCategoryFromAgent(item.category),
     description: item.description ?? "",
     highlights: item.highlights ?? [],
@@ -112,7 +133,12 @@ export function planItemToRecommendation(item: {
     reason: (item.why ?? []).join(" / "),
     match: Math.round((item.score ?? 0.8) * 100),
     memberOnly: item.memberOnly ?? false,
-    image: item.image || spotImageUrl({ id: item.id, imageUrl: item.imageUrl }),
+    image:
+      item.imageUrl != null && item.imageUrl !== ""
+        ? spotImageUrl({ id: item.id, imageUrl: item.imageUrl })
+        : item.image?.trim()
+          ? item.image
+          : SPOT_IMAGE_PLACEHOLDER,
   };
 }
 

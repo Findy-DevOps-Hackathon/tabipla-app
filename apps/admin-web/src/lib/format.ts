@@ -1,4 +1,4 @@
-import { getFixedPrefecture, MUNICIPALITY } from "../master/index.ts";
+import { getFixedPrefecture, getMunicipality } from "../master/index.ts";
 import { extractAreaFromAddress } from "./address.ts";
 import { formatCategories } from "./categories.ts";
 
@@ -91,9 +91,10 @@ export const CSV_HEADER = "name,category,area,prefecture,address,description,hig
 
 /** 一括取り込み用 CSV テンプレート（ヘッダー + サンプル1行）。 */
 export function buildCsvTemplate(prefecture: string = getFixedPrefecture()): string {
+  const municipality = getMunicipality();
   return [
     CSV_HEADER,
-    `"道の駅 〇〇","ショッピング;食","${MUNICIPALITY.defaultArea}","${prefecture}","${prefecture}${MUNICIPALITY.defaultArea}国道沿い1","地元の特産品や食堂が楽しめる道の駅。旅の休憩・お土産選びに便利です。","地元野菜の直売所が充実している;名物メニューの食堂が人気;展望デッキの景色がきれい"`,
+    `"道の駅 〇〇","ショッピング;食","${municipality.defaultArea}","${prefecture}","${prefecture}${municipality.defaultArea}国道沿い1","地元の特産品や食堂が楽しめる道の駅。旅の休憩・お土産選びに便利です。","地元野菜の直売所が充実している;名物メニューの食堂が人気;展望デッキの景色がきれい"`,
   ].join("\n");
 }
 

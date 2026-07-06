@@ -1,5 +1,6 @@
 import { InMemoryRunner, LlmAgent, stringifyContent } from "@google/adk";
 import { z } from "zod";
+import type { Spot } from "../contracts.js";
 import { KOMORO_SPOTS, SPOT_HOURS, SPOT_TAGS } from "../fixtures/spots.js";
 import { CHAT_MODEL } from "../modelConfig.js";
 
@@ -68,32 +69,34 @@ export interface DebateInput {
   travelMemory?: string;
 }
 
-export async function runDebate(input: DebateInput, userId = "demo"): Promise<DebateResult> {
+export async function runDebate(
+  input: DebateInput,
+  userId = "demo",
+  catalog: Spot[] = KOMORO_SPOTS,
+): Promise<DebateResult> {
   if (process.env.USE_MOCK !== "0") {
+    const picks = catalog.slice(0, Math.min(3, catalog.length));
+    const pickNames = picks.map((s) => s.name).join("、");
     return {
       debate: [
         {
           agent: "recommend",
-          thought:
-            "ユーザーの好みを考慮し、代表的な観光スポットである懐古園と、グルメとして停車場ガーデン、マンズワイン小諸ワイナリーを推薦します。",
-          message: "懐古園、停車場ガーデン、小諸ワイナリーの3箇所をベースに提案します！",
+          thought: `ユーザーの好みを考慮し、${pickNames || "候補"} を推薦します。`,
+          message: pickNames ? `${pickNames} の${picks.length}箇所をベースに提案します！` : "候補スポットを提案します。",
         },
         {
           agent: "route",
-          thought:
-            "小諸駅発として、懐古園と停車場ガーデンは駅至近、小諸ワイナリーへは車で10分程度。時間予算内に余裕で収まります。",
+          thought: `${input.origin} 発として、${picks.length}箇所は時間予算内に収まります。`,
           message: "ルートチェック完了。移動時間・滞在時間ともに問題ありません。",
         },
         {
           agent: "introduce",
-          thought:
-            "紹介スタイルに合わせ、歴史のロマンと千曲川の絶景ワインバレーの魅力をアピールしてまとめます。",
-          message: "歴史散策、ガーデンランチ、ワイナリーを巡る大人旅プランで合意しましょう！",
+          thought: "紹介スタイルに合わせ、各スポットの魅力をバランスよく組み合わせてまとめます。",
+          message: picks.length > 0 ? `${picks.length}箇所を巡るプランで合意しましょう！` : "条件に合うプランで合意しましょう！",
         },
       ],
-      finalSpots: ["s1", "s3", "s4"],
-      summary:
-        "懐古園で歴史を感じた後、駅前の停車場ガーデンでのランチ、最後にマンズワイン小諸ワイナリーでぶどう畑の美しい景色とワインを楽しむプランです。",
+      finalSpots: picks.map((s) => s.id),
+      summary: pickNames ? `${pickNames} を巡るおすすめプランです。` : "おすすめ観光プランです。",
     };
   }
   const runner = new InMemoryRunner({ agent: debateAgent });
@@ -102,13 +105,13 @@ export async function runDebate(input: DebateInput, userId = "demo"): Promise<De
     userId,
   });
 
-  const spotsCatalog = KOMORO_SPOTS.map((s) => ({
+  const spotsCatalog = catalog.map((s) => ({
     id: s.id,
     name: s.name,
     category: s.category,
     description: s.description,
     stayMin: SPOT_HOURS[s.id]?.stayMin ?? 60,
-    tags: SPOT_TAGS[s.id] ?? [],
+    tags: s.tags ?? SPOT_TAGS[s.id] ?? [],
   }));
 
   const requestText = `
@@ -120,7 +123,7 @@ export async function runDebate(input: DebateInput, userId = "demo"): Promise<De
 - 過去の紹介フィードバック（紹介スタイル）: ${input.introStyle || "特になし"}
 - ユーザーの思い出に残っている旅行（この傾向や体験を今回の推薦にも考慮してください）: ${input.travelMemory || "特になし"}
 
-【利用可能なスポットカタログ（小諸）】
+【利用可能なスポットカタログ】
 ${JSON.stringify(spotsCatalog, null, 2)}
 
 この条件を基に、推薦エージェント、ルート計画エージェント、紹介エージェントによるディベート対話を生成し、最終的なおすすめスポットリスト (finalSpots) を決定してください。

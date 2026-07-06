@@ -8,6 +8,7 @@ type Props<T extends string> = {
   onChange: (value: T) => void;
   items: Item<T>[];
   className?: string;
+  disabled?: boolean;
 };
 
 export function SegmentedControl<T extends string>({
@@ -15,6 +16,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   items,
   className = "",
+  disabled = false,
 }: Props<T>) {
   return (
     <div
@@ -31,8 +33,11 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="tab"
             aria-selected={active}
-            onClick={() => onChange(item.value)}
-            className={`flex-1 cursor-pointer px-4 py-2.5 text-sm transition ${
+            onClick={() => !disabled && onChange(item.value)}
+            disabled={disabled}
+            className={`flex-1 px-4 py-2.5 text-sm transition ${
+              disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+            } ${
               !isLast ? "border-r border-[#e2e8f0]" : ""
             } ${
               active
