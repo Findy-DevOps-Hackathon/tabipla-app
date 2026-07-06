@@ -17,9 +17,6 @@ MAIN_BRANCH="${CLOUD_BUILD_BRANCH:-^main$}"
 REPO_RESOURCE="projects/${PROJECT}/locations/${REGION}/connections/${CONNECTION}/repositories/${REPO}"
 SERVICE_ACCOUNT="projects/${PROJECT}/serviceAccounts/tabipla-cloudbuild-deploy@${PROJECT}.iam.gserviceaccount.com"
 
-CI_INCLUDED_FILES="apps/**,services/**,packages/**,biome.json,pnpm-lock.yaml,pnpm-workspace.yaml,package.json,**/tsconfig*.json,infra/cloud-build/cloudbuild.ci.yaml,.gitleaks.toml"
-DEPLOY_INCLUDED_FILES="services/**,packages/**,infra/cloud-build/**,pnpm-lock.yaml,pnpm-workspace.yaml,package.json"
-
 GCS_BUCKET=""
 GCS_PUBLIC_BASE_URL=""
 GCS_OBJECT_PREFIX="spots"
@@ -51,98 +48,155 @@ if ! gcloud builds repositories describe "$REPO" \
   exit 1
 fi
 
-create_or_update_push_trigger() {
+TRIGGER_DIR="$(mktemp -d "${TMPDIR:-/tmp}/tabipla-triggers.XXXXXX")"
+cleanup() {
+  rm -rf "$TRIGGER_DIR"
+}
+trap cleanup EXIT
+
+write_included_files() {
+  local -a files=("$@")
+  for file in "${files[@]}"; do
+    printf "  - '%s'\n" "$file"
+  done
+}
+
+apply_trigger() {
   local name="$1"
   local config="$2"
-  local branch_pattern="$3"
-  shift 3
-  local -a extra_args=("$@")
 
   if gcloud builds triggers describe "$name" \
     --project="$PROJECT" \
     --region="$REGION" >/dev/null 2>&1; then
-    echo "Updating push trigger '${name}'..."
-    local -a sub_args=()
-    for arg in "${extra_args[@]}"; do
-      if [[ "$arg" == --substitutions=* ]]; then
-        sub_args+=(--update-substitutions="${arg#--substitutions=}")
-      else
-        sub_args+=("$arg")
-      fi
-    done
+    echo "Updating trigger '${name}'..."
     gcloud builds triggers update github "$name" \
       --project="$PROJECT" \
       --region="$REGION" \
-      --repository="$REPO_RESOURCE" \
-      --branch-pattern="$branch_pattern" \
-      --build-config="$config" \
-      --service-account="$SERVICE_ACCOUNT" \
-      "${sub_args[@]}" \
+      --trigger-config="$config" \
       --quiet
   else
-    echo "Creating push trigger '${name}'..."
-    gcloud builds triggers create github \
-      --name="$name" \
+    echo "Creating trigger '${name}'..."
+    gcloud builds triggers import \
       --project="$PROJECT" \
       --region="$REGION" \
-      --repository="$REPO_RESOURCE" \
-      --branch-pattern="$branch_pattern" \
-      --build-config="$config" \
-      --service-account="$SERVICE_ACCOUNT" \
-      "${extra_args[@]}" \
+      --source="$config" \
       --quiet
   fi
   echo "  ✓ ${name}"
 }
 
-create_or_update_pr_trigger() {
-  local name="$1"
-  local config="$2"
-  local pr_pattern="$3"
-  shift 3
-  local -a extra_args=("$@")
+CI_FILES=(
+  "apps/**"
+  "services/**"
+  "packages/**"
+  "biome.json"
+  "pnpm-lock.yaml"
+  "pnpm-workspace.yaml"
+  "package.json"
+  "**/tsconfig*.json"
+  "infra/cloud-build/cloudbuild.ci.yaml"
+  ".gitleaks.toml"
+)
 
-  if gcloud builds triggers describe "$name" \
-    --project="$PROJECT" \
-    --region="$REGION" >/dev/null 2>&1; then
-    echo "Updating PR trigger '${name}'..."
-    gcloud builds triggers update github "$name" \
-      --project="$PROJECT" \
-      --region="$REGION" \
-      --repository="$REPO_RESOURCE" \
-      --pull-request-pattern="$pr_pattern" \
-      --build-config="$config" \
-      --service-account="$SERVICE_ACCOUNT" \
-      --comment-control=COMMENTS_ENABLED \
-      "${extra_args[@]}" \
-      --quiet
-  else
-    echo "Creating PR trigger '${name}'..."
-    gcloud builds triggers create github \
-      --name="$name" \
-      --project="$PROJECT" \
-      --region="$REGION" \
-      --repository="$REPO_RESOURCE" \
-      --pull-request-pattern="$pr_pattern" \
-      --build-config="$config" \
-      --service-account="$SERVICE_ACCOUNT" \
-      --comment-control=COMMENTS_ENABLED \
-      "${extra_args[@]}" \
-      --quiet
-  fi
-  echo "  ✓ ${name}"
+DEPLOY_FILES=(
+  "services/**"
+  "packages/**"
+  "infra/cloud-build/**"
+  "pnpm-lock.yaml"
+  "pnpm-workspace.yaml"
+  "package.json"
+)
+
+FRONT_DEPLOY_FILES=(
+  "apps/user-web/**"
+  "apps/admin-web/**"
+  "infra/cloud-build/deploy-user-web.sh"
+  "infra/cloud-build/deploy-admin-web.sh"
+  "infra/cloud-build/cloudbuild.deploy-front.yaml"
+  "pnpm-lock.yaml"
+  "pnpm-workspace.yaml"
+  "package.json"
+)
+
+CORS_ORIGINS="https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com"
+
+write_ci_pr_trigger() {
+  local out="$TRIGGER_DIR/tabipla-ci.yaml"
+  cat >"$out" <<EOF
+name: tabipla-ci
+filename: infra/cloud-build/cloudbuild.ci.yaml
+includedFiles:
+$(write_included_files "${CI_FILES[@]}")
+repositoryEventConfig:
+  repository: ${REPO_RESOURCE}
+  pullRequest:
+    branch: ${MAIN_BRANCH}
+    commentControl: COMMENTS_ENABLED
+serviceAccount: ${SERVICE_ACCOUNT}
+EOF
+  echo "$out"
 }
 
-DEPLOY_SUBS="_REGION=${REGION},_USE_MOCK=1"
-if [[ -n "${GCS_BUCKET:-}" ]]; then
-  DEPLOY_SUBS="${DEPLOY_SUBS},_GCS_BUCKET=${GCS_BUCKET}"
-fi
-if [[ -n "${GCS_PUBLIC_BASE_URL:-}" ]]; then
-  DEPLOY_SUBS="${DEPLOY_SUBS},_GCS_PUBLIC_BASE_URL=${GCS_PUBLIC_BASE_URL}"
-fi
-if [[ -n "${GCS_OBJECT_PREFIX:-}" ]]; then
-  DEPLOY_SUBS="${DEPLOY_SUBS},_GCS_OBJECT_PREFIX=${GCS_OBJECT_PREFIX}"
-fi
+write_ci_push_trigger() {
+  local out="$TRIGGER_DIR/tabipla-ci-push.yaml"
+  cat >"$out" <<EOF
+name: tabipla-ci-push
+filename: infra/cloud-build/cloudbuild.ci.yaml
+includedFiles:
+$(write_included_files "${CI_FILES[@]}")
+repositoryEventConfig:
+  repository: ${REPO_RESOURCE}
+  push:
+    branch: .*
+serviceAccount: ${SERVICE_ACCOUNT}
+EOF
+  echo "$out"
+}
+
+write_deploy_services_trigger() {
+  local out="$TRIGGER_DIR/tabipla-deploy-services.yaml"
+  cat >"$out" <<EOF
+name: tabipla-deploy-services
+filename: infra/cloud-build/cloudbuild.deploy.yaml
+includedFiles:
+$(write_included_files "${DEPLOY_FILES[@]}")
+substitutions:
+  _REGION: ${REGION}
+  _USE_MOCK: "1"
+  _CORS_ORIGINS: "${CORS_ORIGINS}"
+  _GCS_BUCKET: "${GCS_BUCKET}"
+  _GCS_PUBLIC_BASE_URL: "${GCS_PUBLIC_BASE_URL}"
+  _GCS_OBJECT_PREFIX: ${GCS_OBJECT_PREFIX}
+  _ES_NODE: ""
+  _ES_INDEX: ""
+  _ES_VECTOR_DIMS: ""
+  _EMBEDDING_PROVIDER: ""
+repositoryEventConfig:
+  repository: ${REPO_RESOURCE}
+  push:
+    branch: ${MAIN_BRANCH}
+serviceAccount: ${SERVICE_ACCOUNT}
+EOF
+  echo "$out"
+}
+
+write_deploy_front_trigger() {
+  local out="$TRIGGER_DIR/tabipla-deploy-front.yaml"
+  cat >"$out" <<EOF
+name: tabipla-deploy-front
+filename: infra/cloud-build/cloudbuild.deploy-front.yaml
+includedFiles:
+$(write_included_files "${FRONT_DEPLOY_FILES[@]}")
+substitutions:
+  _REGION: ${REGION}
+repositoryEventConfig:
+  repository: ${REPO_RESOURCE}
+  push:
+    branch: ${MAIN_BRANCH}
+serviceAccount: ${SERVICE_ACCOUNT}
+EOF
+  echo "$out"
+}
 
 echo "Project:    ${PROJECT}"
 echo "Region:     ${REGION}"
@@ -151,26 +205,16 @@ echo "Repository: ${REPO}"
 echo ""
 
 echo "=== CI triggers ==="
-create_or_update_pr_trigger \
-  tabipla-ci \
-  infra/cloud-build/cloudbuild.ci.yaml \
-  "$MAIN_BRANCH" \
-  --included-files="$CI_INCLUDED_FILES"
-
-create_or_update_push_trigger \
-  tabipla-ci-push \
-  infra/cloud-build/cloudbuild.ci.yaml \
-  ".*" \
-  --included-files="$CI_INCLUDED_FILES"
+apply_trigger tabipla-ci "$(write_ci_pr_trigger)"
+apply_trigger tabipla-ci-push "$(write_ci_push_trigger)"
 
 echo ""
-echo "=== CD trigger ==="
-create_or_update_push_trigger \
-  tabipla-deploy-services \
-  infra/cloud-build/cloudbuild.deploy.yaml \
-  "$MAIN_BRANCH" \
-  --included-files="$DEPLOY_INCLUDED_FILES" \
-  --substitutions="${DEPLOY_SUBS}"
+echo "=== CD trigger (backend) ==="
+apply_trigger tabipla-deploy-services "$(write_deploy_services_trigger)"
+
+echo ""
+echo "=== CD trigger (frontend) ==="
+apply_trigger tabipla-deploy-front "$(write_deploy_front_trigger)"
 
 echo ""
 echo "=== Triggers setup complete ==="
@@ -180,3 +224,4 @@ echo "  gcloud builds submit . --config=infra/cloud-build/cloudbuild.ci.yaml --r
 echo ""
 echo "CD 手動実行:"
 echo "  gcloud builds triggers run tabipla-deploy-services --branch=main --region=${REGION} --project=${PROJECT}"
+echo "  gcloud builds triggers run tabipla-deploy-front --branch=main --region=${REGION} --project=${PROJECT}"
