@@ -16,12 +16,7 @@ export const NOTO_UMBRELLA_AREA = "能登半島";
 /** 石川県公式区分: 能登北部（2市2町）。 */
 export const NOTO_NORTHERN_AREA = "能登北部";
 
-export const NOTO_NORTHERN_MUNICIPALITY_NAMES = [
-  "輪島市",
-  "珠洲市",
-  "穴水町",
-  "能登町",
-] as const;
+export const NOTO_NORTHERN_MUNICIPALITY_NAMES = ["輪島市", "珠洲市", "穴水町", "能登町"] as const;
 
 /** 石川県公式区分: 能登中部（2市3町）。 */
 export const NOTO_CENTRAL_AREA = "能登中部";

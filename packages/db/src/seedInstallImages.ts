@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { SEED_IMAGES_DIR, resolveSpotUploadDir, seedImageFilename } from "./seedData.js";
 import type { SeedSpot } from "./seedData.js";
+import { resolveSpotUploadDir, SEED_IMAGES_DIR, seedImageFilename } from "./seedData.js";
 
 /** seed-data/images の画像を backend-api の uploads へコピーする。 */
 export async function installSeedImages(spots: SeedSpot[]): Promise<number> {

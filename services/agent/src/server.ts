@@ -1,23 +1,23 @@
-import { InMemoryRunner, stringifyContent, type LlmAgent } from "@google/adk";
+import { InMemoryRunner, type LlmAgent, stringifyContent } from "@google/adk";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import {
-  collectAgent,
   COLLECT_CATEGORIES,
+  collectAgent,
   MAX_COLLECT_TARGET_COUNT,
   resolveCollectResult,
 } from "./agents/collect.js";
-import { describeAgent, describeSpot, type DescribeMode } from "./agents/describe.js";
-import { generateSpotImage } from "./agents/spotImage.js";
+import { type DescribeMode, describeAgent, describeSpot } from "./agents/describe.js";
 import { analyzeFeedback } from "./agents/feedback.js";
 import { askIntroduce } from "./agents/introduce.js";
 import { personalizedPlan } from "./agents/personalized.js";
 import { recommendAgent } from "./agents/recommend.js";
 import { ask } from "./agents/run.js";
+import { generateSpotImage } from "./agents/spotImage.js";
 import { story } from "./agents/unchiku.js";
-import { KOMORO_SPOTS, SPOT_IMAGES, SPOT_TAGS } from "./fixtures/spots.js";
 import type { Spot } from "./contracts.js";
+import { KOMORO_SPOTS, SPOT_IMAGES, SPOT_TAGS } from "./fixtures/spots.js";
 import { summarizeProfile, userProfiles } from "./personalize.js";
 import { sceneSvg } from "./sceneSvg.js";
 import { toolCallStorage } from "./tools/tracker.js";
@@ -25,7 +25,7 @@ import { pageHtml, swipePageHtml } from "./ui.js";
 
 const app = new Hono();
 
-app.use("*", async (c, next) => {
+app.use("*", async (_c, next) => {
   return toolCallStorage.run({ count: 0 }, next);
 });
 
@@ -377,7 +377,7 @@ ${focusBlock}${excludeBlock}
 【出力の再確認】Markdown・見出し・箇条書き・説明文は禁止。{"spots":[{"name":"...","description":"...","highlights":["...","...","..."],"category":"自然","area":"...","prefecture":"...","address":"...","tags":["..."],"sources":["..."]}]} 形式のJSONだけを出力すること。`;
 
     const JSON_RETRY_SUFFIX =
-      "\n\n【再指示】前回はMarkdownで返したため失敗しました。JSON以外は一切書かず、{\"spots\":[...]} だけを出力してください。";
+      '\n\n【再指示】前回はMarkdownで返したため失敗しました。JSON以外は一切書かず、{"spots":[...]} だけを出力してください。';
 
     const MAX_ATTEMPTS = 3;
     let final = "";
@@ -390,7 +390,9 @@ ${focusBlock}${excludeBlock}
       if (final) break;
       if (!isTransientError(errMsg)) break;
       if (attempt < MAX_ATTEMPTS) {
-        console.warn(`[collect] 一過性エラーのため再試行します (${attempt}/${MAX_ATTEMPTS}): ${errMsg}`);
+        console.warn(
+          `[collect] 一過性エラーのため再試行します (${attempt}/${MAX_ATTEMPTS}): ${errMsg}`,
+        );
         await new Promise((r) => setTimeout(r, 1500 * attempt));
       }
     }
@@ -420,7 +422,13 @@ ${focusBlock}${excludeBlock}
 
 // 個別登録向け: 指定自治体内の観光地1件について紹介文またはおすすめポイントを生成
 app.post("/v1/describe-spot", async (c) => {
-  const { name, municipality, prefecture, address, mode = "description" } = await c.req.json<{
+  const {
+    name,
+    municipality,
+    prefecture,
+    address,
+    mode = "description",
+  } = await c.req.json<{
     name: string;
     municipality: string;
     prefecture: string;
@@ -534,10 +542,7 @@ app.post("/v1/generate-spot-image", async (c) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/429|quota|rate/i.test(msg)) {
-      return c.json(
-        { error: "⚠️ レート制限に達しました。1分ほど待って再試行してください。" },
-        429,
-      );
+      return c.json({ error: "⚠️ レート制限に達しました。1分ほど待って再試行してください。" }, 429);
     }
     return c.json({ error: msg || "画像の生成に失敗しました" }, 500);
   }

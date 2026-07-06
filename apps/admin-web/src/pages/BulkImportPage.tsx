@@ -214,7 +214,11 @@ export default function BulkImportPage() {
               </table>
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <Button variant="secondary" disabled={importing} onClick={() => patchImport({ step: 1 })}>
+              <Button
+                variant="secondary"
+                disabled={importing}
+                onClick={() => patchImport({ step: 1 })}
+              >
                 戻る
               </Button>
               <Button

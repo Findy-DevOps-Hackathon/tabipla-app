@@ -327,11 +327,19 @@ export default function SpotListPage() {
                   <ChevronLeft className="size-4" />
                 </PageBtn>
                 {Array.from({ length: Math.min(3, totalPages) }, (_, i) => i + 1).map((n) => (
-                  <PageBtn key={n} active={page === n} disabled={deleting} onClick={() => setPage(n)}>
+                  <PageBtn
+                    key={n}
+                    active={page === n}
+                    disabled={deleting}
+                    onClick={() => setPage(n)}
+                  >
                     {n}
                   </PageBtn>
                 ))}
-                <PageBtn disabled={deleting || page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                <PageBtn
+                  disabled={deleting || page >= totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
                   <ChevronRight className="size-4" />
                 </PageBtn>
               </div>

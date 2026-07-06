@@ -91,7 +91,10 @@ function normalizeBrief(raw: SpotVisualBrief): SpotVisualBrief | null {
   return { subject, keyElements, atmosphere, composition, avoidElements };
 }
 
-function mergeBriefs(primary: SpotVisualBrief | null, secondary: SpotVisualBrief | null): SpotVisualBrief | null {
+function mergeBriefs(
+  primary: SpotVisualBrief | null,
+  secondary: SpotVisualBrief | null,
+): SpotVisualBrief | null {
   if (!primary && !secondary) return null;
   if (!primary) return secondary;
   if (!secondary) return primary;
@@ -136,7 +139,9 @@ async function fetchWikipediaIntro(input: SpotVisualBriefInput): Promise<string 
     const data = (await res.json()) as {
       query?: { pages?: Record<string, { missing?: string; extract?: string; title?: string }> };
     };
-    const pages = Object.values(data.query?.pages ?? {}).filter((p) => !p.missing && p.extract?.trim());
+    const pages = Object.values(data.query?.pages ?? {}).filter(
+      (p) => !p.missing && p.extract?.trim(),
+    );
     if (pages.length === 0) return null;
 
     const page = pages.find((p) => p.extract?.trim());
@@ -149,7 +154,10 @@ async function fetchWikipediaIntro(input: SpotVisualBriefInput): Promise<string 
   }
 }
 
-function buildVisualBriefPrompt(input: SpotVisualBriefInput, wikipediaIntro: string | null): string {
+function buildVisualBriefPrompt(
+  input: SpotVisualBriefInput,
+  wikipediaIntro: string | null,
+): string {
   const addressLine = input.address?.trim() ? `\n【住所】${input.address.trim()}` : "";
   const wikiBlock = wikipediaIntro
     ? `\n【Wikipedia 概要（参考・視覚的特徴の抽出に使う）】\n${wikipediaIntro}`
@@ -229,7 +237,9 @@ export async function researchSpotVisualBrief(
 ): Promise<SpotVisualBriefContext> {
   const wikipediaIntro = await fetchWikipediaIntro(input);
   if (wikipediaIntro) {
-    console.info(`[spot-image] wikipedia intro for "${input.name.trim()}": ${wikipediaIntro.slice(0, 80)}…`);
+    console.info(
+      `[spot-image] wikipedia intro for "${input.name.trim()}": ${wikipediaIntro.slice(0, 80)}…`,
+    );
   }
 
   if (!isSpotImageResearchEnabled()) {
@@ -243,7 +253,8 @@ export async function researchSpotVisualBrief(
       runVisualBriefAgent(buildVisualBriefPrompt(input, wikipediaIntro)),
       new Promise<null>((_, reject) => {
         setTimeout(
-          () => reject(new Error(`visual brief agent timeout (${VISUAL_BRIEF_TIMEOUT_MS / 1000}s)`)),
+          () =>
+            reject(new Error(`visual brief agent timeout (${VISUAL_BRIEF_TIMEOUT_MS / 1000}s)`)),
           VISUAL_BRIEF_TIMEOUT_MS,
         );
       }),

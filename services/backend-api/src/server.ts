@@ -37,8 +37,8 @@ import { buildSpotEmbedText, embedText } from "./embedding.js";
 import { patchSpotInElasticsearch, upsertSpotInElasticsearch } from "./esSync.js";
 import { geocodeAddressQuery } from "./geocode.js";
 import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./mapper.js";
-import { buildAskFacts, buildAskFactsFromClient, type AskSpotPayload } from "./spotAskFacts.js";
 import { lookupPlaceByName } from "./places.js";
+import { type AskSpotPayload, buildAskFacts, buildAskFactsFromClient } from "./spotAskFacts.js";
 import { enrichRecommendation, toAgentCatalogSpot } from "./spotCatalog.js";
 import {
   deleteSpotImageFiles,
@@ -77,9 +77,9 @@ import {
   getSpotByIdSchema,
   getSpotCouponsSchema,
   getSpotSchema,
-  listPublicSpotsSchema,
   hybridSearchSchema,
   keywordSearchSchema,
+  listPublicSpotsSchema,
   listSpotsSchema,
   loginSchema,
   placeLookupSchema,
@@ -661,7 +661,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   );
 
   // ---- v1 Reference & Mock APIs (B5 / B7) ---------------------------------
-  app.get("/v1/meta/preference-tags", async (req, reply) => {
+  app.get("/v1/meta/preference-tags", async (_req, _reply) => {
     return {
       tags: [
         { id: "sakagura", label: "酒蔵" },
@@ -990,9 +990,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   app.get("/img/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const dbSpot = await getSpotById(db, id);
-    const category = dbSpot?.category?.[0]
-      ? toAgentCatalogSpot(dbSpot).category
-      : undefined;
+    const category = dbSpot?.category?.[0] ? toAgentCatalogSpot(dbSpot).category : undefined;
     const url = category
       ? `${agentApiUrl}/img/${encodeURIComponent(id)}?category=${encodeURIComponent(category)}`
       : `${agentApiUrl}/img/${encodeURIComponent(id)}`;

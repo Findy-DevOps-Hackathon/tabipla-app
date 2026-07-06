@@ -36,4 +36,3 @@ export function markDetailedDiagnosisComplete(): void {
     // localStorage 不可時はセッション内 state のみに依存する。
   }
 }
-

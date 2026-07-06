@@ -39,10 +39,7 @@ export function toAgentCatalogSpot(row: SpotRow) {
 }
 
 /** agent の personalized/plan レスポンス1件を DB 行で enrich する。 */
-export function enrichRecommendation(
-  rec: Record<string, unknown>,
-  row: SpotRow | undefined,
-) {
+export function enrichRecommendation(rec: Record<string, unknown>, row: SpotRow | undefined) {
   if (!row) return rec;
 
   return {

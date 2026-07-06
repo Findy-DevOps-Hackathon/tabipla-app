@@ -112,11 +112,7 @@ async function removeExistingSpotImagesGcs(spotId: string): Promise<void> {
   await Promise.all(files.map((file) => file.delete().catch(() => undefined)));
 }
 
-async function saveSpotImageLocal(
-  spotId: string,
-  ext: string,
-  buffer: Buffer,
-): Promise<string> {
+async function saveSpotImageLocal(spotId: string, ext: string, buffer: Buffer): Promise<string> {
   const uploadDir = getSpotUploadDir();
   await mkdir(uploadDir, { recursive: true });
   await removeExistingSpotImagesLocal(spotId, uploadDir);

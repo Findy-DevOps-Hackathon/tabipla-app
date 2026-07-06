@@ -4,9 +4,9 @@ import { upsertAdminUser } from "./repository/adminUsers.js";
 import { upsertCoupon } from "./repository/coupons.js";
 import { upsertSpots } from "./repository/spots.js";
 import { upsertUnchikuFact } from "./repository/unchiku.js";
+import { municipalities } from "./schema.js";
 import { loadSeedBundle } from "./seedData.js";
 import { installSeedImages } from "./seedInstallImages.js";
-import { municipalities } from "./schema.js";
 
 /**
  * 開発用シードデータ投入スクリプト。
@@ -30,15 +30,11 @@ async function main(): Promise<void> {
     const defaultPassword = process.env.ADMIN_SEED_PASSWORD ?? "Zaq12wsx#";
 
     for (const municipality of bundle.municipalities) {
-      await db
-        .insert(municipalities)
-        .values(municipality)
-        .onConflictDoNothing();
+      await db.insert(municipalities).values(municipality).onConflictDoNothing();
     }
 
     for (const adminUser of bundle.adminUsers) {
-      const password =
-        adminUser.email === "admin@example.com" ? komoroPassword : defaultPassword;
+      const password = adminUser.email === "admin@example.com" ? komoroPassword : defaultPassword;
       await upsertAdminUser(db, {
         ...adminUser,
         passwordHash: await hashPassword(password),
@@ -63,8 +59,7 @@ async function main(): Promise<void> {
         `蘊蓄 ${counts.unchikuFacts} 件を upsert しました。`,
     );
     for (const adminUser of bundle.adminUsers) {
-      const password =
-        adminUser.email === "admin@example.com" ? komoroPassword : defaultPassword;
+      const password = adminUser.email === "admin@example.com" ? komoroPassword : defaultPassword;
       console.log("[db] ログイン:", adminUser.email, "/", password);
     }
   } finally {

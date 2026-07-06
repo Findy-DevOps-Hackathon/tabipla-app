@@ -501,184 +501,184 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
 
         <div className="mx-auto w-full pb-8">
           <fieldset disabled={formBusy} className="min-w-0 border-0 p-0">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="lg:col-span-2 flex flex-col gap-2">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <label htmlFor="spot-name" className="text-sm font-medium text-[#0f172a]">
-                  観光地名
-                </label>
-                {!isEdit && (
-                  <span className="text-xs text-[#64748b]">
-                    {lookingUpPlace
-                      ? "観光地名から情報を取得中…"
-                      : placeLookupMiss
-                        ? "該当する観光地が見つかりませんでした。住所を直接入力してください。"
-                        : "入力すると住所が自動入力されます。"}
-                  </span>
-                )}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="lg:col-span-2 flex flex-col gap-2">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <label htmlFor="spot-name" className="text-sm font-medium text-[#0f172a]">
+                    観光地名
+                  </label>
+                  {!isEdit && (
+                    <span className="text-xs text-[#64748b]">
+                      {lookingUpPlace
+                        ? "観光地名から情報を取得中…"
+                        : placeLookupMiss
+                          ? "該当する観光地が見つかりませんでした。住所を直接入力してください。"
+                          : "入力すると住所が自動入力されます。"}
+                    </span>
+                  )}
+                </div>
+                <input
+                  id="spot-name"
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setSpotName(e.target.value)}
+                  placeholder="例: 道の駅 〇〇"
+                  className={`h-11 rounded-lg border px-3 text-sm outline-none transition focus:ring-2 focus:ring-[#2563eb]/30 ${
+                    errors.name
+                      ? "border-[#dc2626] bg-white"
+                      : "border-[#e2e8f0] bg-white focus:border-[#2563eb]"
+                  }`}
+                />
+                {errors.name && <p className="text-xs text-[#dc2626]">{errors.name}</p>}
               </div>
-              <input
-                id="spot-name"
-                type="text"
-                value={form.name}
-                onChange={(e) => setSpotName(e.target.value)}
-                placeholder="例: 道の駅 〇〇"
-                className={`h-11 rounded-lg border px-3 text-sm outline-none transition focus:ring-2 focus:ring-[#2563eb]/30 ${
-                  errors.name
-                    ? "border-[#dc2626] bg-white"
-                    : "border-[#e2e8f0] bg-white focus:border-[#2563eb]"
-                }`}
+              <Input
+                label="住所"
+                value={form.address}
+                onChange={setAddress}
+                placeholder="例: 国道沿い1丁目"
+                className="lg:col-span-2"
               />
-              {errors.name && <p className="text-xs text-[#dc2626]">{errors.name}</p>}
-            </div>
-            <Input
-              label="住所"
-              value={form.address}
-              onChange={setAddress}
-              placeholder="例: 国道沿い1丁目"
-              className="lg:col-span-2"
-            />
-            <SpotImageField
-              spotId={isEdit ? id : undefined}
-              imageUrl={form.imageUrl}
-              pendingFile={pendingImageFile}
-              onImageUrlChange={(imageUrl) => setField("imageUrl", imageUrl)}
-              onPendingFileChange={setPendingImageFile}
-              disabled={formBusy}
-              generating={generatingImage}
-              onGenerate={() => void handleGenerateImage()}
-              generateMiss={imageGenerateMiss}
-            />
-            <div className="lg:col-span-2">
-              <div className="mb-2 flex flex-wrap items-end gap-4">
-                <label htmlFor="spot-description" className="text-sm font-medium text-[#0f172a]">
-                  紹介文
-                </label>
-                {!errors.description && (
-                  <p className="mt-2 text-xs text-[#64748b]">
-                    {descriptionGenerateMiss
-                      ? "紹介文を自動生成できませんでした。手動で入力するか、もう一度お試しください。"
-                      : `${form.description.length}/${MAX_DESCRIPTION_LENGTH}文字`}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={formBusy || generatingDescription || form.name.trim().length < 2}
-                  onClick={() => void handleGenerateDescription()}
-                >
-                  {generatingDescription ? "作成中…" : "AIで作成"}
-                </button>
-              </div>
-              <textarea
-                id="spot-description"
-                value={form.description}
-                rows={6}
-                maxLength={MAX_DESCRIPTION_LENGTH}
-                placeholder="例: 地元の特産品や食堂が楽しめる道の駅。旅の休憩・お土産選びに便利です。"
-                onChange={(e) => {
-                  setDescriptionGenerateMiss(false);
-                  setField("description", e.target.value);
-                }}
-                className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30 bg-white ${
-                  errors.description ? "border-[#dc2626]" : "border-[#e2e8f0]"
-                }`}
-              />
-              {errors.description && (
-                <p className="mt-2 text-xs text-[#dc2626]">{errors.description}</p>
-              )}
-            </div>
-            <div className="lg:col-span-2">
-              <div className="mb-2 flex flex-wrap items-end gap-4">
-                <label htmlFor="spot-highlights" className="text-sm font-medium text-[#0f172a]">
-                  おすすめポイント
-                </label>
-
-                <span className="text-xs text-[#64748b]">
-                  {highlightsGenerateMiss
-                    ? "おすすめポイントを自動生成できませんでした。手動で入力するか、もう一度お試しください。"
-                    : "1行1件（最大3件・各30文字）"}
-                </span>
-                <button
-                  type="button"
-                  className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={formBusy || generatingHighlights || form.name.trim().length < 2}
-                  onClick={() => void handleGenerateHighlights()}
-                >
-                  {generatingHighlights ? "作成中…" : "AIで作成"}
-                </button>
-              </div>
-              <textarea
-                id="spot-highlights"
-                value={form.highlights}
-                rows={4}
-                placeholder={
-                  "例: 地元野菜の直売所が充実している\n例: 名物メニューの食堂が人気\n例: 展望デッキの景色がきれい"
-                }
-                onChange={(e) => {
-                  setHighlightsGenerateMiss(false);
-                  setField("highlights", enforceHighlightsText(e.target.value));
-                }}
-                className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30"
-              />
-            </div>
-            <div className="lg:col-span-2">
-              <p className="mb-3 text-sm font-medium text-[#0f172a]">
-                カテゴリ{" "}
-                <span className="text-xs text-[#64748b]">
-                  複数選択可・最大 {MAX_SPOT_CATEGORIES} 件
-                </span>
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {SPOT_CATEGORIES.map((category) => {
-                  const active = form.categories.includes(category);
-                  return (
-                    <button
-                      key={category}
-                      type="button"
-                      disabled={!active && atMaxCategories}
-                      onClick={() => toggleCategory(category)}
-                      className={`rounded-full px-3 py-1.5 text-[13px] transition ${
-                        active
-                          ? "cursor-pointer bg-[#2563eb] font-medium text-white"
-                          : atMaxCategories
-                            ? "cursor-not-allowed bg-white text-[#94a3b8]"
-                            : "cursor-pointer bg-white text-[#475569] hover:bg-[#e2e8f0]"
-                      }`}
-                    >
-                      {category}
-                    </button>
-                  );
-                })}
-              </div>
-              {errors.categories && (
-                <p className="mt-2 text-xs text-[#dc2626]">{errors.categories}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-8 flex items-center justify-between pt-6">
-            {isEdit ? (
-              <Button
-                type="button"
+              <SpotImageField
+                spotId={isEdit ? id : undefined}
+                imageUrl={form.imageUrl}
+                pendingFile={pendingImageFile}
+                onImageUrlChange={(imageUrl) => setField("imageUrl", imageUrl)}
+                onPendingFileChange={setPendingImageFile}
                 disabled={formBusy}
-                className="bg-transparent text-[#dc2626]! border border-[#dc2626]! hover:bg-transparent! hover:opacity-50"
-                onClick={() => setShowDelete(true)}
-              >
-                削除
-              </Button>
-            ) : (
-              <div />
-            )}
-            <div className="flex gap-3">
-              <Button variant="secondary" disabled={formBusy} onClick={handleCancel}>
-                キャンセル
-              </Button>
-              <Button disabled={formBusy} onClick={() => void handleSave()}>
-                {saving ? "保存中…" : "保存して公開"}
-              </Button>
+                generating={generatingImage}
+                onGenerate={() => void handleGenerateImage()}
+                generateMiss={imageGenerateMiss}
+              />
+              <div className="lg:col-span-2">
+                <div className="mb-2 flex flex-wrap items-end gap-4">
+                  <label htmlFor="spot-description" className="text-sm font-medium text-[#0f172a]">
+                    紹介文
+                  </label>
+                  {!errors.description && (
+                    <p className="mt-2 text-xs text-[#64748b]">
+                      {descriptionGenerateMiss
+                        ? "紹介文を自動生成できませんでした。手動で入力するか、もう一度お試しください。"
+                        : `${form.description.length}/${MAX_DESCRIPTION_LENGTH}文字`}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={formBusy || generatingDescription || form.name.trim().length < 2}
+                    onClick={() => void handleGenerateDescription()}
+                  >
+                    {generatingDescription ? "作成中…" : "AIで作成"}
+                  </button>
+                </div>
+                <textarea
+                  id="spot-description"
+                  value={form.description}
+                  rows={6}
+                  maxLength={MAX_DESCRIPTION_LENGTH}
+                  placeholder="例: 地元の特産品や食堂が楽しめる道の駅。旅の休憩・お土産選びに便利です。"
+                  onChange={(e) => {
+                    setDescriptionGenerateMiss(false);
+                    setField("description", e.target.value);
+                  }}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30 bg-white ${
+                    errors.description ? "border-[#dc2626]" : "border-[#e2e8f0]"
+                  }`}
+                />
+                {errors.description && (
+                  <p className="mt-2 text-xs text-[#dc2626]">{errors.description}</p>
+                )}
+              </div>
+              <div className="lg:col-span-2">
+                <div className="mb-2 flex flex-wrap items-end gap-4">
+                  <label htmlFor="spot-highlights" className="text-sm font-medium text-[#0f172a]">
+                    おすすめポイント
+                  </label>
+
+                  <span className="text-xs text-[#64748b]">
+                    {highlightsGenerateMiss
+                      ? "おすすめポイントを自動生成できませんでした。手動で入力するか、もう一度お試しください。"
+                      : "1行1件（最大3件・各30文字）"}
+                  </span>
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={formBusy || generatingHighlights || form.name.trim().length < 2}
+                    onClick={() => void handleGenerateHighlights()}
+                  >
+                    {generatingHighlights ? "作成中…" : "AIで作成"}
+                  </button>
+                </div>
+                <textarea
+                  id="spot-highlights"
+                  value={form.highlights}
+                  rows={4}
+                  placeholder={
+                    "例: 地元野菜の直売所が充実している\n例: 名物メニューの食堂が人気\n例: 展望デッキの景色がきれい"
+                  }
+                  onChange={(e) => {
+                    setHighlightsGenerateMiss(false);
+                    setField("highlights", enforceHighlightsText(e.target.value));
+                  }}
+                  className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30"
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <p className="mb-3 text-sm font-medium text-[#0f172a]">
+                  カテゴリ{" "}
+                  <span className="text-xs text-[#64748b]">
+                    複数選択可・最大 {MAX_SPOT_CATEGORIES} 件
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {SPOT_CATEGORIES.map((category) => {
+                    const active = form.categories.includes(category);
+                    return (
+                      <button
+                        key={category}
+                        type="button"
+                        disabled={!active && atMaxCategories}
+                        onClick={() => toggleCategory(category)}
+                        className={`rounded-full px-3 py-1.5 text-[13px] transition ${
+                          active
+                            ? "cursor-pointer bg-[#2563eb] font-medium text-white"
+                            : atMaxCategories
+                              ? "cursor-not-allowed bg-white text-[#94a3b8]"
+                              : "cursor-pointer bg-white text-[#475569] hover:bg-[#e2e8f0]"
+                        }`}
+                      >
+                        {category}
+                      </button>
+                    );
+                  })}
+                </div>
+                {errors.categories && (
+                  <p className="mt-2 text-xs text-[#dc2626]">{errors.categories}</p>
+                )}
+              </div>
             </div>
-          </div>
+
+            <div className="mt-8 flex items-center justify-between pt-6">
+              {isEdit ? (
+                <Button
+                  type="button"
+                  disabled={formBusy}
+                  className="bg-transparent text-[#dc2626]! border border-[#dc2626]! hover:bg-transparent! hover:opacity-50"
+                  onClick={() => setShowDelete(true)}
+                >
+                  削除
+                </Button>
+              ) : (
+                <div />
+              )}
+              <div className="flex gap-3">
+                <Button variant="secondary" disabled={formBusy} onClick={handleCancel}>
+                  キャンセル
+                </Button>
+                <Button disabled={formBusy} onClick={() => void handleSave()}>
+                  {saving ? "保存中…" : "保存して公開"}
+                </Button>
+              </div>
+            </div>
           </fieldset>
         </div>
       </div>
@@ -711,7 +711,11 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
           保存していない変更があります。このページを離れると、入力内容は失われます。
         </p>
         <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" disabled={formBusy} onClick={() => setShowDiscardConfirm(false)}>
+          <Button
+            variant="secondary"
+            disabled={formBusy}
+            onClick={() => setShowDiscardConfirm(false)}
+          >
             編集を続ける
           </Button>
           <Button variant="danger" disabled={formBusy} onClick={leaveForm}>

@@ -70,7 +70,9 @@ const PHOTO_SEARCH_AGENT_TIMEOUT_MS = 45_000;
 /** Wikipedia 完全一致など、このスコア以上なら Google 検索エージェントを省略する。 */
 const WIKI_FAST_PATH_MIN_SCORE = 90;
 
-async function runPhotoSearchAgent(prompt: string): Promise<{ pageUrls: string[]; imageUrls: string[] }> {
+async function runPhotoSearchAgent(
+  prompt: string,
+): Promise<{ pageUrls: string[]; imageUrls: string[] }> {
   const runner = new InMemoryRunner({ agent: spotPhotoSearchAgent });
   const session = await runner.sessionService.createSession({
     appName: runner.appName,
@@ -106,7 +108,12 @@ async function runPhotoSearchAgentWithTimeout(
       runPhotoSearchAgent(prompt),
       new Promise<never>((_, reject) => {
         setTimeout(
-          () => reject(new Error(`Google 検索エージェントが ${PHOTO_SEARCH_AGENT_TIMEOUT_MS / 1000}s 以内に完了しませんでした`)),
+          () =>
+            reject(
+              new Error(
+                `Google 検索エージェントが ${PHOTO_SEARCH_AGENT_TIMEOUT_MS / 1000}s 以内に完了しませんでした`,
+              ),
+            ),
           PHOTO_SEARCH_AGENT_TIMEOUT_MS,
         );
       }),
@@ -135,7 +142,7 @@ function isGenericLocationTitle(title: string, municipality: string, prefecture:
   if (t === municipality || t === prefecture) return true;
   if (t === `${prefecture}${municipality}`) return true;
   // 市区町村名だけ（「小諸市」記事など）
-  if (t === municipality.replace(/市$/, "") + "市") return true;
+  if (t === `${municipality.replace(/市$/, "")}市`) return true;
   return false;
 }
 
@@ -230,11 +237,7 @@ async function collectWikimediaPhotoUrls(input: SpotPhotoSearchInput): Promise<S
     results.push({ url, score, source });
   };
 
-  const exactTitles = [
-    spotName,
-    `${spotName} (${municipality})`,
-    `${spotName}（${municipality}）`,
-  ];
+  const exactTitles = [spotName, `${spotName} (${municipality})`, `${spotName}（${municipality}）`];
   const exactPages = await fetchWikiPagesByTitles(exactTitles);
   for (const page of exactPages) {
     const title = page.title ?? spotName;
@@ -407,7 +410,10 @@ function extractPageImageCandidates(
   return results;
 }
 
-async function collectImagesFromPage(pageUrl: string, input: SpotPhotoSearchInput): Promise<ScoredUrl[]> {
+async function collectImagesFromPage(
+  pageUrl: string,
+  input: SpotPhotoSearchInput,
+): Promise<ScoredUrl[]> {
   const html = await fetchPageHtml(pageUrl);
   if (!html) return [];
   if (!pageMatchesSpot(html, input)) {
@@ -526,7 +532,9 @@ function mergeCandidateUrls(
 
 async function collectGoogleSearchCandidates(input: SpotPhotoSearchInput): Promise<ScoredUrl[]> {
   console.info(`[spot-image] google search fallback for "${input.name}"`);
-  const { pageUrls, imageUrls } = await runPhotoSearchAgentWithTimeout(buildPhotoSearchPrompt(input));
+  const { pageUrls, imageUrls } = await runPhotoSearchAgentWithTimeout(
+    buildPhotoSearchPrompt(input),
+  );
   console.info(
     `[spot-image] google search result for "${input.name}": imageUrls=${imageUrls.length} pageUrls=${pageUrls.length}`,
   );
@@ -586,7 +594,9 @@ export async function findReferencePhoto(input: SpotPhotoSearchInput): Promise<R
       console.info(`[spot-image] skipping google search agent (web discovery score>=85)`);
     }
   } else {
-    console.info(`[spot-image] skipping google search fallback (wikipedia score=${wikiCandidates[0]?.score})`);
+    console.info(
+      `[spot-image] skipping google search fallback (wikipedia score=${wikiCandidates[0]?.score})`,
+    );
   }
 
   candidates.sort((a, b) => b.score - a.score);
@@ -613,7 +623,9 @@ export async function findReferencePhoto(input: SpotPhotoSearchInput): Promise<R
 }
 
 /** 参考写真が見つからない場合は null を返す（auto モード用）。 */
-export async function tryFindReferencePhoto(input: SpotPhotoSearchInput): Promise<ReferencePhoto | null> {
+export async function tryFindReferencePhoto(
+  input: SpotPhotoSearchInput,
+): Promise<ReferencePhoto | null> {
   try {
     return await findReferencePhoto(input);
   } catch {
