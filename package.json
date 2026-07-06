@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm --filter './packages/*' build && pnpm -r typecheck",
     "build": "pnpm -r build",
     "format": "biome format --write .",
     "lint": "biome lint .",

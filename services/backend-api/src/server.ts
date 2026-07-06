@@ -12,6 +12,7 @@ import {
   getUserByEmail,
   hashPassword,
   listSpots,
+  type SpotRow,
   upsertSpot,
   upsertSpots,
   verifyPassword,
@@ -843,9 +844,9 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
           ];
     const { rows: dbRows } = await listSpots(db, { destinations, limit: 100 });
     const catalog = dbRows.map(toAgentCatalogSpot);
-    const rowById = new Map(dbRows.map((row) => [row.id, row]));
-    const rowByName = new Map(dbRows.map((row) => [row.name, row]));
-    const allowedIds = new Set(dbRows.map((row) => row.id));
+    const rowById = new Map(dbRows.map((row: SpotRow) => [row.id, row]));
+    const rowByName = new Map(dbRows.map((row: SpotRow) => [row.name, row]));
+    const allowedIds = new Set(dbRows.map((row: SpotRow) => row.id));
 
     if (dbRows.length === 0) {
       return {
