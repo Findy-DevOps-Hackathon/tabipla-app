@@ -365,33 +365,18 @@ export default function App() {
   }, [refineCatalog]);
 
   const handleSwipeComplete = useCallback(
-    (likedIds: string[]) => {
-      setLikes((prev) => {
-        const next = [...prev];
-        for (const id of likedIds) {
-          if (!next.includes(id)) next.push(id);
-        }
-        return next;
-      });
+    (likedIds: string[], nopedIds: string[]) => {
+      setLikes(likedIds);
+      setNopes(nopedIds);
+      setSwipedCount(likedIds.length + nopedIds.length);
 
-      const deckIds = swipeDeck.map((s) => s.id);
-      const nopedIds = deckIds.filter((id) => !likedIds.includes(id));
-      setNopes((prev) => {
-        const next = [...prev];
-        for (const id of nopedIds) {
-          if (!next.includes(id)) next.push(id);
-        }
-        return next;
-      });
-
-      setSwipedCount(swipeDeck.length);
       if (refining) {
         setDetailedComplete(true);
         markDetailedDiagnosisComplete();
       }
       setStep(refining ? "processing" : "input");
     },
-    [refining, swipeDeck],
+    [refining],
   );
 
   useEffect(() => {
@@ -586,7 +571,6 @@ export default function App() {
       {step === "swipe" && (
         <SwipeScreen
           key={runId}
-          spots={swipeDeck}
           refine={refining}
           onComplete={handleSwipeComplete}
           onCancel={() => {

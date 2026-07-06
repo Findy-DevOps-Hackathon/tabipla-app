@@ -64,6 +64,13 @@
       "when": 1782800000000,
       "tag": "0008_spot_image_url",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783348926766,
+      "tag": "0009_legal_franklin_storm",
+      "breakpoints": true
     }
   ]
 }

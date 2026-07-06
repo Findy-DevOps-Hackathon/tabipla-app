@@ -26,7 +26,7 @@ export function resolveEmbeddingProvider(): EmbeddingProvider {
   return "hash";
 }
 
-/** スポットドキュメントから埋め込み用テキストを組み立てる。 */
+/** スポットドキュメントから埋め込み用テキストを組み立てる（地理情報はハードフィルタで扱うため除外）。 */
 export function buildSpotEmbedText(
   doc: Pick<SpotDocument, "name" | "description" | "category" | "area" | "prefecture" | "tags">,
 ): string {
@@ -34,8 +34,6 @@ export function buildSpotEmbedText(
     doc.name,
     doc.description,
     ...(doc.category ? (Array.isArray(doc.category) ? doc.category : [doc.category]) : []),
-    doc.area,
-    doc.prefecture,
     doc.tags?.join(" "),
   ].filter(Boolean);
   return parts.join("\n");

@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   countSpots,
   createDatabase,
@@ -12,6 +15,7 @@ import {
   getUserByEmail,
   hashPassword,
   listSpots,
+  spots,
   upsertSpot,
   upsertSpots,
   verifyPassword,
@@ -82,6 +86,7 @@ import {
   keywordSearchSchema,
   listSpotsSchema,
   loginSchema,
+  nextPairSchema,
   placeLookupSchema,
   postRecommendationsSchema,
   postSpotImageSchema,
@@ -96,6 +101,7 @@ import {
   vectorSearchSchema,
 } from "./schemas.js";
 import { issueUserToken } from "./userAuth.js";
+import { getNextPair } from "./diagnosis.js";
 
 /**
  * backend-api は検索ロジックを持たず、必ず search-core を経由して Elasticsearch を扱う。
@@ -240,6 +246,91 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         { err: error, spotId: document.id },
         "embedding 生成に失敗したため embedding なしで登録します",
       );
+      return document;
+    }
+  }
+
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+
+  function cosineSimilarity(a: number[], b: number[]): number {
+    let dot = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < a.length; i++) {
+      const valA = a[i] ?? 0;
+      const valB = b[i] ?? 0;
+      dot += valA * valB;
+      normA += valA * valA;
+      normB += valB * valB;
+    }
+    return normA > 0 && normB > 0 ? dot / (Math.sqrt(normA) * Math.sqrt(normB)) : 0;
+  }
+
+  // 最も類似する基準観光地の clusterId を割り当てる (案A)
+  async function attachClusterId(document: SpotDocument): Promise<SpotDocument> {
+    const scores = document.sensoryScores;
+    if (!scores) {
+      return document;
+    }
+
+    try {
+      // DBから全スポットを取得して基準観光地 (id が 'ref-') をフィルター
+      const allRows = await db
+        .select({
+          id: spots.id,
+          clusterId: spots.clusterId,
+          sensoryScores: spots.sensoryScores
+        })
+        .from(spots);
+      const refRows = allRows.filter((r) => r.id.startsWith("ref-"));
+
+      if (refRows.length === 0) {
+        app.log.warn("[server] 基準観光地がDBに見つかりません");
+        return document;
+      }
+      
+      let maxSimilarity = -1;
+      let bestClusterId = 0;
+
+      const target = [
+        scores.nature ?? 0,
+        scores.history ?? 0,
+        scores.art ?? 0,
+        scores.entertainment ?? 0,
+        scores.gourmet ?? 0,
+        scores.activity ?? 0,
+        scores.quietness ?? 0,
+        scores.indoor ?? 0,
+        scores.popularity ?? 0,
+      ];
+
+      for (const ref of refRows) {
+        if (ref.clusterId === null || !ref.sensoryScores) continue;
+
+        const refScores = ref.sensoryScores as any;
+        const refVector = [
+          refScores.nature ?? 0,
+          refScores.history ?? 0,
+          refScores.art ?? 0,
+          refScores.entertainment ?? 0,
+          refScores.gourmet ?? 0,
+          refScores.activity ?? 0,
+          refScores.quietness ?? 0,
+          refScores.indoor ?? 0,
+          refScores.popularity ?? 0
+        ];
+
+        const sim = cosineSimilarity(target, refVector);
+        if (sim > maxSimilarity) {
+          maxSimilarity = sim;
+          bestClusterId = ref.clusterId;
+        }
+      }
+
+      return { ...document, clusterId: bestClusterId };
+    } catch (e) {
+      app.log.error(e, "[server] attachClusterId でエラーが発生しました");
       return document;
     }
   }
@@ -446,7 +537,13 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     { schema: createSpotSchema },
     async (req) => {
       const refresh = req.query.refresh === "true";
-      const row = await upsertSpot(db, toNewSpotRow(req.body));
+      const tempDoc: SpotDocument = req.body;
+      const docWithCluster = await attachClusterId(tempDoc);
+      const rowInput = {
+        ...toNewSpotRow(tempDoc),
+        clusterId: docWithCluster.clusterId ?? null,
+      };
+      const row = await upsertSpot(db, rowInput);
       const document = toSpotDocument(row);
       await upsertSpotInElasticsearch(client, await attachEmbedding(document), { refresh });
       return document;
@@ -523,7 +620,16 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     { schema: bulkSpotsSchema },
     async (req) => {
       const refresh = req.query.refresh === "true";
-      const rows = await upsertSpots(db, req.body.spots.map(toNewSpotRow));
+      const newSpotRows = [];
+      for (const spotBody of req.body.spots) {
+        const tempDoc: SpotDocument = spotBody;
+        const docWithCluster = await attachClusterId(tempDoc);
+        newSpotRows.push({
+          ...toNewSpotRow(tempDoc),
+          clusterId: docWithCluster.clusterId ?? null,
+        });
+      }
+      const rows = await upsertSpots(db, newSpotRows);
       const documents = rows.map(toSpotDocument);
       // 各ドキュメントを1回だけ embedding 付与して upsert する。
       // refresh は最後の1件だけ true にして、まとめて可視化する（従来の挙動を踏襲）。
@@ -657,6 +763,15 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     { schema: travelTimesSchema },
     async (req) => {
       return getTravelTimes(req.body);
+    },
+  );
+
+  // ---- コールドスタート診断：動的ペア提示 API ----
+  app.post<{ Body: { likes: string[]; nopes: string[] } }>(
+    "/v1/diagnosis/next-pair",
+    { schema: nextPairSchema },
+    async (req) => {
+      return getNextPair(req.body);
     },
   );
 

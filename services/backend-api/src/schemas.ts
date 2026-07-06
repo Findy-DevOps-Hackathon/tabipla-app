@@ -50,6 +50,22 @@ const spotOptionalProps = {
   location: geoPointSchema,
   price: { type: "integer", minimum: 0 },
   imageUrl: { type: "string", maxLength: 2048 },
+  clusterId: { type: "integer" },
+  sensoryScores: {
+    type: "object",
+    properties: {
+      nature: { type: "number" },
+      history: { type: "number" },
+      art: { type: "number" },
+      entertainment: { type: "number" },
+      gourmet: { type: "number" },
+      activity: { type: "number" },
+      quietness: { type: "number" },
+      indoor: { type: "number" },
+      popularity: { type: "number" },
+    },
+    additionalProperties: false,
+  },
   embedding: { type: "array", items: { type: "number" } },
   createdAt: { type: "string", format: "date-time" },
   updatedAt: { type: "string", format: "date-time" },
@@ -461,3 +477,23 @@ export const postSpotStorySchema = {
     },
   },
 } as const;
+
+/** POST /v1/diagnosis/next-pair */
+export const nextPairSchema = {
+  body: {
+    type: "object",
+    required: ["likes", "nopes"],
+    additionalProperties: false,
+    properties: {
+      likes: {
+        type: "array",
+        items: { type: "string" },
+      },
+      nopes: {
+        type: "array",
+        items: { type: "string" },
+      },
+    },
+  },
+} as const;
+

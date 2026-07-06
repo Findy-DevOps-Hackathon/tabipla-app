@@ -1,41 +1,93 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UndoIcon } from "../components/icons.tsx";
 import { SpotImage } from "../components/SpotImage.tsx";
-import type { SwipeSpot } from "../data/spots.ts";
+import type { SwipeSpot, SpotCategory } from "../data/spots.ts";
 import { spotPreviewText } from "../lib/spotMapper.ts";
 
 type SwipeScreenProps = {
-  spots: SwipeSpot[];
-  /** 全ラウンド完了時。好みと判定したスポット ID を渡す。 */
-  onComplete: (likedIds: string[]) => void;
-  /** 「好みをより詳しく設定する」からの詳細設定ラウンドか。見出し表示が変わる。 */
   refine?: boolean;
-  /** 中止ボタン押下時。比較をやめて前の画面へ戻る。 */
+  /** 全ラウンド完了時。likes（勝者ID）と nopes（敗者ID）の最終配列を親に渡す */
+  onComplete: (likedIds: string[], nopedIds: string[]) => void;
   onCancel: () => void;
 };
 
-type HistoryEntry = {
-  roundIndex: number;
-  championId: string;
-  wins: Record<string, number>;
-  winnerId: string;
+type SwipeHistoryEntry = {
+  likes: string[];
+  nopes: string[];
+  spotA: SwipeSpot;
+  spotB: SwipeSpot;
 };
 
-/** 勝ち数上位（同数は元の並び順）から好み候補 ID を返す。 */
-function computeLikedIds(spots: SwipeSpot[], wins: Record<string, number>): string[] {
-  if (spots.length === 0) return [];
-  const only = spots[0];
-  if (spots.length === 1 && only) return [only.id];
+const API_BASE = "/api";
 
-  const likeCount = Math.max(1, Math.ceil(spots.length / 2));
-  return [...spots]
-    .sort((a, b) => {
-      const diff = (wins[b.id] ?? 0) - (wins[a.id] ?? 0);
-      if (diff !== 0) return diff;
-      return spots.indexOf(a) - spots.indexOf(b);
-    })
-    .slice(0, likeCount)
-    .map((s) => s.id);
+// 基準観光地用の美麗な Unsplash 画像マッピング (Rich Aesthetics)
+const SPOT_IMAGES: Record<string, string> = {
+  "ref-01": "https://images.unsplash.com/photo-1545569341-9eb8b30979d9?auto=format&fit=crop&w=600&q=80", // 清水寺
+  "ref-02": "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=600&q=80", // 金閣寺
+  "ref-03": "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=600&q=80", // 伏見稲荷
+  "ref-04": "https://images.unsplash.com/photo-1590224796214-368f9a2fb6e5?auto=format&fit=crop&w=600&q=80", // 姫路城
+  "ref-05": "https://images.unsplash.com/photo-1504198453319-5ce911bafcde?auto=format&fit=crop&w=600&q=80", // 厳島神社
+  "ref-06": "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=600&q=80", // 浅草寺
+  "ref-07": "https://images.unsplash.com/photo-1528164344705-47542687000d?auto=format&fit=crop&w=600&q=80", // 日光東照宮
+  "ref-08": "https://images.unsplash.com/photo-1524413840807-0c3cb6fa808d?auto=format&fit=crop&w=600&q=80", // 伊勢神宮
+  "ref-09": "https://images.unsplash.com/photo-1490730141103-6cac27aaab94?auto=format&fit=crop&w=600&q=80", // 出雲大社
+  "ref-10": "https://images.unsplash.com/photo-1490730141103-6cac27aaab94?auto=format&fit=crop&w=600&q=80", // 富士山五合目
+  "ref-11": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80", // 上高地
+  "ref-12": "https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=600&q=80", // 大雪山
+  "ref-13": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80", // 阿蘇山
+  "ref-14": "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=600&q=80", // 鳥取砂丘
+  "ref-15": "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=600&q=80", // 白谷雲水峡
+  "ref-16": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=600&q=80", // 奥入瀬渓流
+  "ref-17": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=600&q=80", // 高千穂峡
+  "ref-18": "https://images.unsplash.com/photo-1546026423-cc4642628d2b?auto=format&fit=crop&w=600&q=80", // 美ら海水族館
+  "ref-19": "https://images.unsplash.com/photo-1513829096960-ef0412df7b53?auto=format&fit=crop&w=600&q=80", // USJ
+  "ref-20": "https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&w=600&q=80", // 東京スカイツリー
+  "ref-21": "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=600&q=80", // 金沢21世紀美術館
+  "ref-22": "https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?auto=format&fit=crop&w=600&q=80", // 大塚国際美術館
+  "ref-23": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=600&q=80", // ジブリ美術館
+  "ref-24": "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=600&q=80", // 日本科学未来館
+  "ref-25": "https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=600&q=80", // 箱根彫刻の森美術館
+  "ref-26": "https://images.unsplash.com/photo-1525755662778-989d0524087e?auto=format&fit=crop&w=600&q=80", // 横浜中華街
+  "ref-27": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=600&q=80", // 築地場外市場
+  "ref-28": "https://images.unsplash.com/photo-1590256695277-2d4ff9000a6e?auto=format&fit=crop&w=600&q=80", // 道頓堀
+  "ref-29": "https://images.unsplash.com/photo-1534080391025-a87b4f145763?auto=format&fit=crop&w=600&q=80", // ひがし茶屋街
+  "ref-30": "https://images.unsplash.com/photo-1542044896530-05d85be9b11a?auto=format&fit=crop&w=600&q=80", // 草津温泉
+  "ref-31": "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=600&q=80", // 有馬温泉
+  "ref-32": "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&w=600&q=80", // 別府地獄めぐり
+  "ref-33": "https://images.unsplash.com/photo-1542044896530-05d85be9b11a?auto=format&fit=crop&w=600&q=80", // 城崎温泉
+  "ref-34": "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=600&q=80", // ニセコ
+  "ref-35": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=600&q=80", // 琵琶湖カヤック
+  "ref-36": "https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=600&q=80", // しまなみ海道
+  "ref-37": "https://images.unsplash.com/photo-1530866495561-507c9faab2ed?auto=format&fit=crop&w=600&q=80", // みなかみラフティング
+  "ref-38": "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=600&q=80", // 小樽運河
+  "ref-39": "https://images.unsplash.com/photo-1528360983277-13d401cdc186?auto=format&fit=crop&w=600&q=80", // 川越蔵造り
+  "ref-40": "https://images.unsplash.com/photo-1508193638397-1c4234db14d8?auto=format&fit=crop&w=600&q=80", // 白川郷
+  "ref-41": "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80", // 角島大橋
+  "ref-42": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=600&q=80", // 美瑛青い池
+  "ref-43": "https://images.unsplash.com/photo-1504618223053-559bdef9dd5a?auto=format&fit=crop&w=600&q=80", // 兼六園
+  "ref-44": "https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=600&q=80", // 那智の滝
+  "ref-45": "https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&w=600&q=80", // 中村藤吉
+  "ref-46": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80", // 高野山奥之院
+  "ref-47": "https://images.unsplash.com/photo-1470240731273-7821a6eeb6bd?auto=format&fit=crop&w=600&q=80", // ひたち海浜公園
+  "ref-48": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80", // 神戸北野異人館
+  "ref-49": "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=600&q=80", // 軽井沢ハルニレ
+  "ref-50": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=600&q=80", // 竹田城跡
+};
+
+const DEFAULT_SPOT_IMAGE = "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=600&q=80";
+
+function mapToSwipeSpot(spot: any): SwipeSpot {
+  return {
+    id: spot.id,
+    name: spot.name,
+    prefecture: spot.prefecture || "",
+    area: spot.area || "",
+    category: (Array.isArray(spot.category) ? spot.category[0] : spot.category) as SpotCategory || "観光",
+    description: spot.description,
+    trivia: spot.description,
+    tags: spot.tags || [],
+    image: SPOT_IMAGES[spot.id] || DEFAULT_SPOT_IMAGE,
+  };
 }
 
 type ComparisonCardProps = {
@@ -109,38 +161,54 @@ function ComparisonCard({
   );
 }
 
-/** フロー 3: 2つのスポットを比較して好みを伝える画面。 */
-export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: SwipeScreenProps) {
-  const totalRounds = Math.max(0, spots.length - 1);
+export function SwipeScreen({ onComplete, refine = false, onCancel }: SwipeScreenProps) {
+  const [likes, setLikes] = useState<string[]>([]);
+  const [nopes, setNopes] = useState<string[]>([]);
+  const [currentPair, setCurrentPair] = useState<{ spotA: SwipeSpot; spotB: SwipeSpot } | null>(null);
   const [roundIndex, setRoundIndex] = useState(0);
-  const [championId, setChampionId] = useState(() => spots[0]?.id ?? "");
-  const [wins, setWins] = useState<Record<string, number>>({});
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
   const [pick, setPick] = useState<{ winnerId: string; loserId: string } | null>(null);
   const [hintActive, setHintActive] = useState(true);
+  const [history, setHistory] = useState<SwipeHistoryEntry[]>([]);
 
-  const likedRef = useRef<string[]>([]);
   const completedRef = useRef(false);
   const hintTimerRef = useRef<number | null>(null);
 
-  const challenger = spots[roundIndex + 1];
-  const champion = spots.find((s) => s.id === championId);
-  const currentTop = champion;
-  const currentBottom = challenger;
+  // APIを呼び出して次のペアを取得する
+  const fetchNextPair = useCallback(async (currentLikes: string[], currentNopes: string[]) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/v1/diagnosis/next-pair`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ likes: currentLikes, nopes: currentNopes }),
+      });
+      const data = await res.json();
 
-  useEffect(() => {
-    if (spots.length === 0 && !completedRef.current) {
-      completedRef.current = true;
-      onComplete([]);
-    } else if (spots.length === 1 && !completedRef.current) {
-      const only = spots[0];
-      if (only) {
-        completedRef.current = true;
-        onComplete([only.id]);
+      if (data.isComplete || !data.spotA || !data.spotB) {
+        if (!completedRef.current) {
+          completedRef.current = true;
+          onComplete(currentLikes, currentNopes);
+        }
+      } else {
+        setCurrentPair({
+          spotA: mapToSwipeSpot(data.spotA),
+          spotB: mapToSwipeSpot(data.spotB),
+        });
+        setRoundIndex(data.roundIndex);
       }
+    } catch (error) {
+      console.error("次のペアの取得に失敗しました:", error);
+    } finally {
+      setLoading(false);
     }
-  }, [spots, onComplete]);
+  }, [onComplete]);
+
+  // 初回マウント時に最初のペアをフェッチ
+  useEffect(() => {
+    fetchNextPair([], []);
+  }, [fetchNextPair]);
 
   const playHint = useCallback(() => {
     setHintActive(true);
@@ -149,42 +217,40 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
   }, []);
 
   useEffect(() => {
-    playHint();
+    if (currentPair) {
+      playHint();
+    }
     return () => {
       if (hintTimerRef.current !== null) window.clearTimeout(hintTimerRef.current);
     };
-  }, [playHint]);
-
-  function finish(winsSnapshot: Record<string, number>) {
-    if (completedRef.current) return;
-    completedRef.current = true;
-    likedRef.current = computeLikedIds(spots, winsSnapshot);
-    onComplete(likedRef.current);
-  }
+  }, [currentPair, playHint]);
 
   function pickWinner(winnerId: string, loserId: string) {
-    if (locked || !currentTop || !currentBottom) return;
+    if (locked || !currentPair) return;
     setHintActive(false);
     setLocked(true);
     setPick({ winnerId, loserId });
 
-    const nextWins = { ...wins, [winnerId]: (wins[winnerId] ?? 0) + 1 };
-    const nextRound = roundIndex + 1;
-    const isLast = nextRound >= totalRounds;
+    const nextLikes = [...likes, winnerId];
+    const nextNopes = [...nopes, loserId];
 
-    setHistory((prev) => [...prev, { roundIndex, championId, wins, winnerId }]);
+    // 履歴に現在の状態をスタック（Undo用）
+    setHistory((prev) => [
+      ...prev,
+      {
+        likes,
+        nopes,
+        spotA: currentPair.spotA,
+        spotB: currentPair.spotB,
+      },
+    ]);
 
     window.setTimeout(() => {
-      if (isLast) {
-        finish(nextWins);
-        return;
-      }
-      setWins(nextWins);
-      setChampionId(winnerId);
-      setRoundIndex(nextRound);
+      setLikes(nextLikes);
+      setNopes(nextNopes);
+      fetchNextPair(nextLikes, nextNopes);
       setPick(null);
       setLocked(false);
-      playHint();
     }, 320);
   }
 
@@ -195,23 +261,25 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
 
     completedRef.current = false;
     setHistory((prev) => prev.slice(0, -1));
-    setRoundIndex(last.roundIndex);
-    setChampionId(last.championId);
-    setWins(last.wins);
+    setLikes(last.likes);
+    setNopes(last.nopes);
+    setCurrentPair({ spotA: last.spotA, spotB: last.spotB });
+    setRoundIndex(last.likes.length);
     setPick(null);
     setLocked(false);
     playHint();
   }
 
-  if (spots.length <= 1) {
+  if (loading && !currentPair) {
     return (
       <div className="flex flex-1 items-center justify-center px-4">
-        <p className="text-[14px] text-[#64748b]">スポットを読み込んでいます…</p>
+        <p className="text-[14px] text-[#64748b]">診断の軸となるスポットを読み込んでいます…</p>
       </div>
     );
   }
 
-  const progress = totalRounds > 0 ? ((roundIndex + 1) / totalRounds) * 100 : 0;
+  const totalRounds = 10;
+  const progress = ((roundIndex) / totalRounds) * 100;
   const canUndo = history.length > 0 && !locked;
 
   return (
@@ -264,16 +332,16 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
             どちらが好みの観光地ですか？
           </p>
 
-          {currentTop && currentBottom && (
+          {currentPair && (
             <div className="flex w-full max-w-[358px] flex-col items-stretch gap-3">
               <ComparisonCard
-                spot={currentTop}
+                spot={currentPair.spotA}
                 position="top"
-                disabled={locked}
-                selected={pick?.winnerId === currentTop.id}
-                rejected={pick?.loserId === currentTop.id}
+                disabled={locked || loading}
+                selected={pick?.winnerId === currentPair.spotA.id}
+                rejected={pick?.loserId === currentPair.spotB.id} // rejectedの代わりにハイライト制御
                 wiggle={hintActive && !locked}
-                onSelect={() => pickWinner(currentTop.id, currentBottom.id)}
+                onSelect={() => pickWinner(currentPair.spotA.id, currentPair.spotB.id)}
               />
               <div className="flex items-center justify-center">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full text-[14px] font-extrabold text-[#64748b]">
@@ -281,13 +349,13 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
                 </span>
               </div>
               <ComparisonCard
-                spot={currentBottom}
+                spot={currentPair.spotB}
                 position="bottom"
-                disabled={locked}
-                selected={pick?.winnerId === currentBottom.id}
-                rejected={pick?.loserId === currentBottom.id}
+                disabled={locked || loading}
+                selected={pick?.winnerId === currentPair.spotB.id}
+                rejected={pick?.loserId === currentPair.spotA.id}
                 wiggle={hintActive && !locked}
-                onSelect={() => pickWinner(currentBottom.id, currentTop.id)}
+                onSelect={() => pickWinner(currentPair.spotB.id, currentPair.spotA.id)}
               />
             </div>
           )}

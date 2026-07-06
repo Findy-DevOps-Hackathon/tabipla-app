@@ -36,6 +36,8 @@ export async function upsertSpot(db: Database, input: NewSpotRow): Promise<SpotR
         lon: sql`excluded.lon`,
         price: sql`excluded.price`,
         imageUrl: sql`excluded.image_url`,
+        clusterId: sql`excluded.cluster_id`,
+        sensoryScores: sql`excluded.sensory_scores`,
         updatedAt: now,
       },
     })
@@ -74,6 +76,8 @@ export async function upsertSpots(db: Database, inputs: NewSpotRow[]): Promise<S
         lon: sql`excluded.lon`,
         price: sql`excluded.price`,
         imageUrl: sql`excluded.image_url`,
+        clusterId: sql`excluded.cluster_id`,
+        sensoryScores: sql`excluded.sensory_scores`,
         updatedAt: now,
       },
     })

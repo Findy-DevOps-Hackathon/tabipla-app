@@ -47,6 +47,8 @@ export function toSpotDocument(row: SpotRow): SpotDocument {
     ...(row.imageUrl !== null ? { imageUrl: row.imageUrl } : {}),
     ...(location ? { location } : {}),
     ...(row.price !== null ? { price: row.price } : {}),
+    ...(row.clusterId !== null ? { clusterId: row.clusterId } : {}),
+    ...(row.sensoryScores !== null ? { sensoryScores: row.sensoryScores as any } : {}),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -76,6 +78,8 @@ export function toNewSpotRow(doc: SpotDocument): NewSpotRow {
     lon: doc.location?.lon ?? null,
     price: doc.price ?? null,
     imageUrl: doc.imageUrl ?? null,
+    clusterId: doc.clusterId ?? null,
+    sensoryScores: doc.sensoryScores ?? null,
   };
 }
 
@@ -109,6 +113,8 @@ export function mergeSpotRow(existing: SpotRow, patch: SpotPatch): NewSpotRow {
     lon: patch.location ? patch.location.lon : existing.lon,
     price: patch.price !== undefined ? patch.price : existing.price,
     imageUrl: patch.imageUrl !== undefined ? patch.imageUrl : existing.imageUrl,
+    clusterId: patch.clusterId !== undefined ? patch.clusterId : existing.clusterId,
+    sensoryScores: patch.sensoryScores !== undefined ? patch.sensoryScores : existing.sensoryScores,
     createdAt: existing.createdAt,
   };
 }

@@ -1,116 +1,84 @@
-# Tabipla エージェント & データベース アーキテクチャ
+# Tabipla エージェント & 検索パーソナライズ アーキテクチャ
 
-本ドキュメントは、旅行提案アプリ「旅サキ」におけるマルチエージェント協調フレームワーク、マルチモーダル紹介エージェント、および学習（フィードバック）ループとデータベース（PostgreSQL / Drizzle）のデータ永続化設計について解説します。
+本ドキュメントは、旅行提案アプリ「Tabipla」におけるコールドスタート診断（事前クラスタリングと Active Learning）、地理制約ハードフィルタ付きハイブリッドベクトル検索、およびアンサンブル・リランキング（Desire & Reality 評価器）のアーキテクチャ設計について解説します。
 
 ---
 
 ## 1. 全体アーキテクチャ概要
 
-本システムは、それぞれに固有の専門性と指示（System Instruction）を持った複数のエージェントが協調して動作する「マルチエージェント・フィードバックループ」構成を採用しています。
+本システムは、以前の複雑で遅い「マルチエージェント・ディベート会議」から、**「API駆動の動的A/Bテスト（診断）」** と **「位置制約ハードフィルタ ＋ アンサンブル・リランキング」** を組み合わせた、高速・堅牢かつ高精度な推薦パイプラインへと刷新されました。
 
 ```mermaid
 graph TD
-    User([ユーザー]) -->|旅行条件/好み入力| DevUi[フロントエンド UI]
-    DevUi -->|APIリクエスト| DebateAgent[① ディベート調整エージェント]
+    User([ユーザー]) -->|A/Bテスト選択 likes/nopes| Diagnosis[① コールドスタート診断 API]
+    Diagnosis -->|事前クラスタ代表点 & 境界サンプリング| User
     
-    subgraph バックステージ（作戦会議）
-        DebateAgent -->|条件提示| RecAgent[推薦エージェント]
-        DebateAgent -->|ルート制約確認| RouteAgent[ルート計画エージェント]
-        DebateAgent -->|トーン調整| IntroAgent[紹介エージェント]
-        RecAgent -->|候補地提示| DebateAgent
-        RouteAgent -->|所要時間チェック| DebateAgent
-        IntroAgent -->|紹介スタイル評価| DebateAgent
+    User -->|診断完了 v_pref + 思い出コメント v_comment| SearchPlan[② 推薦・パーソナライズエンジン]
+    
+    subgraph 推薦・パーソナライズエンジン内部
+        SearchPlan -->|likes重心 + コメントベクトルマージ| Vector[ハイブリッドクエリベクトル v_query]
+        SearchPlan -->|出発地座標| GeoFilter[位置ハードフィルタ geo_distance]
+        GeoFilter -->|フィルター適用| ES[(Elasticsearch)]
+        Vector -->|k-NN 近傍検索| ES
+        
+        ES -->|上位候補抽出| Rerank[③ アンサンブル・リランキング]
+        
+        subgraph 2つのLLM評価器（同時構造化採点）
+            Rerank -->|Desire| DesireAgent[感性・好み評価 (重み: 0.6)]
+            Rerank -->|Reality| RealityAgent[実用性・物理制約評価 (重み: 0.4)]
+        end
+        
+        DesireAgent & RealityAgent -->|スコア加重平均ソート| RankList[最終ソートスポット一覧]
     end
 
-    DebateAgent -->|合意プラン + 会議ログ| DevUi
-    DevUi -->|Good/Bad評価 & 星/コメント| FbAgent[② フィードバック学習エージェント]
-    FbAgent -->|プロファイル更新| Db[(PostgreSQL DB)]
-    Db -.->|次回の会議で考慮| DebateAgent
-
-    DevUi -->|画像・音声で質問| IntroAgent
-    IntroAgent -->|事実に基づくパーソナライズ解説| User
+    RankList -->|Gemini 要約| User
 ```
 
 ---
 
-## 2. エージェントの役割と協調設計
+## 2. 各機能モジュールの役割と設計
 
-### ① ディベート（作戦会議）コーディネーター (`debateAgent`)
-ユーザーが「結果を見る」を選択した際、裏で自律的な作戦会議（ディベート）を実行します。
-* **推薦エージェント (recommend)**: ユーザーの好みのカテゴリ/タグを最優先し、それに合致する魅力的なスポットを提案。
-* **ルート計画エージェント (route)**: 出発地からの移動時間や滞在時間を計算し、時間予算内に収まるか、ルートが物理的に破綻していないかをチェック。
-* **紹介エージェント (introduce)**: スポットのおすすめポイントや楽しみ方がユーザーの紹介スタイルに合うかを評価し、滞在時間の調整や差し替え案を提示。
-* **出力**: 3者のリアルなディベート対話ログ（JSONB）と、最終合意されたスポットIDリスト。
+### ① コールドスタート診断 (Active Learning A/Bテスト)
+限られた試行回数（10回）でユーザーの特徴量空間を最速で分割し、好みを特定する動的 A/B テスト API。
+- **基準観光地データセット**:
+  多様なカテゴリ（自然、歴史、グルメ、温泉など）をカバーする50件以上のリファレンス観光地。
+- **事前クラスタリング (K-Means)**:
+  地理情報（エリア名・都道府県）を除外した「特性ベクトル（名称、説明、カテゴリ、タグ）」により、基準観光地をあらかじめ $K=6 \sim 8$ のクラスタに分類。
+- **動的提示アルゴリズム (`/v1/diagnosis/next-pair`)**:
+  - **第1〜2ラウンド (直交サンプリング)**: 特徴空間上で最も距離が遠い、異なるクラスタの代表点ペア（清水寺 vs 上高地など）を提示して大分類を特定。
+  - **第3〜10ラウンド (能動学習 - Active Learning)**: 選択された勝者（`likes`）と敗者（`nopes`）のベクトル重心から「選好ベクトル $\mathbf{w}$」を推測。未提示スポットのうち、$\mathbf{w}$ とのコサイン類似度が $0$ に最も近い（＝好き嫌いの判定が最も不確実な）境界上のペアを対比提示。
+- **嗜好ベクトル $\mathbf{v}_{pref}$ 確定**:
+  10ラウンド完了時に `likes`（選んだスポット）のベクトルの平均（重心）を求めてユーザーの嗜好ベクトルとします。
 
-### ② マルチモーダル紹介エージェント (`introduceAgent`)
-選定された観光スポットのパーソナライズ紹介と、ユーザーからのリアルタイム質問に応答します。
-* **インプット**: スポットの正確な事実 (`facts`), `PreferenceProfile` (好み + `introStyle`), ユーザーからの質問（テキスト/画像/音声データ）。
-* **マルチモーダル処理**: 添付されたカメラ写真や、マイク録音された音声データをGeminiの `inlineData` としてダイレクトにモデルへ入力し、画像を解析したり音声の意図を汲み取った上で、ハルシネーションを防いだ解説を生成します。
+### ② ハードフィルタ付き ES ハイブリッド検索
+地理的・物理的な制約で候補地を絞り込んだ上で、ユーザーの感性マッチ度が高いスポットを抽出する高速検索。
+- **位置情報ハードフィルタ**:
+  出発地 `origin`（小諸駅など）から `geo_distance: 15km` 圏内のドキュメントにハードフィルタをかけます。
+- **統合クエリベクトル $\mathbf{v}_{query}$**:
+  診断結果の $\mathbf{v}_{pref}$ と、今回の思い出コメント（`travelMemory`）から生成した「思い出文脈ベクトル $\mathbf{v}_{comment}$」を $0.5 : 0.5$ の比率で加重平均マージします。
+- **ES 近傍 (k-NN) 検索**:
+  位置ハードフィルタの適用下で、$\mathbf{v}_{query}$ を用いた k-NN 近傍ベクトル検索を Elasticsearch で実行し、上位候補（例: 最大15件）を抽出。診断で `nopes` に選ばれたスポットは自動的に除外されます。
 
-### ③ フィードバック・学習エージェント (`feedbackAgent`)
-ユーザーからの明示的な評価を解釈し、エージェント全体の精度を向上させるエンジン。
-* **トリガー**: スポットに対する Good/Bad ボタンのクリック、または旅行終了後の全体星評価（1-5）とコメント送信。
-* **学習内容**: LLMがフィードバックの心理を分析し、**「推薦の好みメモ（`feedbackNotes`）」** と **「紹介の解説スタイル（`introStyle`）」** を動的に更新し、DBに永続化します。
-
----
-
-## 3. データベース永続化スキーマ（PostgreSQL / Drizzle）
-
-エージェントが学習した成果や、やり取りのログを永続化するため、以下のテーブルを `packages/db/src/schema.ts` に追加・統合しています。
-
-```typescript
-// 1. ユーザーの好みプロファイル・学習データ
-export const userPreferences = pgTable("user_preferences", {
-  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
-  userId: text("user_id").notNull().unique(),            // デモID対応のため references なし
-  categoryScore: jsonb("category_score"),                // カテゴリごとのスコア (JSONB)
-  tagScore: jsonb("tag_score"),                          // 特徴タグごとのスコア (JSONB)
-  preferredPriceMax: integer("preferred_price_max"),     // 許容最高価格
-  likedIds: text("liked_ids").array(),                   // いいねしたスポットID配列
-  nopedIds: text("noped_ids").array(),                   // 興味なしにしたスポットID配列
-  feedbackNotes: text("feedback_notes").default("").notNull(), // 推薦の好み傾向メモ（AI書き込み）
-  introStyle: text("intro_style").default("").notNull(),       // 紹介のトーン＆マナーメモ（AI書き込み）
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-// 2. おすすめに対するGood/Badフィードバック
-export const spotFeedbacks = pgTable("spot_feedbacks", {
-  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
-  userId: text("user_id").notNull(),
-  spotId: text("spot_id").notNull().references(() => spots.id, { onDelete: "cascade" }),
-  rating: text("rating").notNull(), // "good" | "bad"
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-// 3. 旅行全体のフィードバック
-export const tripFeedbacks = pgTable("trip_feedbacks", {
-  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
-  userId: text("user_id").notNull(),
-  rating: integer("rating").notNull(), // 星評価（1〜5）
-  comment: text("comment"),            // フリーテキストコメント
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-// 4. 旅行プラン ＆ ディベート会話ログ
-export const tripPlans = pgTable("trip_plans", {
-  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
-  userId: text("user_id").notNull(),
-  origin: text("origin").notNull(),
-  timeBudget: text("time_budget").notNull(),
-  finalSpots: text("final_spots").array().notNull(),
-  summary: text("summary").notNull(),
-  debateLog: jsonb("debate_log").notNull(), // 会議ログ（配列）を格納
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
-```
+### ③ アンサンブル・リランキング (Desire & Reality 評価器)
+ディベート会議を撤廃し、1回の構造化 LLM 呼び出し（Zod 出力スキーマ）で2つの異なる評価視点を採点してソートする高速リランキング。
+- **感性評価 (Desire Agent)**:
+  ユーザーの「好みプロファイル（likes傾向）」や「思い出コメント（travelMemory）」に対して、スポットの感性・ジャンルがどれだけマッチしているかを 1〜10 で採点。
+- **実用性評価 (Reality Agent)**:
+  「時間予算（timeBudget）」「出発地（origin）」の制約、価格帯、営業時間などの現実的適合度を 1〜10 で採点。
+- **決定論的マージ**:
+  プログラム側で最終スコア $S_{final} = 0.6 \times Desire + 0.4 \times Reality$ を計算して降順ソート。
+- **サマリー要約生成**:
+  リランキングされた最終スポットリストをもとに、Gemini 2.5-flash で全体のテーマ性・見どころに焦点を当てたワクワクする要約文（結果テキスト）を簡潔に生成します。
+- **フォールバック設計**:
+  LLMの呼び出しエラー等が発生した場合でも、ES のスコア順で安全にフォールバックさせ、システムが落ちずにおすすめプランとプレースホルダーサマリーを返却する堅牢性を確保しています。
 
 ---
 
-## 4. フィードバックループの仕組み
+## 3. データベース & 検索インデックス設計 (PostgreSQL / Elasticsearch)
 
-1. **初期データ抽出**: スワイプ情報から静的スコアリングにより基本プロフィールが生成されます。
-2. **ディベート**: コーディネーターが条件（出発地・時間）とプロフィールを基に議論を開始。
-3. **提案**: 合意プランと「議論ログ」がUIに描画され、ユーザーはAIたちの思考プロセスをタイムラインで覗けます。
-4. **フィードバック**: ユーザーが Good/Bad や最終コメントを入力。
-5. **自己更新（メタ学習）**: `feedbackAgent` がフィードバックを言語化・分析し、`feedbackNotes` と `introStyle` を更新してDBに格納。次回のディベート時、AIたちのインプットプロンプトにこのメモが引き継がれ、自律的に精度が改善されます。
+### PostgreSQL (`spots` テーブル)
+- `cluster_id` (integer) カラムを拡張。基準観光地（`id` が `ref-` で始まるもの）に対して、K-Means で計算された所属クラスタIDを保持します。
+
+### Elasticsearch (`spots` インデックスマッピング)
+- `clusterId` (integer) フィールドを追加。
+- `embedding` フィールド (`dense_vector`, `dims: 1536`, `similarity: cosine`, `index: true`) に特性ベクトルを格納し、k-NN 検索を高速に行います。

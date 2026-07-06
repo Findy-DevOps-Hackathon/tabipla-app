@@ -109,7 +109,7 @@ async function removeExistingSpotImagesGcs(spotId: string): Promise<void> {
 
   const bucket = getStorageClient().bucket(bucketName);
   const [files] = await bucket.getFiles({ prefix: `${GCS_OBJECT_PREFIX}/${spotId}.` });
-  await Promise.all(files.map((file) => file.delete().catch(() => undefined)));
+  await Promise.all(files.map((file: any) => file.delete().catch(() => undefined)));
 }
 
 async function saveSpotImageLocal(

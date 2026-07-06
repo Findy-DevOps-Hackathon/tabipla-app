@@ -66,6 +66,20 @@ export const spotMapping: estypes.MappingTypeMapping = {
     },
     createdAt: { type: "date" },
     updatedAt: { type: "date" },
+    clusterId: { type: "integer" },
+    sensoryScores: {
+      properties: {
+        nature: { type: "half_float" },
+        history: { type: "half_float" },
+        art: { type: "half_float" },
+        entertainment: { type: "half_float" },
+        gourmet: { type: "half_float" },
+        activity: { type: "half_float" },
+        quietness: { type: "half_float" },
+        indoor: { type: "half_float" },
+        popularity: { type: "half_float" },
+      },
+    },
   },
 };
 

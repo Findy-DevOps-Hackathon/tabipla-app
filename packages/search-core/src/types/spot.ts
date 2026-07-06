@@ -46,6 +46,20 @@ export type SpotDocument = {
   createdAt?: string;
   /** 更新日時（ISO 8601 文字列を想定）。 */
   updatedAt?: string;
+  /** クラスタリングID（事前クラスタリングによる分類）。 */
+  clusterId?: number;
+  /** 9次元の感性・知名度スコアオブジェクト */
+  sensoryScores?: {
+    nature: number;
+    history: number;
+    art: number;
+    entertainment: number;
+    gourmet: number;
+    activity: number;
+    quietness: number;
+    indoor: number;
+    popularity: number;
+  };
 };
 
 /**

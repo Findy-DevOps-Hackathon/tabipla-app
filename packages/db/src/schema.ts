@@ -72,6 +72,10 @@ export const spots = pgTable(
     price: integer("price"),
     /** スポット画像 URL（相対パス `/uploads/spots/...` または外部 URL）。 */
     imageUrl: text("image_url"),
+    /** クラスタリングID（事前クラスタリングによる分類）。 */
+    clusterId: integer("cluster_id"),
+    /** 9次元の感性・知名度スコアオブジェクト */
+    sensoryScores: jsonb("sensory_scores"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
