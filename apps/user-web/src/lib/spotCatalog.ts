@@ -1,16 +1,13 @@
 import { fetchPublicSpots, fetchSpotById } from "../api.ts";
-import {
-  getCurrentDestinations,
-  type TripDestination,
-} from "./destination.ts";
+import type { Recommendation, SwipeSpot } from "../data/spots.ts";
+import type { SpotDocument } from "../types.ts";
+import { getCurrentDestinations, type TripDestination } from "./destination.ts";
 import {
   documentToRecommendation,
   documentToSwipeSpot,
   planItemToRecommendation,
   spotImageUrl,
 } from "./spotMapper.ts";
-import type { Recommendation, SwipeSpot } from "../data/spots.ts";
-import type { SpotDocument } from "../types.ts";
 
 export type SpotCatalogBundle = {
   docs: SpotDocument[];
@@ -66,8 +63,7 @@ export async function resolveSpotById(
   recommendations: Recommendation[],
   exploreSpots: Recommendation[],
 ): Promise<Recommendation | null> {
-  const cached =
-    recommendations.find((r) => r.id === id) ?? exploreSpots.find((r) => r.id === id);
+  const cached = recommendations.find((r) => r.id === id) ?? exploreSpots.find((r) => r.id === id);
   if (cached) return cached;
 
   try {

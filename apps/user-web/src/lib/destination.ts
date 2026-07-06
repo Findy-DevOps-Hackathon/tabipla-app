@@ -1,10 +1,10 @@
-import type { SpotDocument } from "../types.ts";
 import {
   compressNotoSelectionLabels,
   NOTO_MUNICIPALITY_NAMES,
   spotMatchesDestinations,
 } from "../data/notoAreas.ts";
 import { compressToshinSelectionLabels, TOSHIN_MUNICIPALITY_NAMES } from "../data/toshinAreas.ts";
+import type { SpotDocument } from "../types.ts";
 
 export type TripDestination = {
   area: string;
@@ -58,7 +58,9 @@ export function setCurrentDestinations(destinations: TripDestination[]): void {
 }
 
 /** 表示用ラベル（例: 東信 / 能登北部・七尾市 / 七尾市ほか2件）。 */
-export function formatDestinationLabel(destinations: TripDestination[] = getCurrentDestinations()): string {
+export function formatDestinationLabel(
+  destinations: TripDestination[] = getCurrentDestinations(),
+): string {
   if (destinations.length === 0) return DEFAULT_DESTINATION.area;
 
   const notoSet = new Set(NOTO_MUNICIPALITY_NAMES as readonly string[]);

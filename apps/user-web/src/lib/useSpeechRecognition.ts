@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  AUDIO_LEVEL_BAR_COUNT,
-  AudioLevelMonitor,
-  emptyAudioLevels,
-} from "./audioLevel.ts";
+import { AUDIO_LEVEL_BAR_COUNT, AudioLevelMonitor, emptyAudioLevels } from "./audioLevel.ts";
 import { isIOS, isIOSSafari, isMobileDevice } from "./platform.ts";
 import {
   getSpeechRecognitionCtor,
   isSpeechRecognitionSupported,
   isVoiceInputSupported,
-  speechRecognitionErrorMessage,
   type SpeechRecognitionInstance,
+  speechRecognitionErrorMessage,
 } from "./speechRecognition.ts";
 
 type UseSpeechRecognitionOptions = {
@@ -81,16 +77,19 @@ export function useSpeechRecognition({
     setAudioLevels(emptyAudioLevels());
   }, []);
 
-  const startMonitor = useCallback(async (deferMs = 0) => {
-    stopMonitor();
-    if (deferMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, deferMs));
-      if (!shouldContinueRef.current) return;
-    }
-    const monitor = new AudioLevelMonitor(AUDIO_LEVEL_BAR_COUNT);
-    monitorRef.current = monitor;
-    await monitor.start(setAudioLevels, { useHardware: true });
-  }, [stopMonitor]);
+  const startMonitor = useCallback(
+    async (deferMs = 0) => {
+      stopMonitor();
+      if (deferMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, deferMs));
+        if (!shouldContinueRef.current) return;
+      }
+      const monitor = new AudioLevelMonitor(AUDIO_LEVEL_BAR_COUNT);
+      monitorRef.current = monitor;
+      await monitor.start(setAudioLevels, { useHardware: true });
+    },
+    [stopMonitor],
+  );
 
   const stop = useCallback(() => {
     shouldContinueRef.current = false;
@@ -178,4 +177,4 @@ export function useSpeechRecognition({
     stop,
     toggle,
   };
-};
+}

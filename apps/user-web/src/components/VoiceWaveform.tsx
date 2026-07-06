@@ -7,7 +7,13 @@ type VoiceWaveformProps = {
 };
 
 /** 固定本数のバー用。並び替えが無いのでスロット ID を key に使う。 */
-const WAVE_BAR_KEYS = ["wave-bar-1", "wave-bar-2", "wave-bar-3", "wave-bar-4", "wave-bar-5"] as const;
+const WAVE_BAR_KEYS = [
+  "wave-bar-1",
+  "wave-bar-2",
+  "wave-bar-3",
+  "wave-bar-4",
+  "wave-bar-5",
+] as const;
 
 /** マイク入力の振幅をバーで表示する。 */
 export function VoiceWaveform({

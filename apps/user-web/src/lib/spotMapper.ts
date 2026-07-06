@@ -1,7 +1,12 @@
+import { API_BASE } from "../config.ts";
 import type { Recommendation, SpotCategory, SwipeSpot } from "../data/spots.ts";
 import type { SpotDocument } from "../types.ts";
-import { API_BASE } from "../config.ts";
-import { getCurrentDestination, getCurrentDestinations, isDestinationSpot, type TripDestination } from "./destination.ts";
+import {
+  getCurrentDestination,
+  getCurrentDestinations,
+  isDestinationSpot,
+  type TripDestination,
+} from "./destination.ts";
 
 /** 管理画面カテゴリ → user-web 表示用バッジカテゴリ。 */
 const ADMIN_TO_DISPLAY: Record<string, SpotCategory> = {
@@ -89,22 +94,25 @@ export function documentToRecommendation(
 }
 
 /** プラン API レスポンス1件 → Recommendation。 */
-export function planItemToRecommendation(item: {
-  id: string;
-  name: string;
-  category?: string;
-  description?: string;
-  highlights?: string[];
-  prefecture?: string;
-  area?: string;
-  tags?: string[];
-  why?: string[];
-  score?: number;
-  memberOnly?: boolean;
-  image?: string;
-  imageUrl?: string;
-  address?: string;
-}, destinations: TripDestination[] = getCurrentDestinations()): Recommendation | null {
+export function planItemToRecommendation(
+  item: {
+    id: string;
+    name: string;
+    category?: string;
+    description?: string;
+    highlights?: string[];
+    prefecture?: string;
+    area?: string;
+    tags?: string[];
+    why?: string[];
+    score?: number;
+    memberOnly?: boolean;
+    image?: string;
+    imageUrl?: string;
+    address?: string;
+  },
+  destinations: TripDestination[] = getCurrentDestinations(),
+): Recommendation | null {
   if (item.area && item.prefecture) {
     if (
       !isDestinationSpot(
@@ -143,7 +151,9 @@ export function planItemToRecommendation(item: {
 }
 
 /** スワイプ比較カード用の短いプレビュー文。 */
-export function spotPreviewText(spot: Pick<SwipeSpot, "highlights" | "trivia" | "description">): string {
+export function spotPreviewText(
+  spot: Pick<SwipeSpot, "highlights" | "trivia" | "description">,
+): string {
   const firstHighlight = spot.highlights?.find(Boolean);
   if (firstHighlight) return firstHighlight;
   if (spot.trivia) {

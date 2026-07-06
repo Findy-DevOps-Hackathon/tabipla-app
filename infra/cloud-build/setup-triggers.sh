@@ -12,9 +12,10 @@ fi
 REGION="${GOOGLE_CLOUD_LOCATION:-asia-northeast1}"
 CONNECTION="${CLOUD_BUILD_CONNECTION:-github-tabipla}"
 REPO="${CLOUD_BUILD_REPOSITORY:-Findy-DevOps-Hackathon-tabipla-app}"
-BRANCH="${CLOUD_BUILD_BRANCH:-^main$}"
+MAIN_BRANCH="${CLOUD_BUILD_BRANCH:-^main$}"
 
 REPO_RESOURCE="projects/${PROJECT}/locations/${REGION}/connections/${CONNECTION}/repositories/${REPO}"
+SERVICE_ACCOUNT="projects/${PROJECT}/serviceAccounts/tabipla-cloudbuild-deploy@${PROJECT}.iam.gserviceaccount.com"
 
 GCS_BUCKET=""
 GCS_PUBLIC_BASE_URL=""
@@ -36,10 +37,6 @@ if ! gcloud builds connections describe "$CONNECTION" \
   echo "     https://console.cloud.google.com/cloud-build/repositories/2nd-gen?project=${PROJECT}" >&2
   echo "  2. GitHub を接続し、接続名 '${CONNECTION}' で ${REPO} をリンク" >&2
   echo "  3. 再度このスクリプトを実行" >&2
-  echo "" >&2
-  echo "接続名 / リポジトリ名は環境変数で上書きできます:" >&2
-  echo "  CLOUD_BUILD_CONNECTION=${CONNECTION}" >&2
-  echo "  CLOUD_BUILD_REPOSITORY=${REPO}" >&2
   exit 1
 fi
 
@@ -51,83 +48,180 @@ if ! gcloud builds repositories describe "$REPO" \
   exit 1
 fi
 
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
-SERVICE_ACCOUNT="projects/${PROJECT}/serviceAccounts/tabipla-cloudbuild-deploy@${PROJECT}.iam.gserviceaccount.com"
+TRIGGER_DIR="$(mktemp -d "${TMPDIR:-/tmp}/tabipla-triggers.XXXXXX")"
+cleanup() {
+  rm -rf "$TRIGGER_DIR"
+}
+trap cleanup EXIT
 
-create_or_update_trigger() {
+write_included_files() {
+  local -a files=("$@")
+  for file in "${files[@]}"; do
+    printf "  - '%s'\n" "$file"
+  done
+}
+
+apply_trigger() {
   local name="$1"
   local config="$2"
-  shift 2
-  local -a extra_args=("$@")
 
   if gcloud builds triggers describe "$name" \
     --project="$PROJECT" \
     --region="$REGION" >/dev/null 2>&1; then
     echo "Updating trigger '${name}'..."
-    local -a sub_args=()
-    for arg in "${extra_args[@]}"; do
-      if [[ "$arg" == --substitutions=* ]]; then
-        sub_args+=(--update-substitutions="${arg#--substitutions=}")
-      else
-        sub_args+=("$arg")
-      fi
-    done
     gcloud builds triggers update github "$name" \
       --project="$PROJECT" \
       --region="$REGION" \
-      --repository="$REPO_RESOURCE" \
-      --branch-pattern="$BRANCH" \
-      --build-config="$config" \
-      --service-account="$SERVICE_ACCOUNT" \
-      "${sub_args[@]}" \
+      --trigger-config="$config" \
       --quiet
   else
     echo "Creating trigger '${name}'..."
-    gcloud builds triggers create github \
-      --name="$name" \
+    gcloud builds triggers import \
       --project="$PROJECT" \
       --region="$REGION" \
-      --repository="$REPO_RESOURCE" \
-      --branch-pattern="$BRANCH" \
-      --build-config="$config" \
-      --service-account="$SERVICE_ACCOUNT" \
-      "${extra_args[@]}" \
+      --source="$config" \
       --quiet
   fi
   echo "  ✓ ${name}"
 }
 
-SUBS="_REGION=${REGION},_USE_MOCK=1"
-if [[ -n "${GCS_BUCKET:-}" ]]; then
-  SUBS="${SUBS},_GCS_BUCKET=${GCS_BUCKET}"
-fi
-if [[ -n "${GCS_PUBLIC_BASE_URL:-}" ]]; then
-  SUBS="${SUBS},_GCS_PUBLIC_BASE_URL=${GCS_PUBLIC_BASE_URL}"
-fi
-if [[ -n "${GCS_OBJECT_PREFIX:-}" ]]; then
-  SUBS="${SUBS},_GCS_OBJECT_PREFIX=${GCS_OBJECT_PREFIX}"
-fi
+CI_FILES=(
+  "apps/**"
+  "services/**"
+  "packages/**"
+  "biome.json"
+  "pnpm-lock.yaml"
+  "pnpm-workspace.yaml"
+  "package.json"
+  "**/tsconfig*.json"
+  "infra/cloud-build/cloudbuild.ci.yaml"
+  ".gitleaks.toml"
+)
+
+DEPLOY_FILES=(
+  "services/**"
+  "packages/**"
+  "infra/cloud-build/**"
+  "pnpm-lock.yaml"
+  "pnpm-workspace.yaml"
+  "package.json"
+)
+
+FRONT_DEPLOY_FILES=(
+  "apps/user-web/**"
+  "apps/admin-web/**"
+  "infra/cloud-build/deploy-user-web.sh"
+  "infra/cloud-build/deploy-admin-web.sh"
+  "infra/cloud-build/cloudbuild.deploy-front.yaml"
+  "pnpm-lock.yaml"
+  "pnpm-workspace.yaml"
+  "package.json"
+)
+
+CORS_ORIGINS="https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com"
+
+write_ci_pr_trigger() {
+  local out="$TRIGGER_DIR/tabipla-ci.yaml"
+  cat >"$out" <<EOF
+name: tabipla-ci
+filename: infra/cloud-build/cloudbuild.ci.yaml
+includedFiles:
+$(write_included_files "${CI_FILES[@]}")
+repositoryEventConfig:
+  repository: ${REPO_RESOURCE}
+  pullRequest:
+    branch: ${MAIN_BRANCH}
+    commentControl: COMMENTS_ENABLED
+serviceAccount: ${SERVICE_ACCOUNT}
+EOF
+  echo "$out"
+}
+
+write_ci_push_trigger() {
+  local out="$TRIGGER_DIR/tabipla-ci-push.yaml"
+  cat >"$out" <<EOF
+name: tabipla-ci-push
+filename: infra/cloud-build/cloudbuild.ci.yaml
+includedFiles:
+$(write_included_files "${CI_FILES[@]}")
+repositoryEventConfig:
+  repository: ${REPO_RESOURCE}
+  push:
+    branch: .*
+serviceAccount: ${SERVICE_ACCOUNT}
+EOF
+  echo "$out"
+}
+
+write_deploy_services_trigger() {
+  local out="$TRIGGER_DIR/tabipla-deploy-services.yaml"
+  cat >"$out" <<EOF
+name: tabipla-deploy-services
+filename: infra/cloud-build/cloudbuild.deploy.yaml
+includedFiles:
+$(write_included_files "${DEPLOY_FILES[@]}")
+substitutions:
+  _REGION: ${REGION}
+  _USE_MOCK: "1"
+  _CORS_ORIGINS: "${CORS_ORIGINS}"
+  _GCS_BUCKET: "${GCS_BUCKET}"
+  _GCS_PUBLIC_BASE_URL: "${GCS_PUBLIC_BASE_URL}"
+  _GCS_OBJECT_PREFIX: ${GCS_OBJECT_PREFIX}
+  _ES_NODE: ""
+  _ES_INDEX: ""
+  _ES_VECTOR_DIMS: ""
+  _EMBEDDING_PROVIDER: ""
+repositoryEventConfig:
+  repository: ${REPO_RESOURCE}
+  push:
+    branch: ${MAIN_BRANCH}
+serviceAccount: ${SERVICE_ACCOUNT}
+EOF
+  echo "$out"
+}
+
+write_deploy_front_trigger() {
+  local out="$TRIGGER_DIR/tabipla-deploy-front.yaml"
+  cat >"$out" <<EOF
+name: tabipla-deploy-front
+filename: infra/cloud-build/cloudbuild.deploy-front.yaml
+includedFiles:
+$(write_included_files "${FRONT_DEPLOY_FILES[@]}")
+substitutions:
+  _REGION: ${REGION}
+repositoryEventConfig:
+  repository: ${REPO_RESOURCE}
+  push:
+    branch: ${MAIN_BRANCH}
+serviceAccount: ${SERVICE_ACCOUNT}
+EOF
+  echo "$out"
+}
 
 echo "Project:    ${PROJECT}"
 echo "Region:     ${REGION}"
 echo "Connection: ${CONNECTION}"
 echo "Repository: ${REPO}"
-echo "Branch:     ${BRANCH}"
 echo ""
 
-# agent → backend-api の順でデプロイ（重複トリガーを避けるため 1 本化）
-create_or_update_trigger \
-  tabipla-deploy-services \
-  infra/cloud-build/cloudbuild.deploy.yaml \
-  --included-files="services/**,packages/**,infra/cloud-build/**,pnpm-lock.yaml,pnpm-workspace.yaml,package.json" \
-  --substitutions="${SUBS}"
+echo "=== CI triggers ==="
+apply_trigger tabipla-ci "$(write_ci_pr_trigger)"
+apply_trigger tabipla-ci-push "$(write_ci_push_trigger)"
+
+echo ""
+echo "=== CD trigger (backend) ==="
+apply_trigger tabipla-deploy-services "$(write_deploy_services_trigger)"
+
+echo ""
+echo "=== CD trigger (frontend) ==="
+apply_trigger tabipla-deploy-front "$(write_deploy_front_trigger)"
 
 echo ""
 echo "=== Triggers setup complete ==="
 echo ""
-echo "手動実行:"
-echo "  gcloud builds triggers run tabipla-deploy-services --branch=main --region=${REGION} --project=${PROJECT}"
+echo "CI 手動実行:"
+echo "  gcloud builds submit . --config=infra/cloud-build/cloudbuild.ci.yaml --region=${REGION} --project=${PROJECT}"
 echo ""
-echo "個別デプロイ（手動 submit）:"
-echo "  gcloud builds submit . --config=services/agent/cloudbuild.deploy.yaml --substitutions=_IMAGE=gcr.io/${PROJECT}/tabipla-agent"
-echo "  gcloud builds submit . --config=services/backend-api/cloudbuild.deploy.yaml --substitutions=_IMAGE=gcr.io/${PROJECT}/tabipla-backend-api"
+echo "CD 手動実行:"
+echo "  gcloud builds triggers run tabipla-deploy-services --branch=main --region=${REGION} --project=${PROJECT}"
+echo "  gcloud builds triggers run tabipla-deploy-front --branch=main --region=${REGION} --project=${PROJECT}"

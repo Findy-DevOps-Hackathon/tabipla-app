@@ -13,14 +13,7 @@ export type SpotImageProps = {
 };
 
 /** スポット画像。loading / fetchPriority / decoding を一括指定。 */
-export function SpotImage({
-  src,
-  alt,
-  className,
-  priority,
-  lazy,
-  draggable,
-}: SpotImageProps) {
+export function SpotImage({ src, alt, className, priority, lazy, draggable }: SpotImageProps) {
   const [resolvedSrc, setResolvedSrc] = useState(src || SPOT_IMAGE_PLACEHOLDER);
 
   useEffect(() => {

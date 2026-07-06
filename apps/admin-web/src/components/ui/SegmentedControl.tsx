@@ -37,9 +37,7 @@ export function SegmentedControl<T extends string>({
             disabled={disabled}
             className={`flex-1 px-4 py-2.5 text-sm transition ${
               disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
-            } ${
-              !isLast ? "border-r border-[#e2e8f0]" : ""
-            } ${
+            } ${!isLast ? "border-r border-[#e2e8f0]" : ""} ${
               active
                 ? "bg-transparent font-bold  text-[#0f172a]"
                 : "bg-white font-medium text-[#94a3b8] hover:text-[#64748b]"

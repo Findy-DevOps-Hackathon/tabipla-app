@@ -169,10 +169,11 @@ async function prepareReferenceForSketch(reference: Buffer): Promise<Buffer> {
 const UPLOAD_REFERENCE_MAX_BYTES = 8 * 1024 * 1024;
 const UPLOAD_REFERENCE_MIN_BYTES = 8_000;
 
-function parseUploadedReference(referenceImage: {
+function parseUploadedReference(referenceImage: { mimeType: string; data: string }): {
+  buffer: Buffer;
   mimeType: string;
-  data: string;
-}): { buffer: Buffer; mimeType: string; sourceUrl: string } {
+  sourceUrl: string;
+} {
   const mimeType = referenceImage.mimeType.trim().toLowerCase();
   if (!/^image\/(jpeg|png|webp)$/.test(mimeType)) {
     throw new Error("referenceImage.mimeType は image/jpeg / image/png / image/webp のみ対応です");
@@ -311,7 +312,9 @@ export async function generateSpotImage(input: SpotImageInput): Promise<SpotImag
       if (mode === "photo") {
         const reference = await findReferencePhoto(searchInput);
         const result = await stylizeReferencePhoto(input, reference, brief, wikipediaIntro);
-        console.info(`[spot-image] ${name} model=${getSpotImageModel()} mode=photo ref=${reference.sourceUrl}`);
+        console.info(
+          `[spot-image] ${name} model=${getSpotImageModel()} mode=photo ref=${reference.sourceUrl}`,
+        );
         console.info(`[spot-image] ${name} prompt: ${result.prompt.slice(0, 240)}…`);
         return result;
       }
@@ -320,7 +323,9 @@ export async function generateSpotImage(input: SpotImageInput): Promise<SpotImag
       const reference = await tryFindReferencePhoto(searchInput);
       if (reference) {
         const result = await stylizeReferencePhoto(input, reference, brief, wikipediaIntro);
-        console.info(`[spot-image] ${name} model=${getSpotImageModel()} mode=auto→photo ref=${reference.sourceUrl}`);
+        console.info(
+          `[spot-image] ${name} model=${getSpotImageModel()} mode=auto→photo ref=${reference.sourceUrl}`,
+        );
         console.info(`[spot-image] ${name} prompt: ${result.prompt.slice(0, 240)}…`);
         return result;
       }

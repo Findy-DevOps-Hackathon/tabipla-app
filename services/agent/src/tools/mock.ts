@@ -1,6 +1,6 @@
 import type { GetUnchikuSourceFn, SearchFn, TravelTimesFn } from "../contracts.js";
-import { fetchSpotFactsFromBackend } from "./spotFacts.js";
 import { KOMORO_SPOTS } from "../fixtures/spots.js";
+import { fetchSpotFactsFromBackend } from "./spotFacts.js";
 
 // 本物(A3)と同じ型シグネチャ。fixtureを絞って返すだけ。
 export const searchMock: SearchFn = async (i) => {

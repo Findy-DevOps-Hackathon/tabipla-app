@@ -1,0 +1,33 @@
+# lint / typecheck / audit / secret scan（PR / push 向け CI）
+steps:
+  - name: ghcr.io/gitleaks/gitleaks:v8.24.2
+    id: secret-scan
+    entrypoint: gitleaks
+    args:
+      - detect
+      - --source=/workspace
+      - --config=/workspace/.gitleaks.toml
+      - --redact
+      - --verbose
+      - --exit-code=1
+
+  - name: node:22-bookworm
+    id: quality-checks
+    waitFor: [secret-scan]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        corepack enable
+        corepack prepare pnpm@10.30.3 --activate
+        pnpm install --frozen-lockfile
+        echo "=== biome check ==="
+        pnpm check
+        echo "=== typecheck ==="
+        pnpm typecheck
+        echo "=== dependency audit (high+) ==="
+        pnpm audit --audit-level=high
+
+options:
+  logging: CLOUD_LOGGING_ONLY

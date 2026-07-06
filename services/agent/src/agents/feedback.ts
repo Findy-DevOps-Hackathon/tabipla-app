@@ -52,8 +52,9 @@ export async function analyzeFeedback(
 ): Promise<FeedbackResult> {
   if (process.env.USE_MOCK !== "0") {
     return {
-      feedbackNotes: input.currentFeedbackNotes || "歴史散策やマイナーなスポットを好む傾向があります。",
-      introStyle: input.currentIntroStyle || "説明は簡潔で、歴史的背景を重視するスタイルです。"
+      feedbackNotes:
+        input.currentFeedbackNotes || "歴史散策やマイナーなスポットを好む傾向があります。",
+      introStyle: input.currentIntroStyle || "説明は簡潔で、歴史的背景を重視するスタイルです。",
     };
   }
   const runner = new InMemoryRunner({ agent: feedbackAgent });
@@ -105,7 +106,7 @@ ${input.tripFeedback ? `評価（1-5）: ${input.tripFeedback.rating}\nコメン
   try {
     const parsed = JSON.parse(final) as FeedbackResult;
     return parsed;
-  } catch (e) {
-    throw new Error("フィードバック結果のJSONパースに失敗しました: " + final);
+  } catch (_e) {
+    throw new Error(`フィードバック結果のJSONパースに失敗しました: ${final}`);
   }
 }

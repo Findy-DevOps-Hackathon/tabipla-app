@@ -21,7 +21,10 @@ function isNotoRegionContext(context: MunicipalityContext): boolean {
 }
 
 /** 住所が指定自治体内かどうか（都道府県・市区町村名の両方を含むか）。 */
-function isAddressInMunicipality(address: string | undefined, context: MunicipalityContext): boolean {
+function isAddressInMunicipality(
+  address: string | undefined,
+  context: MunicipalityContext,
+): boolean {
   if (!address?.trim()) return false;
   const normalized = address.replace(/\s+/g, "");
   if (!normalized.includes(context.prefecture.replace(/\s+/g, ""))) return false;
@@ -107,9 +110,7 @@ async function lookupViaPlacesApiNew(
     }>;
   };
 
-  const place = data.places?.find((p) =>
-    isAddressInMunicipality(p.formattedAddress, context),
-  );
+  const place = data.places?.find((p) => isAddressInMunicipality(p.formattedAddress, context));
   if (!place) return null;
 
   const lat = place.location?.latitude;
@@ -194,9 +195,7 @@ async function lookupViaGeocoding(
     }>;
   };
 
-  const result = data.results?.find((r) =>
-    isAddressInMunicipality(r.formatted_address, context),
-  );
+  const result = data.results?.find((r) => isAddressInMunicipality(r.formatted_address, context));
   if (!result) return null;
 
   const lat = result.geometry?.location?.lat;

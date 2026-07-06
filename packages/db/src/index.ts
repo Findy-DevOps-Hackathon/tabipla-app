@@ -7,8 +7,12 @@
  */
 
 export type { CreateDatabaseOptions, Database } from "./client.js";
+// クライアント
+export { createDatabase } from "./client.js";
 export {
   buildDestinationMatchClauses,
+  type DestinationFilter,
+  type DestinationMatchClause,
   extractNotoAreaFromAddress,
   inferNotoAreaFromName,
   isIncompleteNotoSpot,
@@ -17,11 +21,7 @@ export {
   NOTO_UMBRELLA_AREA,
   resolveSpotArea,
   spotMatchesDestinations,
-  type DestinationFilter,
-  type DestinationMatchClause,
 } from "./destinationMatching.js";
-// クライアント
-export { createDatabase } from "./client.js";
 export { hashPassword, verifyPassword } from "./password.js";
 export { getAdminUserByEmail, upsertAdminUser } from "./repository/adminUsers.js";
 // リポジトリ（クーポン）

@@ -1,5 +1,9 @@
 import { getMunicipality, type Prefecture } from "../master/index.ts";
-import { extractNotoAreaFromAddress, inferNotoAreaFromName, NOTO_UMBRELLA_AREA } from "./notoAreas.ts";
+import {
+  extractNotoAreaFromAddress,
+  inferNotoAreaFromName,
+  NOTO_UMBRELLA_AREA,
+} from "./notoAreas.ts";
 
 /**
  * 住所文字列から市区町村（エリア）を抽出する。
