@@ -7,7 +7,7 @@ export type EmbeddingProvider = "gemini" | "hash";
 /** Gemini embedContent の taskType（検索用途向け）。 */
 export type EmbedTaskType = "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT";
 
-const DEFAULT_GEMINI_MODEL = "gemini-embedding-001";
+const DEFAULT_GEMINI_MODEL = "gemini-embedding-2";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const EMBEDDING_TIMEOUT_MS = 30_000;
 
@@ -91,9 +91,9 @@ type GeminiEmbedResponse = {
 /**
  * Gemini Embeddings API（Google AI Studio）でベクトルを生成する。
  *
- * - モデル既定: gemini-embedding-001
+ * - モデル既定: gemini-embedding-2
  * - outputDimensionality: VECTOR_DIMS（ES mapping と一致させる）
- * - 3072 未満の次元では L2 正規化を行う（gemini-embedding-001 の推奨）
+ * - 3072 未満の次元では L2 正規化を行う
  */
 async function geminiEmbed(text: string, taskType: EmbedTaskType): Promise<number[]> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -137,7 +137,7 @@ async function geminiEmbed(text: string, taskType: EmbedTaskType): Promise<numbe
   return l2Normalize(values);
 }
 
-/** L2 正規化（gemini-embedding-001 で outputDimensionality < 3072 のとき推奨）。 */
+/** L2 正規化（outputDimensionality < 3072 のときのスコア安定化）。 */
 function l2Normalize(values: number[]): number[] {
   let norm = 0;
   for (const v of values) {

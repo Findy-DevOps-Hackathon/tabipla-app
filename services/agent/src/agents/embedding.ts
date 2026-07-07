@@ -37,7 +37,7 @@ async function embedTextGemini(
     throw new Error("[agent/embedding] GEMINI_API_KEY が設定されていません。");
   }
 
-  const model = "gemini-embedding-001";
+  const model = "gemini-embedding-2";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${apiKey}`;
 
   const res = await fetch(url, {

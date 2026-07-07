@@ -12,7 +12,7 @@ const introOutputSchema = z.object({
 
 export const introAgent = new LlmAgent({
   name: "intro_agent",
-  model: "gemini-2.5-flash",
+  model: "gemini-3.5-flash",
   description: "好み診断結果に基づくおすすめ紹介文を生成する",
   instruction: `あなたはプロの旅行アテンドガイドです。
 提示された「ユーザーの好み・旅の要望」と「上位の観光スポット候補」を参考に、今回のおすすめ選びの意図を伝える紹介文だけを作成してください。
