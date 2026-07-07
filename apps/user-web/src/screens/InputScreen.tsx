@@ -240,13 +240,22 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
     onSearch([location]);
   };
 
+  const handleBack = () => {
+    if (afterDiagnosis && selected.length > 0) {
+      setSelected([]);
+      setCollapsedPrefectures(new Set());
+      return;
+    }
+    onBack();
+  };
+
   return (
     <div className="flex flex-1 flex-col justify-between">
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-11 items-center justify-between px-4 pt-3">
           <button
             type="button"
-            onClick={onBack}
+            onClick={handleBack}
             className="flex items-center gap-1 text-[#475569] transition active:opacity-60"
           >
             <ChevronLeftIcon className="size-[18px]" />
