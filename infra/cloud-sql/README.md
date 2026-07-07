@@ -101,6 +101,8 @@ pnpm --filter @tabipla/agent run deploy
 `CLOUD_SQL_INSTANCE` が `.credentials` にあれば、Cloud Run へ `--add-cloudsql-instances` が自動付与されます。  
 `firebase.json` の `run.region` は **`asia-northeast1`** です。
 
+検索（Elasticsearch）を本番で使う場合は **`infra/elasticsearch/README.md`** も参照してください。
+
 ---
 
 ## ローカルから DB を触る

@@ -51,7 +51,8 @@ for pair in \
   "GEMINI_API_KEY=tabipla-gemini-api-key" \
   "GOOGLE_MAPS_API_KEY=tabipla-google-maps-api-key" \
   "ES_API_KEY=tabipla-es-api-key" \
-  "ES_PASSWORD=tabipla-es-password"; do
+  "ES_PASSWORD=tabipla-es-password" \
+  "ES_USERNAME=tabipla-es-username"; do
   env_name="${pair%%=*}"
   secret_name="${pair##*=}"
   if gcloud secrets describe "$secret_name" --project="${PROJECT_ID}" >/dev/null 2>&1; then

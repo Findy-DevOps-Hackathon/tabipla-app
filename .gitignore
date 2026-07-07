@@ -8,6 +8,7 @@ dist/
 !.env.example
 infra/cloud-sql/.credentials
 infra/gcs/.credentials
+infra/elasticsearch/.credentials
 docs/figma-export/
 data/uploads/
 services/backend-api/data/

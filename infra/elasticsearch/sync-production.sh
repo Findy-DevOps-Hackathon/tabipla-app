@@ -1,27 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 旧能登プレースホルダーを削除し、本番 Elasticsearch を reindex する。
+# 本番 PostgreSQL → Elasticsearch へ reindex + embedding を投入する。
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-CREDS_FILE="$ROOT/infra/cloud-sql/.credentials"
+SQL_CREDS="$ROOT/infra/cloud-sql/.credentials"
 ES_CREDS="$ROOT/infra/elasticsearch/.credentials"
 
-if [[ ! -f "$CREDS_FILE" ]]; then
+if [[ ! -f "$SQL_CREDS" ]]; then
   echo "先に bash infra/cloud-sql/setup.sh を実行してください" >&2
   exit 1
 fi
+if [[ ! -f "$ES_CREDS" ]]; then
+  echo "先に bash infra/elasticsearch/setup.sh を実行してください" >&2
+  exit 1
+fi
 
+set -a
 # shellcheck disable=SC1090
-source "$CREDS_FILE"
+source "$SQL_CREDS"
+# shellcheck disable=SC1090
+source "$ES_CREDS"
+set +a
 
-if [[ -f "$ES_CREDS" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$ES_CREDS"
-  set +a
-  export ES_NODE ES_API_KEY ES_USERNAME ES_PASSWORD ES_INDEX ES_VECTOR_DIMS
-else
-  echo "WARNING: infra/elasticsearch/.credentials がありません。ES_NODE は backend-api/.env の値を使います。" >&2
+if [[ -z "${ES_NODE:-}" ]]; then
+  echo "ES_NODE が未設定です。" >&2
+  exit 1
 fi
 
 PROXY_BIN="${CLOUD_SQL_PROXY_BIN:-cloud-sql-proxy}"
@@ -36,17 +39,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
+echo "Starting Cloud SQL Auth Proxy on :${PROXY_PORT}..."
 "$PROXY_BIN" "$CONNECTION_NAME" --port "$PROXY_PORT" &
 PROXY_PID=$!
 sleep 5
 
 export DATABASE_URL="$DATABASE_URL_LOCAL"
 
-echo "Deleting legacy Noto placeholder spots..."
-pnpm -C "$ROOT/packages/db" exec tsx scratch/delete-legacy-noto-spots.ts
-
-echo "Reindexing Elasticsearch from production PostgreSQL..."
+echo ""
+echo "Reindexing production PostgreSQL → Elasticsearch (${ES_NODE})..."
 pnpm -C "$ROOT/services/backend-api" reindex
 
 echo ""
-echo "Post-seed sync complete."
+echo "Embedding spots (Gemini)..."
+pnpm -C "$ROOT/services/backend-api" embed-spots
+
+echo ""
+echo "=== Production ES sync complete ==="
