@@ -15,7 +15,6 @@ export const searchSpotsTool = new FunctionTool({
       .array(z.enum(["nature", "gourmet", "history"]))
       .optional()
       .describe("カテゴリ（OR）。nature/gourmet/history のみ"),
-    priceLevelMax: z.number().optional().describe("価格帯の上限 0-4。これ以下に絞る"),
     k: z.number().optional().describe("取得件数（既定8）"),
   }),
   execute: async (args) => {

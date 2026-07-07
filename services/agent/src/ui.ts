@@ -88,7 +88,7 @@ export const pageHtml = `<!DOCTYPE html>
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      const text = data.result ?? data.plan ?? JSON.stringify(data);
+      const text = data.result ?? JSON.stringify(data);
       outEl.className = "out";
       outEl.textContent = text;
     } catch (e) {
@@ -142,7 +142,6 @@ export const swipePageHtml = `<!DOCTYPE html>
   .chip{display:inline-block;color:#fff;font-size:12px;font-weight:700;padding:3px 12px;border-radius:999px}
   .chip.sm{font-size:11px;padding:1px 9px}
   .cname{font-size:24px;font-weight:800;margin:0 0 4px}
-  .cprice{color:var(--sub);font-weight:700;margin-bottom:10px}
   .ctags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
   .tg{background:#eef2f7;color:var(--sub);font-size:12px;padding:3px 10px;border-radius:999px}
   .cdesc{color:var(--ink);font-size:14px;margin-top:10px}
@@ -173,7 +172,6 @@ export const swipePageHtml = `<!DOCTYPE html>
     font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;margin-top:2px}
   .rbody{flex:1}
   .sc{color:var(--sub);font-size:11px;background:#eef2f7;padding:1px 8px;border-radius:999px;margin-left:4px}
-  .why{color:var(--sub);font-size:12px;margin-top:3px}
   .rthumb{flex:0 0 52px;width:52px;height:52px;border-radius:10px;object-fit:cover;background:#e7ebf1}
   .tm{font-weight:800;color:var(--accent);margin-right:6px}
   .itin-title{font-weight:700;margin-bottom:8px}
@@ -212,7 +210,6 @@ export const swipePageHtml = `<!DOCTYPE html>
   var spots=[], idx=0, likes=[], nopes=[];
   var CAT={ nature:{l:"自然",c:"#0d9488"}, gourmet:{l:"グルメ",c:"#d97706"}, history:{l:"歴史",c:"#2563eb"} };
   function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}); }
-  function priceStr(p){ return p<=0 ? "無料" : "¥".repeat(p); }
 
   function load(){
     fetch("/v1/spots").then(function(r){return r.json();}).then(function(d){
@@ -225,7 +222,7 @@ export const swipePageHtml = `<!DOCTYPE html>
     if(idx>=spots.length){ finish(); return; }
     var s=spots[idx];
     var cat=CAT[s.category]||{l:s.category,c:"#6b7280"};
-    var tags=(s.tags||[]).map(function(t){return '<span class="tg">'+esc(t)+'</span>';}).join("");
+    var highlights=(s.highlights||[]).map(function(t){return '<span class="tg">'+esc(t)+'</span>';}).join("");
     var img=s.image||"";
     var imgTag=img?'<img src="'+img+'" onerror="this.style.display=&#39;none&#39;">':"";
     $("deck").innerHTML =
@@ -234,8 +231,7 @@ export const swipePageHtml = `<!DOCTYPE html>
         '<div class="cimg" style="background:linear-gradient(135deg,'+cat.c+'aa,'+cat.c+'dd)">'+imgTag+'<span class="chip" style="background:'+cat.c+'">'+cat.l+'</span></div>'+
         '<div class="cbody">'+
           '<div class="cname">'+esc(s.name)+'</div>'+
-          '<div class="cprice">'+priceStr(s.priceLevel)+'</div>'+
-          '<div class="ctags">'+tags+'</div>'+
+          '<div class="ctags">'+highlights+'</div>'+
           '<div class="cdesc">'+esc(s.description)+'</div>'+
         '</div>'+
       '</div>';
@@ -265,12 +261,11 @@ export const swipePageHtml = `<!DOCTYPE html>
     if(d.error){ $("result").innerHTML='<div class="err">'+esc(d.error)+'</div>'+resetHtml(); bindReset(); return; }
     var recos=(d.recommendations||[]).map(function(r,i){
       var cat=CAT[r.category]||{l:r.category,c:"#6b7280"};
-      var tags=(r.tags||[]).map(function(t){return '<span class="tg">'+esc(t)+'</span>';}).join("");
-      var why=(r.why||[]).join(" / ");
+      var highlights=(r.highlights||[]).map(function(t){return '<span class="tg">'+esc(t)+'</span>';}).join("");
       var th=r.image?'<img class="rthumb" src="'+r.image+'" onerror="this.style.visibility=&#39;hidden&#39;">':'<div class="rthumb"></div>';
       return '<div class="reco"><div class="rk">'+(i+1)+'</div>'+th+'<div class="rbody">'+
         '<div><span class="chip sm" style="background:'+cat.c+'">'+cat.l+'</span> <b>'+esc(r.name)+'</b> <span class="sc">match '+r.score+'</span></div>'+
-        '<div class="ctags">'+tags+'</div>'+(why?'<div class="why">'+esc(why)+'</div>':"")+'</div></div>';
+        '<div class="ctags">'+highlights+'</div></div></div>';
     }).join("");
     var rec = d.result ? '<div class="out">'+esc(d.result)+'</div>' : "";
     $("result").innerHTML=

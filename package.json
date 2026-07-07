@@ -27,9 +27,5 @@
     "overrides": {
       "tar": ">=7.5.4"
     }
-  },
-  "dependencies": {
-    "@humation/assets-humation-1": "^1.0.1",
-    "@humation/react": "^1.0.1"
   }
 }

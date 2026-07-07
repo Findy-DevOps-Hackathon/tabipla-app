@@ -2,9 +2,37 @@ import { getNextPair } from "../src/diagnosis.js";
 
 // シミュレーション用のユーザーの好みエミュレータ
 // 好み: 「自然」「温泉」「絶景」が好き。「歴史」「グルメ」「現代アート」は興味なし。
-function evaluatePreference(spotName: string, category: string[], tags: string[]): "A" | "B" | "neutral" {
-  const positiveKeywords = ["自然", "山", "海", "渓谷", "高原", "滝", "温泉", "絶景", "トレッキング", "露天風呂"];
-  const negativeKeywords = ["歴史", "寺", "神社", "城", "中華", "寿司", "グルメ", "カフェ", "現代アート", "美術館", "USJ", "テーマパーク"];
+function evaluatePreference(
+  spotName: string,
+  category: string[],
+  tags: string[],
+): "A" | "B" | "neutral" {
+  const positiveKeywords = [
+    "自然",
+    "山",
+    "海",
+    "渓谷",
+    "高原",
+    "滝",
+    "温泉",
+    "絶景",
+    "トレッキング",
+    "露天風呂",
+  ];
+  const negativeKeywords = [
+    "歴史",
+    "寺",
+    "神社",
+    "城",
+    "中華",
+    "寿司",
+    "グルメ",
+    "カフェ",
+    "現代アート",
+    "美術館",
+    "USJ",
+    "テーマパーク",
+  ];
 
   const text = `${spotName} ${category.join(" ")} ${tags.join(" ")}`;
 
@@ -48,8 +76,12 @@ async function simulate() {
     const a = res.spotA;
     const b = res.spotB;
 
-    console.log(`提示A: ${a.name} [カテゴリ: ${a.category?.join(",")}] [タグ: ${a.tags?.join(",")}]`);
-    console.log(`提示B: ${b.name} [カテゴリ: ${b.category?.join(",")}] [タグ: ${b.tags?.join(",")}]`);
+    console.log(
+      `提示A: ${a.name} [カテゴリ: ${a.category?.join(",")}] [タグ: ${a.tags?.join(",")}]`,
+    );
+    console.log(
+      `提示B: ${b.name} [カテゴリ: ${b.category?.join(",")}] [タグ: ${b.tags?.join(",")}]`,
+    );
 
     // 好み判定
     const prefA = evaluatePreference(a.name, (a.category as string[]) ?? [], a.tags ?? []);

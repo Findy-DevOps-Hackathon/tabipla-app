@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
-import { PRIMARY_BUTTON } from "../lib/ui.ts";
+import { presentPlanError } from "../lib/planError.ts";
+import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "../lib/ui.ts";
 
 type ProcessingScreenProps = {
   /** スワイプした件数（本文に表示）。 */
@@ -11,8 +12,14 @@ type ProcessingScreenProps = {
   isFetchDone?: boolean;
   /** APIエラーメッセージ */
   apiError?: string | null;
-  /** エラー発生時のやり直し処理 */
+  /** 同じ入力のまま再試行 */
+  onRetry?: () => void;
+  /** 好み診断からやり直す */
   onRestart?: () => void;
+  /** 入力画面へ戻る */
+  onGoBack?: () => void;
+  /** 戻るボタンのラベル */
+  goBackLabel?: string;
 };
 
 /** フロー 4: 好みを分析中であることを示す画面（ai-processing）。 */
@@ -21,13 +28,19 @@ export function ProcessingScreen({
   onDone,
   isFetchDone = false,
   apiError = null,
+  onRetry,
   onRestart,
+  onGoBack,
+  goBackLabel = "入力内容を変更する",
 }: ProcessingScreenProps) {
   const [progress, setProgress] = useState(0);
+  const errorPresentation = useMemo(
+    () => (apiError ? presentPlanError(apiError) : null),
+    [apiError],
+  );
 
   useEffect(() => {
     if (apiError) return;
-    // 擬似的に 95% まで徐々に進行させる
     const timer = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 95) {
@@ -60,28 +73,51 @@ export function ProcessingScreen({
       </div>
 
       <div className="relative flex flex-col items-center gap-8 px-4">
-        {apiError ? (
-          // エラー表示
-          <div className="flex flex-col items-center gap-6 text-center">
-            <div className="relative flex size-[80px] items-center justify-center rounded-full bg-red-50 text-red-500 text-[32px]">
+        {errorPresentation ? (
+          <div className="flex w-full max-w-[320px] flex-col items-center gap-6 text-center">
+            <div className="relative flex size-[80px] items-center justify-center rounded-full bg-rose-50 text-[32px]">
               ⚠️
             </div>
             <div className="flex flex-col items-center gap-2">
-              <p className="text-[18px] font-semibold text-red-600">プラン生成エラー</p>
-              <p className="text-[14px] leading-[1.6] text-[#64748b] max-w-[280px]">{apiError}</p>
+              <p className="text-[18px] font-semibold text-[#0f172a]">{errorPresentation.title}</p>
+              <p className="text-[14px] leading-[1.6] text-[#64748b]">
+                {errorPresentation.message}
+              </p>
+              {errorPresentation.hint && (
+                <p className="text-[12px] leading-[1.6] text-[#94a3b8]">{errorPresentation.hint}</p>
+              )}
             </div>
-            {onRestart && (
-              <button
-                type="button"
-                onClick={onRestart}
-                className={`${PRIMARY_BUTTON} px-6 py-2.5 text-[14px]`}
-              >
-                最初からやり直す
-              </button>
-            )}
+            <div className="flex w-full flex-col gap-2.5">
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className={`${PRIMARY_BUTTON} px-6 py-3 text-[14px]`}
+                >
+                  もう一度試す
+                </button>
+              )}
+              {onGoBack && (
+                <button
+                  type="button"
+                  onClick={onGoBack}
+                  className={`${SECONDARY_BUTTON} px-6 py-3 text-[14px]`}
+                >
+                  {goBackLabel}
+                </button>
+              )}
+              {onRestart && (
+                <button
+                  type="button"
+                  onClick={onRestart}
+                  className="text-[13px] font-medium text-[#64748b] underline-offset-2 transition active:opacity-60"
+                >
+                  最初からやり直す
+                </button>
+              )}
+            </div>
           </div>
         ) : (
-          // ローディング表示
           <>
             <div className="relative flex size-[100px] items-center justify-center">
               <div className="size-16 animate-spin rounded-full border-4 border-(--ai-bg) border-t-(--ai-fg)" />
@@ -92,7 +128,7 @@ export function ProcessingScreen({
               <p className="text-center text-[14px] leading-[1.6] text-[#64748b]">
                 回答 {count} 件をもとに
                 <br />
-                最適なプランを生成しています。
+                あなたに合うおすすめを選んでいます。
               </p>
             </div>
           </>

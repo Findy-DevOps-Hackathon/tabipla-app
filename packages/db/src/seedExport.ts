@@ -26,11 +26,9 @@ function stripSpot(row: typeof spots.$inferSelect): SeedSpot {
     area: row.area,
     prefecture: row.prefecture,
     address: row.address,
-    tags: row.tags,
     highlights: row.highlights,
     lat: row.lat,
     lon: row.lon,
-    price: row.price,
     imageUrl: row.imageUrl,
   };
 }

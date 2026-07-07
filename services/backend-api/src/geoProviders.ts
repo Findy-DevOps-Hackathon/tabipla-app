@@ -1,4 +1,7 @@
+import { fetchWithTimeout } from "./fetchWithTimeout.js";
+
 const NOMINATIM_USER_AGENT = "tabipla-backend-api/0.1 (admin geocoding)";
+const GEOCODING_TIMEOUT_MS = 12_000;
 
 export type NominatimHit = {
   lat: number;
@@ -31,9 +34,13 @@ export async function searchNominatim(
   if (options.viewbox) params.set("viewbox", options.viewbox);
   if (options.bounded) params.set("bounded", "1");
 
-  const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
-    headers: { "User-Agent": NOMINATIM_USER_AGENT },
-  });
+  const res = await fetchWithTimeout(
+    `https://nominatim.openstreetmap.org/search?${params}`,
+    {
+      headers: { "User-Agent": NOMINATIM_USER_AGENT },
+    },
+    GEOCODING_TIMEOUT_MS,
+  );
   if (!res.ok) return [];
 
   const data = (await res.json()) as Array<{
@@ -77,7 +84,7 @@ export async function geocodeViaGoogle(
   url.searchParams.set("region", "jp");
   url.searchParams.set("key", key);
 
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url, {}, GEOCODING_TIMEOUT_MS);
   if (!res.ok) return null;
 
   const data = (await res.json()) as {

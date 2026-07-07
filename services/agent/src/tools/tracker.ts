@@ -13,7 +13,7 @@ export const toolCallStorage = new AsyncLocalStorage<ToolCallContext>();
  */
 export function checkToolLoop(
   toolName: string,
-  args: any,
+  args: unknown,
 ): { status: "error"; error: string; message: string } | null {
   const store = toolCallStorage.getStore();
   if (!store) {

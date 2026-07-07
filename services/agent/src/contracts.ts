@@ -11,9 +11,8 @@ export interface Spot {
   name: string;
   category: string; // 使える値は nature / gourmet / history
   location: LatLon;
-  priceLevel: number; // 0-4
   description?: string;
-  tags?: string[];
+  highlights?: string[];
 }
 
 // ① 候補検索（本データは @tabipla/search-core searchCandidateSpots）
@@ -22,7 +21,6 @@ export interface SearchInput {
   center?: LatLon; // 現在地。geo_distanceの基準
   radiusKm?: number; // centerからの半径
   category?: string[]; // nature / gourmet / history（OR）
-  priceLevelMax?: number; // 0-4。これ以下に絞る
   k?: number; // 取得件数（既定8）
 }
 export type SearchFn = (i: SearchInput) => Promise<Spot[]>;

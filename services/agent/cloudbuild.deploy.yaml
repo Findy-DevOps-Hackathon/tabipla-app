@@ -32,6 +32,12 @@ steps:
           RUN_ENV_VARS="$${RUN_ENV_VARS},BACKEND_API_URL=$$BACKEND_URL"
         fi
 
+        SECRET_ARGS=()
+        if gcloud secrets describe tabipla-admin-jwt-secret \
+          --project="${PROJECT_ID}" >/dev/null 2>&1; then
+          SECRET_ARGS+=(--set-secrets=ADMIN_JWT_SECRET=tabipla-admin-jwt-secret:latest)
+        fi
+
         gcloud run deploy "${_SERVICE}" \
           --project="${PROJECT_ID}" \
           --region="${_REGION}" \
@@ -43,7 +49,8 @@ steps:
           --timeout=300 \
           --min-instances=0 \
           --max-instances=5 \
-          --set-env-vars="$${RUN_ENV_VARS}"
+          --set-env-vars="$${RUN_ENV_VARS}" \
+          "$${SECRET_ARGS[@]}"
 
         SERVICE_URL="$(gcloud run services describe "${_SERVICE}" \
           --project="${PROJECT_ID}" \
@@ -59,7 +66,7 @@ substitutions:
   _REGION: asia-northeast1
   _SERVICE: tabipla-agent
   _IMAGE: gcr.io/${PROJECT_ID}/tabipla-agent
-  _USE_MOCK: "1"
+  _USE_MOCK: "0"
 
 options:
   logging: CLOUD_LOGGING_ONLY

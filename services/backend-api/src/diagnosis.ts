@@ -1,6 +1,5 @@
 import { createDatabase, listSpots } from "@tabipla/db";
-import { createElasticsearchClient, keywordSearch, type SpotDocument } from "@tabipla/search-core";
-import { buildSpotEmbedText, embedText } from "./embedding.js";
+import { createElasticsearchClient, type SpotDocument } from "@tabipla/search-core";
 import { toSpotDocument } from "./mapper.js";
 
 // 内積によるコサイン類似度計算 (L2正規化されている前提ですが、安全のために正規化も含めます)
@@ -47,7 +46,9 @@ const REPRESENTATIVE_PAIRS = [
 /**
  * ESおよびDBから、embeddingとclusterIdを含んだ基準スポット(50件)のマップを取得する
  */
-async function fetchReferenceSpotsMap(): Promise<Map<string, DiagnosisSpot & { embedding: number[] }>> {
+async function fetchReferenceSpotsMap(): Promise<
+  Map<string, DiagnosisSpot & { embedding: number[] }>
+> {
   const db = createDatabase();
   const es = createElasticsearchClient();
   const map = new Map<string, DiagnosisSpot & { embedding: number[] }>();
@@ -73,7 +74,7 @@ async function fetchReferenceSpotsMap(): Promise<Map<string, DiagnosisSpot & { e
 
     for (const row of refRows) {
       const hit = esDocs.find((h) => h._id === row.id);
-      if (hit && hit._source && hit._source.embedding) {
+      if (hit?._source?.embedding) {
         map.set(row.id, {
           ...toSpotDocument(row),
           embedding: hit._source.embedding,
@@ -93,7 +94,6 @@ async function fetchReferenceSpotsMap(): Promise<Map<string, DiagnosisSpot & { e
  */
 export async function getNextPair(req: NextPairRequest): Promise<NextPairResponse> {
   const likesSet = new Set(req.likes);
-  const nopesSet = new Set(req.nopes);
   const swipedSet = new Set([...req.likes, ...req.nopes]);
 
   // すでに何ラウンド進んだか (選択した回数 = ラウンドインデックス)
@@ -108,7 +108,9 @@ export async function getNextPair(req: NextPairRequest): Promise<NextPairRespons
   const refSpotsMap = await fetchReferenceSpotsMap();
 
   if (refSpotsMap.size === 0) {
-    throw new Error("[diagnosis] 基準観光地データがロードできませんでした。シードとクラスタリングを先に実行してください。");
+    throw new Error(
+      "[diagnosis] 基準観光地データがロードできませんでした。シードとクラスタリングを先に実行してください。",
+    );
   }
 
   // --- 前半：第1〜2ラウンド (直交サンプリング) ---
@@ -177,8 +179,8 @@ export async function getNextPair(req: NextPairRequest): Promise<NextPairRespons
   // 3. 境界線サンプリング (コサイン類似度 S_i = 0 に最も近いものを対比させて提示)
   // S_i > 0 の中で最も 0 に近い（絶対値が最小の）1件と、
   // S_i < 0 の中で最も 0 に近い（絶対値が最小の）1件を選定
-  let bestLikeCandidate: typeof candidates[0] | null = null;
-  let bestNopeCandidate: typeof candidates[0] | null = null;
+  let bestLikeCandidate: (typeof candidates)[0] | null = null;
+  let bestNopeCandidate: (typeof candidates)[0] | null = null;
 
   for (const cand of candidates) {
     if (cand.similarity >= 0) {
@@ -205,8 +207,8 @@ export async function getNextPair(req: NextPairRequest): Promise<NextPairRespons
     spotBId = candidates[1]?.id ?? null;
   }
 
-  const spotA = spotAId ? refSpotsMap.get(spotAId) ?? null : null;
-  const spotB = spotBId ? refSpotsMap.get(spotBId) ?? null : null;
+  const spotA = spotAId ? (refSpotsMap.get(spotAId) ?? null) : null;
+  const spotB = spotBId ? (refSpotsMap.get(spotBId) ?? null) : null;
 
   return {
     spotA: spotA ? { ...spotA, embedding: undefined } : null,

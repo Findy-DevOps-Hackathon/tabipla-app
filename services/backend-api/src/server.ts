@@ -1,6 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   countSpots,
   createDatabase,
@@ -34,12 +31,14 @@ import {
   searchCandidateSpots,
   vectorSearch,
 } from "@tabipla/search-core";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { normalizeApiPath, registerApiMirrorRoutes } from "./apiPrefix.js";
 import { extractBearerToken, isAdminApiPath, issueAdminToken, verifyAdminToken } from "./auth.js";
 import { registerCors } from "./cors.js";
-import { buildSpotEmbedText, embedText } from "./embedding.js";
+import { getNextPair } from "./diagnosis.js";
+import { embedText, formatEmbeddingError, requireSpotEmbedding } from "./embedding.js";
 import { patchSpotInElasticsearch, upsertSpotInElasticsearch } from "./esSync.js";
+import { fetchWithTimeout } from "./fetchWithTimeout.js";
 import { geocodeAddressQuery } from "./geocode.js";
 import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./mapper.js";
 import { lookupPlaceByName } from "./places.js";
@@ -55,6 +54,8 @@ import {
 /** user-web 向け公開 API の既定エリア（現状は小諸市のみ）。 */
 const PUBLIC_SPOT_PREFECTURE = "長野県";
 const PUBLIC_SPOT_AREA = "小諸市";
+const AGENT_REQUEST_TIMEOUT_MS = 240_000;
+const AGENT_IMAGE_TIMEOUT_MS = 15_000;
 
 type DestinationFilter = { area: string; prefecture: string };
 
@@ -102,7 +103,6 @@ import {
   vectorSearchSchema,
 } from "./schemas.js";
 import { issueUserToken } from "./userAuth.js";
-import { getNextPair } from "./diagnosis.js";
 
 /**
  * backend-api は検索ロジックを持たず、必ず search-core を経由して Elasticsearch を扱う。
@@ -145,14 +145,20 @@ type SearchCandidateSpotsBody = {
   query?: string;
   embedding?: number[];
   category?: string | string[];
-  priceMin?: number;
-  priceMax?: number;
   near?: { lat: number; lon: number };
   radiusKm?: number;
   size?: number;
   k?: number;
   knnBoost?: number;
   index?: string;
+};
+type SensoryScores = NonNullable<SpotDocument["sensoryScores"]>;
+type SpotStoryBody = {
+  preferences: {
+    tags: string[];
+    freeText?: string;
+  };
+  tone?: string;
 };
 
 export type BuildServerOptions = {
@@ -233,26 +239,12 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     }
   });
 
-  // 収集直後のスポットも即セマンティック検索の対象にするため、ES 反映前に embedding を生成して付与する。
-  // 生成に失敗しても登録自体は止めない（キーワード検索は embedding なしでも機能するため、ベストエフォート）。
-  // 既存ドキュメントに embedding があれば upsertSpotInElasticsearch 側が優先保持する（無駄な再計算はしない）。
+  // 登録経路（/spots, /spots/bulk）では ES 反映前に embedding を必須生成する。
+  // 生成に失敗した場合は PostgreSQL への書き込み前に 502 を返し、embedding なし登録を防ぐ。
   async function attachEmbedding(document: SpotDocument): Promise<SpotDocument> {
-    try {
-      const embedding = await embedText(buildSpotEmbedText(document), {
-        taskType: "RETRIEVAL_DOCUMENT",
-      });
-      return { ...document, embedding };
-    } catch (error) {
-      app.log.warn(
-        { err: error, spotId: document.id },
-        "embedding 生成に失敗したため embedding なしで登録します",
-      );
-      return document;
-    }
+    const embedding = await requireSpotEmbedding(document);
+    return { ...document, embedding };
   }
-
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
 
   function cosineSimilarity(a: number[], b: number[]): number {
     let dot = 0;
@@ -281,7 +273,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         .select({
           id: spots.id,
           clusterId: spots.clusterId,
-          sensoryScores: spots.sensoryScores
+          sensoryScores: spots.sensoryScores,
         })
         .from(spots);
       const refRows = allRows.filter((r) => r.id.startsWith("ref-"));
@@ -290,7 +282,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         app.log.warn("[server] 基準観光地がDBに見つかりません");
         return document;
       }
-      
+
       let maxSimilarity = -1;
       let bestClusterId = 0;
 
@@ -309,7 +301,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       for (const ref of refRows) {
         if (ref.clusterId === null || !ref.sensoryScores) continue;
 
-        const refScores = ref.sensoryScores as any;
+        const refScores = ref.sensoryScores as SensoryScores;
         const refVector = [
           refScores.nature ?? 0,
           refScores.history ?? 0,
@@ -319,7 +311,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
           refScores.activity ?? 0,
           refScores.quietness ?? 0,
           refScores.indoor ?? 0,
-          refScores.popularity ?? 0
+          refScores.popularity ?? 0,
         ];
 
         const sim = cosineSimilarity(target, refVector);
@@ -337,7 +329,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   }
 
   // ---- ヘルスチェック ------------------------------------------------------
-  const checkHealth = async (req: any, reply: any) => {
+  const checkHealth = async (req: FastifyRequest, reply: FastifyReply) => {
     let esAlive = false;
     try {
       esAlive = await pingElasticsearch(client);
@@ -536,9 +528,18 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   app.post<{ Body: SpotBody; Querystring: { refresh?: string } }>(
     "/spots",
     { schema: createSpotSchema },
-    async (req) => {
+    async (req, reply) => {
       const refresh = req.query.refresh === "true";
       const tempDoc: SpotDocument = req.body;
+
+      let embeddedDocument: SpotDocument;
+      try {
+        embeddedDocument = await attachEmbedding(tempDoc);
+      } catch (error) {
+        app.log.error({ err: error, spotId: tempDoc.id }, "POST /spots: embedding 生成に失敗");
+        return reply.code(502).send({ error: formatEmbeddingError(error, tempDoc.id) });
+      }
+
       const docWithCluster = await attachClusterId(tempDoc);
       const rowInput = {
         ...toNewSpotRow(tempDoc),
@@ -546,7 +547,28 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       };
       const row = await upsertSpot(db, rowInput);
       const document = toSpotDocument(row);
-      await upsertSpotInElasticsearch(client, await attachEmbedding(document), { refresh });
+
+      try {
+        await upsertSpotInElasticsearch(
+          client,
+          { ...document, embedding: embeddedDocument.embedding },
+          {
+            refresh,
+          },
+        );
+      } catch (error) {
+        app.log.error(
+          { err: error, spotId: document.id },
+          "POST /spots: Elasticsearch への反映に失敗",
+        );
+        return reply.code(502).send({
+          error:
+            error instanceof Error
+              ? error.message
+              : `スポット ${document.id} の Elasticsearch 反映に失敗しました。`,
+        });
+      }
+
       return document;
     },
   );
@@ -619,27 +641,71 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
   app.post<{ Body: { spots: SpotBody[] }; Querystring: { refresh?: string } }>(
     "/spots/bulk",
     { schema: bulkSpotsSchema },
-    async (req) => {
+    async (req, reply) => {
       const refresh = req.query.refresh === "true";
-      const newSpotRows = [];
+      const prepared: Array<{
+        rowInput: ReturnType<typeof toNewSpotRow> & { clusterId: number | null };
+        embedding: number[];
+      }> = [];
+
       for (const spotBody of req.body.spots) {
         const tempDoc: SpotDocument = spotBody;
-        const docWithCluster = await attachClusterId(tempDoc);
-        newSpotRows.push({
-          ...toNewSpotRow(tempDoc),
-          clusterId: docWithCluster.clusterId ?? null,
-        });
+        try {
+          const embedding = await requireSpotEmbedding(tempDoc);
+          const docWithCluster = await attachClusterId(tempDoc);
+          prepared.push({
+            rowInput: {
+              ...toNewSpotRow(tempDoc),
+              clusterId: docWithCluster.clusterId ?? null,
+            },
+            embedding,
+          });
+        } catch (error) {
+          app.log.error(
+            { err: error, spotId: tempDoc.id },
+            "POST /spots/bulk: embedding 生成に失敗",
+          );
+          return reply.code(502).send({ error: formatEmbeddingError(error, tempDoc.id) });
+        }
       }
-      const rows = await upsertSpots(db, newSpotRows);
+
+      const rows = await upsertSpots(
+        db,
+        prepared.map((entry) => entry.rowInput),
+      );
       const documents = rows.map(toSpotDocument);
-      // 各ドキュメントを1回だけ embedding 付与して upsert する。
-      // refresh は最後の1件だけ true にして、まとめて可視化する（従来の挙動を踏襲）。
+
       for (const [i, document] of documents.entries()) {
         const isLast = i === documents.length - 1;
-        await upsertSpotInElasticsearch(client, await attachEmbedding(document), {
-          refresh: refresh && isLast,
-        });
+        const embedding = prepared[i]?.embedding;
+        if (!embedding) {
+          return reply.code(500).send({
+            error: `スポット ${document.id} の embedding を内部処理で関連付けできませんでした。`,
+          });
+        }
+
+        try {
+          await upsertSpotInElasticsearch(
+            client,
+            { ...document, embedding },
+            {
+              refresh: refresh && isLast,
+            },
+          );
+        } catch (error) {
+          app.log.error(
+            { err: error, spotId: document.id },
+            "POST /spots/bulk: Elasticsearch への反映に失敗",
+          );
+          return reply.code(502).send({
+            error:
+              error instanceof Error
+                ? error.message
+                : `スポット ${document.id} の Elasticsearch 反映に失敗しました。`,
+          });
+        }
       }
+
       return { count: documents.length, spots: documents };
     },
   );
@@ -748,7 +814,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     },
   );
 
-  // ---- 候補スポット検索（A3: kNN × geo_distance × price/category） ----
+  // ---- 候補スポット検索（A3: kNN × geo_distance × category） ----
   app.post<{ Body: SearchCandidateSpotsBody }>(
     "/search/candidates",
     { schema: searchCandidateSpotsSchema },
@@ -888,9 +954,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
               category: "isan",
               location: { lat: 34.9948, lng: 135.785 },
               address: "京都府京都市東山区清水1丁目294",
-              priceYen: 400,
               estimatedStayMinutes: 90,
-              tags: ["isan", "shizen"],
             },
             travel: {
               mode: body.transportMode,
@@ -908,7 +972,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     },
   );
 
-  app.post<{ Params: { spotId: string }; Body: any }>(
+  app.post<{ Params: { spotId: string }; Body: SpotStoryBody }>(
     "/v1/spots/:spotId/story",
     { schema: postSpotStorySchema },
     async (req) => {
@@ -939,13 +1003,12 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     const body = req.body as {
       likes?: string[];
       nopes?: string[];
-      userId?: string;
-      timeBudget?: string;
-      origin?: string;
       travelMemory?: string;
       prefecture?: string;
       area?: string;
       destinations?: DestinationFilter[];
+      page?: number;
+      limit?: number;
     };
 
     const destinations =
@@ -968,19 +1031,26 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         profileSummary: "まだ好みが少なめ（もう少しスワイプすると精度が上がります）",
         recommendations: [],
         result: `${destinations.map((dest) => dest.area).join("・")}の観光スポットが登録されていません。`,
+        total: 0,
+        page: body.page ?? 1,
+        limit: body.limit ?? 20,
       };
     }
 
     let res: Response;
     try {
-      res = await fetch(`${agentApiUrl}/v1/personalized/plan`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ...body,
-          catalog,
-        }),
-      });
+      res = await fetchWithTimeout(
+        `${agentApiUrl}/v1/personalized/plan`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...body,
+            catalog,
+          }),
+        },
+        AGENT_REQUEST_TIMEOUT_MS,
+      );
     } catch (error) {
       req.log.error({ err: error }, "personalized/plan: agent への接続に失敗しました");
       return reply.code(503).send({
@@ -990,26 +1060,15 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     }
     const data = (await res.json()) as {
       error?: string;
-      plan?: Record<string, unknown>[];
       recommendations?: Record<string, unknown>[];
       profileSummary?: string;
       result?: string;
-      debate?: unknown;
+      total?: number;
+      page?: number;
+      limit?: number;
     };
     if (!res.ok) {
       return reply.code(res.status).send(data);
-    }
-
-    if (data.plan && Array.isArray(data.plan)) {
-      data.plan = data.plan.map((item: any) => {
-        if (item.type === "spot" && item.spot) {
-          const id = String(item.spot.id ?? "");
-          const name = String(item.spot.name ?? "");
-          const row = rowById.get(id) ?? rowByName.get(name);
-          item.spot = enrichRecommendation(item.spot, row);
-        }
-        return item;
-      });
     }
 
     if (data.recommendations?.length) {
@@ -1021,6 +1080,20 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
           return enrichRecommendation(rec, row);
         })
         .filter((rec) => allowedIds.has(String(rec.id ?? "")));
+
+      req.log.info(
+        {
+          page: data.page,
+          limit: data.limit,
+          total: data.total,
+          scores: data.recommendations.map((rec) => ({
+            id: String(rec.id ?? ""),
+            name: String(rec.name ?? ""),
+            score: rec.score,
+          })),
+        },
+        "personalized/plan: recommendation scores",
+      );
     }
 
     return data;
@@ -1033,7 +1106,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       text?: string;
       image?: { mimeType: string; data: string };
       audio?: { mimeType: string; data: string };
-      userId?: string;
       spot?: AskSpotPayload;
     };
 
@@ -1048,7 +1120,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         name: dbSpot.name,
         description: dbSpot.description,
         highlights: dbSpot.highlights ?? [],
-        tags: dbSpot.tags ?? [],
         area: dbSpot.area ?? undefined,
         prefecture: dbSpot.prefecture ?? undefined,
         address: dbSpot.address ?? undefined,
@@ -1063,15 +1134,19 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
 
     let res: Response;
     try {
-      res = await fetch(`${agentApiUrl}/v1/spots/${spotId}/ask`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ...body,
-          spot: spotForAgent,
-          facts,
-        }),
-      });
+      res = await fetchWithTimeout(
+        `${agentApiUrl}/v1/spots/${spotId}/ask`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...body,
+            spot: spotForAgent,
+            facts,
+          }),
+        },
+        AGENT_REQUEST_TIMEOUT_MS,
+      );
     } catch (error) {
       req.log.error({ err: error, spotId }, "ask: agent への接続に失敗しました");
       return reply.code(503).send({
@@ -1080,34 +1155,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       });
     }
 
-    const data = await res.json();
-    if (!res.ok) {
-      return reply.code(res.status).send(data);
-    }
-    return data;
-  });
-
-  // エージェントプロキシ：スポットフィードバック
-  app.post("/v1/personalized/feedback/spot", async (req, reply) => {
-    const res = await fetch(`${agentApiUrl}/v1/personalized/feedback/spot`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(req.body),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      return reply.code(res.status).send(data);
-    }
-    return data;
-  });
-
-  // エージェントプロキシ：全体フィードバック
-  app.post("/v1/personalized/feedback/trip", async (req, reply) => {
-    const res = await fetch(`${agentApiUrl}/v1/personalized/feedback/trip`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(req.body),
-    });
     const data = await res.json();
     if (!res.ok) {
       return reply.code(res.status).send(data);
@@ -1125,7 +1172,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       : `${agentApiUrl}/img/${encodeURIComponent(id)}`;
     let res: Response;
     try {
-      res = await fetch(url);
+      res = await fetchWithTimeout(url, {}, AGENT_IMAGE_TIMEOUT_MS);
     } catch (error) {
       req.log.error({ err: error, id, agentApiUrl }, "img: agent への接続に失敗しました");
       return reply.code(503).send({ error: "画像サービスに接続できません。" });

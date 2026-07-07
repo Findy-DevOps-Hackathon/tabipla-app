@@ -1,35 +1,62 @@
-import { createElasticsearchClient } from "@tabipla/search-core";
+import { createElasticsearchClient, type SpotDocument, VECTOR_DIMS } from "@tabipla/search-core";
+import type { Spot } from "../contracts.js";
+import { buildProfile, type Swipes, summarizeProfile } from "../personalize.js";
+import {
+  buildPlanCacheKey,
+  type CachedPlanRank,
+  type CachedRankedItem,
+  getCachedPlanRank,
+  setCachedPlanRank,
+} from "../planRankCache.js";
 import { embedText } from "./embedding.js";
-import { runRerank, type PlanItemEntry } from "./rerank.js";
-import { buildProfile, summarizeProfile, userProfiles, type Swipes } from "../personalize.js";
+import { runIntro } from "./intro.js";
 
 export interface Recommendation {
   id: string;
   name: string;
   category: string;
-  priceLevel: number;
-  tags: string[];
+  highlights: string[];
   image: string;
   score: number;
-  why?: string[]; // 下位互換用
-}
-
-export interface PlanItem {
-  type: "spot" | "break";
-  timeSlot: string;
-  spot?: Recommendation;
-  title: string;
-  description: string;
 }
 
 export interface PersonalizedResult {
   profileSummary: string;
-  plan: PlanItem[]; // タイムライン旅程（巡る順）
-  recommendations: Recommendation[]; // その他のサブおすすめ（お勧め順）
-  result: string; // 推薦の要約テキスト
+  recommendations: Recommendation[];
+  result: string;
+  total: number;
+  page: number;
+  limit: number;
+  planKey: string;
 }
 
-// L2正規化
+export type PersonalizedPlanOptions = {
+  page?: number;
+  limit?: number;
+  /** 1ページ目で返却されたキー。2ページ目以降のキャッシュ参照に使用。 */
+  planKey?: string;
+};
+
+/** LLM 紹介文生成に渡す上位候補数。 */
+const LLM_INTRO_POOL = 15;
+
+/** catalog 未指定時のフォールバック k-NN 件数。 */
+const GLOBAL_KNN_LIMIT = 15;
+
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
+type EsSpotRecord = Record<string, unknown> & {
+  id: string;
+  embedding?: number[];
+};
+
+type RankedCandidate = {
+  candidate: EsSpotRecord;
+  similarity: number;
+};
+
 function l2Normalize(vec: number[]): number[] {
   let sumSq = 0;
   for (const v of vec) sumSq += v * v;
@@ -40,128 +67,262 @@ function l2Normalize(vec: number[]): number[] {
   return vec;
 }
 
-/**
- * ESから指定されたIDリストのドキュメントを取得し、embeddingベクトルを取り出す
- */
-async function fetchEmbeddingsForIds(ids: string[]): Promise<number[][]> {
-  if (ids.length === 0) return [];
+/** 正規化済み query と生ベクトルのコサイン類似度。 */
+function cosineSimilarity(normalizedQuery: number[], vec: number[]): number {
+  let dot = 0;
+  let normSq = 0;
+  for (let i = 0; i < normalizedQuery.length; i++) {
+    const q = normalizedQuery[i] ?? 0;
+    const v = vec[i] ?? 0;
+    dot += q * v;
+    normSq += v * v;
+  }
+  const norm = Math.sqrt(normSq);
+  return norm > 0 ? dot / norm : 0;
+}
+
+function similarityToScore(similarity: number): number {
+  return Math.round(Math.max(0, Math.min(1, similarity)) * 100) / 100;
+}
+
+function normalizePagination(options?: PersonalizedPlanOptions): { page: number; limit: number } {
+  const page = Math.max(DEFAULT_PAGE, Math.floor(options?.page ?? DEFAULT_PAGE));
+  const limit = Math.min(MAX_LIMIT, Math.max(1, Math.floor(options?.limit ?? DEFAULT_LIMIT)));
+  return { page, limit };
+}
+
+async function fetchSpotsFromEsByIds(ids: string[]): Promise<Map<string, EsSpotRecord>> {
+  if (ids.length === 0) return new Map();
   const es = createElasticsearchClient();
   try {
     const res = await es.search({
       index: "spots",
       size: ids.length,
-      query: {
-        ids: { values: ids },
-      },
+      query: { ids: { values: ids } },
     });
 
-    const hits = res.hits.hits;
-    const embs: number[][] = [];
-    for (const h of hits) {
-      const src = h._source as { embedding?: number[] };
-      if (src?.embedding && src.embedding.length > 0) {
-        embs.push(src.embedding);
-      }
+    const map = new Map<string, EsSpotRecord>();
+    for (const h of res.hits.hits) {
+      const id = h._id;
+      if (!id) continue;
+      map.set(id, { id, ...(h._source as Record<string, unknown>) });
     }
-    return embs;
+    return map;
   } catch (e) {
-    console.error("[personalized] fetchEmbeddingsForIdsエラー:", e);
-    return [];
+    console.error("[personalized] fetchSpotsFromEsByIdsエラー:", e);
+    return new Map();
   }
 }
 
-/**
- * 地理的近傍 (k-NN) 検索を実行
- */
-async function searchCandidates(
+function mergeCatalogSpot(catalogSpot: Spot, es?: EsSpotRecord): EsSpotRecord {
+  return {
+    ...es,
+    id: catalogSpot.id,
+    name: catalogSpot.name,
+    category: catalogSpot.category,
+    description: catalogSpot.description ?? es?.description,
+    highlights: catalogSpot.highlights ?? es?.highlights,
+    location: catalogSpot.location ?? es?.location,
+  };
+}
+
+/** 目的地カタログ内の全スポットを好みベクトルとの類似度でランキングする。 */
+function rankAllCandidatesInCatalog(
+  queryVector: number[],
+  catalog: Spot[],
+  esById: Map<string, EsSpotRecord>,
+  excludeIds: string[],
+): RankedCandidate[] {
+  const exclude = new Set(excludeIds);
+
+  return catalog
+    .filter((spot) => !exclude.has(spot.id))
+    .map((catalogSpot) => {
+      const es = esById.get(catalogSpot.id);
+      const embedding = es?.embedding;
+      const similarity =
+        embedding && embedding.length > 0 ? cosineSimilarity(queryVector, embedding) : -Infinity;
+      return { candidate: mergeCatalogSpot(catalogSpot, es), similarity };
+    })
+    .filter((entry) => entry.similarity > -Infinity)
+    .sort((a, b) => b.similarity - a.similarity);
+}
+
+/** catalog 未指定時のフォールバック: ES 全件 k-NN。 */
+async function searchCandidatesGlobal(
   queryVector: number[],
   excludeIds: string[],
-  lat: number,
-  lon: number,
-): Promise<any[]> {
+): Promise<RankedCandidate[]> {
   const es = createElasticsearchClient();
   try {
-    const mustNotFilters: any[] = [];
-    if (excludeIds.length > 0) {
-      mustNotFilters.push({ ids: { values: excludeIds } });
-    }
-
-    const knn: any = {
+    const knn: {
+      field: string;
+      query_vector: number[];
+      k: number;
+      num_candidates: number;
+      filter?: { bool: { must_not: { ids: { values: string[] } }[] } };
+    } = {
       field: "embedding",
       query_vector: queryVector,
-      k: 15,
+      k: GLOBAL_KNN_LIMIT,
       num_candidates: 50,
-      filter: {
-        bool: {
-          must: [
-            {
-              geo_distance: {
-                distance: "15km",
-                location: { lat, lon },
+      ...(excludeIds.length > 0
+        ? {
+            filter: {
+              bool: {
+                must_not: [{ ids: { values: excludeIds } }],
               },
             },
-          ],
-          must_not: mustNotFilters,
-        },
-      },
+          }
+        : {}),
     };
 
     const res = await es.search({
       index: "spots",
       knn,
-      size: 15,
+      size: GLOBAL_KNN_LIMIT,
     });
 
-    return res.hits.hits.map((h) => ({
-      id: h._id,
-      ...(h._source as any),
+    return res.hits.hits.map((h, index) => ({
+      candidate: {
+        id: h._id ?? "",
+        ...(h._source as Record<string, unknown>),
+      } as EsSpotRecord,
+      similarity: typeof h._score === "number" ? h._score : Math.max(0, 1 - index * 0.05),
     }));
   } catch (e) {
-    console.error("[personalized] searchCandidatesエラー:", e);
+    console.error("[personalized] searchCandidatesGlobalエラー:", e);
     return [];
   }
 }
 
-export async function personalizedPlan(
-  sw: Swipes,
-  userId = "demo",
-  timeBudget = "半日",
-  origin = "小諸駅",
-  travelMemory = "",
-  catalog?: any,
-): Promise<PersonalizedResult> {
-  console.log(`[personalizedPlan] 開始 (userId: ${userId}, origin: ${origin}, memory: ${travelMemory})`);
+const UNSPLASH_IMAGES = [
+  "https://images.unsplash.com/photo-1542044896530-05d85be9b11a?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80",
+];
 
-  // 1. スワイプ履歴から簡易プロファイルを構築 (画面上でのサマリー表示用)
-  const profile = buildProfile(sw, []);
-  const existing = userProfiles.get(userId);
-  if (existing) {
-    profile.feedbackNotes = existing.feedbackNotes;
-    profile.introStyle = existing.introStyle;
+function toIntroSpot(cand: EsSpotRecord): SpotDocument {
+  return {
+    id: cand.id,
+    name: String(cand.name ?? ""),
+    description: String(cand.description ?? ""),
+    category: cand.category as SpotDocument["category"],
+    area: typeof cand.area === "string" ? cand.area : undefined,
+    prefecture: typeof cand.prefecture === "string" ? cand.prefecture : undefined,
+    address: typeof cand.address === "string" ? cand.address : undefined,
+    highlights: Array.isArray(cand.highlights) ? (cand.highlights as string[]) : undefined,
+    imageUrl: typeof cand.imageUrl === "string" ? cand.imageUrl : undefined,
+    location: cand.location as SpotDocument["location"],
+  };
+}
+
+function toRecommendation(cand: EsSpotRecord, score: number): Recommendation {
+  const category = cand.category;
+  return {
+    id: cand.id,
+    name: String(cand.name ?? ""),
+    category: Array.isArray(category) ? category[0] || "観光" : String(category || "観光"),
+    highlights: Array.isArray(cand.highlights) ? (cand.highlights as string[]) : [],
+    image:
+      String(cand.imageUrl ?? cand.image ?? "") ||
+      (UNSPLASH_IMAGES[Math.floor(Math.random() * UNSPLASH_IMAGES.length)] ?? ""),
+    score,
+  };
+}
+
+function rankedToCachedItems(rankedAll: RankedCandidate[]): CachedRankedItem[] {
+  return rankedAll.map((entry) => {
+    const rec = toRecommendation(entry.candidate, similarityToScore(entry.similarity));
+    return { ...rec, similarity: entry.similarity };
+  });
+}
+
+function buildWeightedPrefVector(
+  likes: string[],
+  likeWeights: Record<string, number> | undefined,
+  esById: Map<string, EsSpotRecord>,
+): number[] | null {
+  let totalWeight = 0;
+  const vPref = new Array(VECTOR_DIMS).fill(0);
+
+  for (const id of likes) {
+    const embedding = esById.get(id)?.embedding;
+    if (!embedding || embedding.length === 0) continue;
+
+    const weight = Math.max(1, likeWeights?.[id] ?? 1);
+    totalWeight += weight;
+    for (let i = 0; i < VECTOR_DIMS; i++) {
+      vPref[i] += (embedding[i] ?? 0) * weight;
+    }
   }
-  userProfiles.set(userId, profile);
 
+  if (totalWeight === 0) return null;
+  return l2Normalize(vPref.map((v) => v / totalWeight));
+}
+
+function logRankedScores(
+  ranked: CachedRankedItem[],
+  page: number,
+  limit: number,
+  fromCache: boolean,
+): void {
+  const start = (page - 1) * limit;
+  const logItems = page === DEFAULT_PAGE ? ranked : ranked.slice(start, start + limit);
+  const logLabel =
+    page === DEFAULT_PAGE
+      ? `[personalizedPlan] スコア (全 ${ranked.length} 件${fromCache ? ", cache" : ""})`
+      : `[personalizedPlan] スコア (page ${page}, ${logItems.length} 件${fromCache ? ", cache" : ""})`;
+  console.log(logLabel);
+  for (const [index, entry] of logItems.entries()) {
+    const rank = page === DEFAULT_PAGE ? index + 1 : start + index + 1;
+    console.log(
+      `  ${rank}. ${entry.id} ${entry.name} similarity=${entry.similarity.toFixed(4)} score=${entry.score.toFixed(2)}`,
+    );
+  }
+}
+
+function sliceCachedPlan(cached: CachedPlanRank, page: number, limit: number): PersonalizedResult {
+  const start = (page - 1) * limit;
+  const pageItems = cached.ranked.slice(start, start + limit);
+  return {
+    profileSummary: cached.profileSummary,
+    recommendations: pageItems.map(({ similarity: _s, ...rec }) => rec),
+    result: page === DEFAULT_PAGE ? cached.result : "",
+    total: cached.ranked.length,
+    page,
+    limit,
+    planKey: cached.planKey,
+  };
+}
+
+async function computeAndCachePlan(
+  sw: Swipes,
+  travelMemory: string,
+  catalogSpots: Spot[],
+  planKey: string,
+): Promise<CachedPlanRank> {
+  const profile = buildProfile(sw, catalogSpots);
   const profileSummary = summarizeProfile(profile);
 
-  // 2. likes の embedding を取得し、平均化 (ユーザーの嗜好ベクトル v_pref)
-  const likedEmbeddings = await fetchEmbeddingsForIds(sw.likes);
-  let vPref = new Array(1536).fill(0);
+  const lookupIds = [...new Set([...sw.likes, ...catalogSpots.map((s) => s.id)])];
+  const esById = await fetchSpotsFromEsByIds(lookupIds);
 
-  if (likedEmbeddings.length > 0) {
-    for (const emb of likedEmbeddings) {
-      for (let i = 0; i < 1536; i++) {
-        vPref[i] += emb[i] ?? 0;
-      }
-    }
-    vPref = vPref.map((v) => v / likedEmbeddings.length);
-    vPref = l2Normalize(vPref);
+  const vPrefFromLikes = buildWeightedPrefVector(sw.likes, sw.likeWeights, esById);
+  const vPref = vPrefFromLikes ?? new Array(VECTOR_DIMS).fill(0);
+  const hasLikedEmbeddings = vPrefFromLikes !== null;
+
+  if (hasLikedEmbeddings && sw.likeWeights) {
+    const weightSummary = sw.likes
+      .map((id) => `${id}:${Math.max(1, sw.likeWeights?.[id] ?? 1)}`)
+      .join(", ");
+    console.log(`[personalizedPlan] Like 加重 weights: ${weightSummary}`);
   }
 
-  // 3. travelMemory のベクトル化 (思い出文脈ベクトル v_comment)
-  let vComment = new Array(1536).fill(0);
+  let vComment = new Array(VECTOR_DIMS).fill(0);
   let hasComment = false;
 
-  if (travelMemory && travelMemory.trim()) {
+  if (travelMemory?.trim()) {
     try {
       vComment = await embedText(travelMemory, { taskType: "RETRIEVAL_QUERY" });
       vComment = l2Normalize(vComment);
@@ -171,131 +332,113 @@ export async function personalizedPlan(
     }
   }
 
-  // 4. 嗜好ベクトル と 思い出文脈ベクトル の統合 (v_query)
-  let vQuery = new Array(1536).fill(0);
-  if (likedEmbeddings.length > 0 && hasComment) {
-    for (let i = 0; i < 1536; i++) {
+  let vQuery = new Array(VECTOR_DIMS).fill(0);
+  if (hasLikedEmbeddings && hasComment) {
+    for (let i = 0; i < VECTOR_DIMS; i++) {
       vQuery[i] = 0.5 * vPref[i] + 0.5 * vComment[i];
     }
     vQuery = l2Normalize(vQuery);
-  } else if (likedEmbeddings.length > 0) {
+  } else if (hasLikedEmbeddings) {
     vQuery = vPref;
   } else if (hasComment) {
     vQuery = vComment;
   } else {
-    vQuery = new Array(1536).fill(0.01);
+    vQuery = new Array(VECTOR_DIMS).fill(0.01);
+    vQuery = l2Normalize(vQuery);
   }
 
-  // 5. 物理制約 (小諸周辺) フィルター付き ES 近傍 (k-NN) 検索
-  const lat = 36.3268;
-  const lon = 138.4211;
-  const rawCandidates = await searchCandidates(vQuery, sw.nopes, lat, lon);
+  const rankedAll =
+    catalogSpots.length > 0
+      ? rankAllCandidatesInCatalog(vQuery, catalogSpots, esById, sw.nopes)
+      : await searchCandidatesGlobal(vQuery, sw.nopes);
 
-  console.log(`[personalizedPlan] ESヒット件数: ${rawCandidates.length}`);
+  console.log(
+    `[personalizedPlan] ランキング ${rankedAll.length} 件` +
+      (catalogSpots.length > 0
+        ? ` (目的地内 ${catalogSpots.length} 件を全評価)`
+        : " (ES全件 k-NN)") +
+      ` → cache key ${planKey.slice(0, 12)}…`,
+  );
 
-  // もしESから候補が見つからない場合は、フォールバックとして空配列を返却
-  if (rawCandidates.length === 0) {
+  let result = "";
+  if (rankedAll.length > 0) {
+    const introPool = rankedAll
+      .slice(0, LLM_INTRO_POOL)
+      .map((entry) => toIntroSpot(entry.candidate));
+    try {
+      const introResult = await runIntro({
+        profileSummary,
+        travelMemory,
+        spots: introPool,
+      });
+      result = introResult.result || "おすすめの観光スポットです。";
+    } catch (error) {
+      console.error("[personalized] 紹介文生成に失敗しました。フォールバックします:", error);
+      result = `${rankedAll
+        .slice(0, 3)
+        .map((entry) => String(entry.candidate.name ?? ""))
+        .join("、")}などがおすすめです。`;
+    }
+  } else {
+    result = "好みに合う観光地が見つかりませんでした。";
+  }
+
+  const cached: CachedPlanRank = {
+    planKey,
+    profileSummary,
+    result,
+    ranked: rankedToCachedItems(rankedAll),
+    createdAt: Date.now(),
+  };
+  setCachedPlanRank(cached);
+  return cached;
+}
+
+export async function personalizedPlan(
+  sw: Swipes,
+  travelMemory = "",
+  catalog?: Spot[],
+  options?: PersonalizedPlanOptions,
+): Promise<PersonalizedResult> {
+  const { page, limit } = normalizePagination(options);
+  const catalogSpots = Array.isArray(catalog) ? catalog : [];
+  const planKey =
+    options?.planKey?.trim() ||
+    buildPlanCacheKey(
+      sw,
+      travelMemory,
+      catalogSpots.map((spot) => spot.id),
+    );
+
+  console.log(
+    `[personalizedPlan] 開始 (memory: ${travelMemory}, page: ${page}, limit: ${limit}, key: ${planKey.slice(0, 12)}…)`,
+  );
+
+  let cachedEntry = getCachedPlanRank(planKey);
+  if (page > DEFAULT_PAGE && cachedEntry) {
+    console.log(`[personalizedPlan] キャッシュヒット → page ${page} をスライス返却`);
+    logRankedScores(cachedEntry.ranked, page, limit, true);
+    return sliceCachedPlan(cachedEntry, page, limit);
+  }
+
+  if (page > DEFAULT_PAGE && !cachedEntry) {
+    console.log("[personalizedPlan] キャッシュミス (page > 1) → フルランキングを再計算");
+  }
+
+  cachedEntry = await computeAndCachePlan(sw, travelMemory, catalogSpots, planKey);
+  logRankedScores(cachedEntry.ranked, page, limit, false);
+
+  if (cachedEntry.ranked.length === 0) {
     return {
-      profileSummary,
-      plan: [],
+      profileSummary: cachedEntry.profileSummary,
       recommendations: [],
-      result: "指定されたエリアで時間・好みに合う観光地が見つかりませんでした。",
+      result: cachedEntry.result,
+      total: 0,
+      page,
+      limit,
+      planKey,
     };
   }
 
-  // 6. 120点アテンド協調プランナーの実行 (Storyteller, Concierge, Route Planner)
-  const rerankInput = {
-    profileSummary,
-    travelMemory,
-    timeBudget,
-    origin,
-    spots: rawCandidates,
-  };
-
-  let attendResult: {
-    planItems: PlanItemEntry[];
-    result: string;
-    subRecommendations: string[];
-  };
-
-  try {
-    attendResult = await runRerank(rerankInput);
-  } catch (error) {
-    console.error("[personalized] プラン生成に失敗しました。フォールバックします:", error);
-    attendResult = {
-      planItems: rawCandidates.slice(0, 3).map((c, idx) => ({
-        type: "spot",
-        timeSlot: idx === 0 ? "10:00 - 11:30" : idx === 1 ? "12:00 - 13:00" : "14:00 - 15:30",
-        spotId: c.id,
-        title: c.name,
-        description: c.description || "おすすめのスポットです。",
-      })),
-      result: `${rawCandidates.slice(0, 3).map((c) => c.name).join("、")}を巡るおすすめプランです。`,
-      subRecommendations: rawCandidates.slice(3, 9).map((c) => c.id),
-    };
-  }
-
-  // デフォルト画像アセット
-  const UNSPLASH_IMAGES = [
-    "https://images.unsplash.com/photo-1542044896530-05d85be9b11a?auto=format&fit=crop&w=600&q=80",
-    "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=600&q=80",
-    "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80",
-  ];
-
-  // タイムライン旅程プラン (planItems) のマッピング
-  const plan: PlanItem[] = attendResult.planItems
-    .map((item) => {
-      if (item.type === "spot" && item.spotId) {
-        const cand = rawCandidates.find((c) => c.id === item.spotId);
-        if (cand) {
-          return {
-            type: "spot" as const,
-            timeSlot: item.timeSlot,
-            title: item.title,
-            description: item.description,
-            spot: {
-              id: cand.id,
-              name: cand.name,
-              category: Array.isArray(cand.category) ? cand.category[0] || "観光" : cand.category || "観光",
-              priceLevel: cand.priceLevel || cand.price || 0,
-              tags: cand.tags || [],
-              image: cand.imageUrl || cand.image || UNSPLASH_IMAGES[Math.floor(Math.random() * UNSPLASH_IMAGES.length)],
-              score: 10,
-            },
-          };
-        }
-      }
-      return {
-        type: "break" as const,
-        timeSlot: item.timeSlot,
-        title: item.title,
-        description: item.description,
-      };
-    });
-
-  // サブおすすめリスト (recommendations) のマッピング
-  const subRecommendations: Recommendation[] = attendResult.subRecommendations
-    .map((subId) => {
-      const cand = rawCandidates.find((c) => c.id === subId);
-      if (cand) {
-        return {
-          id: cand.id,
-          name: cand.name,
-          category: Array.isArray(cand.category) ? cand.category[0] || "観光" : cand.category || "観光",
-          priceLevel: cand.priceLevel || cand.price || 0,
-          tags: cand.tags || [],
-          image: cand.imageUrl || cand.image || UNSPLASH_IMAGES[Math.floor(Math.random() * UNSPLASH_IMAGES.length)],
-          score: 9,
-        };
-      }
-      return null;
-    })
-    .filter((x): x is Recommendation => x !== null);
-
-  return {
-    profileSummary,
-    plan,
-    recommendations: subRecommendations,
-    result: attendResult.result || "おすすめの旅行プランです。",
-  };
+  return sliceCachedPlan(cachedEntry, page, limit);
 }

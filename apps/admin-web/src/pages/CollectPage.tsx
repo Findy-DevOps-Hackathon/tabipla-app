@@ -330,7 +330,6 @@ export default function CollectPage() {
         area: resolveSpotArea(s.area, s.address, prefecture, s.name),
         prefecture: s.prefecture || prefecture,
         address: s.address,
-        tags: s.tags,
         ...(s.location ? { location: s.location } : {}),
       }));
       const res = await bulkImportSpots(spotsToImport);

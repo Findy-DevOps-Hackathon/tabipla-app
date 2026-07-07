@@ -1,0 +1,1 @@
+ALTER TABLE "spots" DROP COLUMN IF EXISTS "tags";

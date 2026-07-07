@@ -10,13 +10,6 @@ overrides:
 importers:
 
   .:
-    dependencies:
-      '@humation/assets-humation-1':
-        specifier: ^1.0.1
-        version: 1.0.1
-      '@humation/react':
-        specifier: ^1.0.1
-        version: 1.0.1(react@19.2.7)
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.5.0
@@ -1062,20 +1055,6 @@ packages:
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: ^4
-
-  '@humation/assets-humation-1@1.0.1':
-    resolution: {integrity: sha512-ucLZMrsRPKLX0Stu6LzX/9eqoWmRPhyDKvKQsy6nQyXhR4ynK1ySQ2tYNnMCJ0BpT/SteZXHxjYAIH6ccuZfCg==}
-    engines: {node: '>=18.0.0'}
-
-  '@humation/core@1.0.1':
-    resolution: {integrity: sha512-gpt6qnXDZY3MUqVxx2Q70xM4S+qrcWuxT+bvWA8nsFOvObf7kLiO4KIXxExARroq56HtywYsoJ9ftgzwW2b1oA==}
-    engines: {node: '>=18.0.0'}
-
-  '@humation/react@1.0.1':
-    resolution: {integrity: sha512-hOHa90cGuF9udMysLr3FRTwpsG8H6dRnxKukjyNh9eL/mw7H8NXL02YHp1ihYdia7DOnBxYDYOnkCcs2vGzQ6A==}
-    engines: {node: '>=18.0.0'}
-    peerDependencies:
-      react: ^18.0.0 || ^19.0.0
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -6127,17 +6106,6 @@ snapshots:
   '@hono/node-server@1.19.14(hono@4.12.26)':
     dependencies:
       hono: 4.12.26
-
-  '@humation/assets-humation-1@1.0.1':
-    dependencies:
-      '@humation/core': 1.0.1
-
-  '@humation/core@1.0.1': {}
-
-  '@humation/react@1.0.1(react@19.2.7)':
-    dependencies:
-      '@humation/core': 1.0.1
-      react: 19.2.7
 
   '@img/colour@1.1.0': {}
 

@@ -59,8 +59,10 @@ async function embedTextGemini(
 
   const data = (await res.json()) as { embedding?: { values?: number[] } };
   const values = data.embedding?.values;
-  if (!values || values.length !== 1536) {
-    throw new Error(`[agent/embedding] 無効なベクトルデータを受信しました (長さ: ${values?.length})`);
+  if (values?.length !== 1536) {
+    throw new Error(
+      `[agent/embedding] 無効なベクトルデータを受信しました (長さ: ${values?.length})`,
+    );
   }
 
   return values;

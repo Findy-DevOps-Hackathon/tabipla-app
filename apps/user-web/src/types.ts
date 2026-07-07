@@ -17,11 +17,9 @@ export type SpotDocument = {
   area?: string;
   prefecture?: string;
   address?: string;
-  tags?: string[];
   highlights?: string[];
   imageUrl?: string;
   location?: GeoPoint;
-  price?: number;
   createdAt?: string;
   updatedAt?: string;
 };

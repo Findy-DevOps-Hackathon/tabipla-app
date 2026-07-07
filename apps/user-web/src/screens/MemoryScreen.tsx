@@ -12,8 +12,8 @@ const MEMORY_TEXTAREA_MAX_HEIGHT = 240;
 type MemoryScreenProps = {
   /** 戻る操作。 */
   onBack: () => void;
-  /** 次へ進む。自由記述内容と時間枠を渡す。 */
-  onContinue: (memory: string, timeBudget: string) => void;
+  /** 次へ進む。自由記述内容を渡す。 */
+  onContinue: (memory: string) => void;
 };
 
 /**
@@ -22,14 +22,13 @@ type MemoryScreenProps = {
  */
 export function MemoryScreen({ onBack, onContinue }: MemoryScreenProps) {
   const [memoryText, setMemoryText] = useState("");
-  const [timeBudget, setTimeBudget] = useState("half");
   const memoryInputRef = useAutoResizeTextarea({
     minHeight: MEMORY_TEXTAREA_MIN_HEIGHT,
     maxHeight: MEMORY_TEXTAREA_MAX_HEIGHT,
   });
 
   const handleContinue = () => {
-    onContinue(memoryText, timeBudget);
+    onContinue(memoryText);
   };
 
   return (
@@ -76,34 +75,6 @@ export function MemoryScreen({ onBack, onContinue }: MemoryScreenProps) {
           >
             {memoryText.length} / {MEMORY_MAX} 文字
           </p>
-        </div>
-
-        {/* 時間予算選択トグル */}
-        <div className="flex flex-col gap-2 w-full">
-          <p className="text-[12px] font-bold text-slate-500 text-left pl-1">
-            今回の旅の時間枠
-          </p>
-          <div className="grid grid-cols-3 gap-2 w-full">
-            {[
-              { id: "short", label: "スキマ時間に", desc: "1〜2時間" },
-              { id: "half", label: "サクッと半日", desc: "3〜4時間" },
-              { id: "1day", label: "のんびり丸一日", desc: "6〜8時間" },
-            ].map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setTimeBudget(opt.id)}
-                className={`flex flex-col items-center justify-center rounded-2xl border p-3 transition active:scale-95 ${
-                  timeBudget === opt.id
-                    ? "border-teal-600 bg-teal-50/40 text-teal-950 font-bold ring-1 ring-teal-600 shadow-xs"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                }`}
-              >
-                <span className="text-[13px]">{opt.label}</span>
-                <span className="text-[10px] text-slate-400 font-normal mt-0.5">{opt.desc}</span>
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 

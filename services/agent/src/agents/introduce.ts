@@ -47,7 +47,6 @@ export type AskSpotContext = {
   name: string;
   description?: string;
   highlights?: string[];
-  tags?: string[];
   area?: string;
   prefecture?: string;
   address?: string;

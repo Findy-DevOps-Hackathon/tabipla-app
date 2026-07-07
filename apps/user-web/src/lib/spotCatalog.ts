@@ -7,7 +7,6 @@ import {
   documentToSwipeSpot,
   planItemToRecommendation,
   spotImageUrl,
-  SPOT_IMAGE_PLACEHOLDER,
 } from "./spotMapper.ts";
 
 export type SpotCatalogBundle = {
@@ -42,11 +41,7 @@ export function refreshRecommendationImages(
   const docById = new Map(docs.map((doc) => [doc.id, doc]));
   return items.map((rec) => {
     const doc = docById.get(rec.id);
-    if (doc) {
-      const url = spotImageUrl(doc);
-      return url !== SPOT_IMAGE_PLACEHOLDER ? { ...rec, image: url } : rec;
-    }
-    return rec;
+    return doc ? { ...rec, image: spotImageUrl(doc) } : rec;
   });
 }
 

@@ -27,16 +27,12 @@ export type SpotDocument = {
   prefecture?: string;
   /** 住所。 */
   address?: string;
-  /** タグ（例: ["寺", "紅葉"]）。 */
-  tags?: string[];
   /** おすすめポイント（例: ["紅葉の名所", "城址散策"]）。 */
   highlights?: string[];
   /** スポット画像 URL。 */
   imageUrl?: string;
   /** 緯度経度。geo_point 検索・距離計算に利用する。 */
   location?: GeoPoint;
-  /** 参考価格（円）。フィルタ・表示用。 */
-  price?: number;
   /**
    * ベクトル検索用の埋め込みベクトル。
    * 生成処理は search-core の責務外（将来 agent-api 等で生成する）。

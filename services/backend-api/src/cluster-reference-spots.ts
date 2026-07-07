@@ -2,7 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDatabase, upsertSpots } from "@tabipla/db";
-import { bulkIndexDocuments, createElasticsearchClient, ensureIndex } from "@tabipla/search-core";
+import {
+  bulkIndexDocuments,
+  createElasticsearchClient,
+  ensureIndex,
+  type SpotDocument,
+} from "@tabipla/search-core";
 import { kmeans } from "ml-kmeans";
 import { buildSpotEmbedText, embedText, resolveEmbeddingProvider } from "./embedding.js";
 import { toSpotDocument } from "./mapper.js";
@@ -17,10 +22,25 @@ if (!fs.existsSync(jsonPath)) {
 }
 
 const rawData = fs.readFileSync(jsonPath, "utf-8");
-const spotsData = JSON.parse(rawData) as any[];
+type ReferenceSpot = {
+  id: string;
+  name: string;
+  description: string;
+  category: string[];
+  area: string;
+  prefecture: string;
+  address: string;
+  highlights?: string[];
+  lat: number;
+  lon: number;
+  sensoryScores?: NonNullable<SpotDocument["sensoryScores"]>;
+};
+const spotsData = JSON.parse(rawData) as ReferenceSpot[];
 
 async function main() {
-  console.log(`[cluster-reference-spots] 基準観光地データ ${spotsData.length} 件を読み込みました。`);
+  console.log(
+    `[cluster-reference-spots] 基準観光地データ ${spotsData.length} 件を読み込みました。`,
+  );
 
   const db = createDatabase();
   const es = createElasticsearchClient();
@@ -40,19 +60,22 @@ async function main() {
       area: s.area,
       prefecture: s.prefecture,
       address: s.address,
-      tags: s.tags,
+      highlights: s.highlights ?? null,
       lat: s.lat,
       lon: s.lon,
-      price: s.price,
       sensoryScores: s.sensoryScores,
     }));
 
     console.log("[cluster-reference-spots] PostgreSQL へシード投入を開始します...");
     const savedRows = await upsertSpots(db, dbInput);
-    console.log(`[cluster-reference-spots] PostgreSQL へ ${savedRows.length} 件を upsert しました。`);
+    console.log(
+      `[cluster-reference-spots] PostgreSQL へ ${savedRows.length} 件を upsert しました。`,
+    );
 
     // B. 特性ベクトルの生成と9次元特徴ベクトルの構築
-    console.log("[cluster-reference-spots] 各スポットの特性ベクトル (embeddings) を生成し、9次元特徴ベクトルを構築します...");
+    console.log(
+      "[cluster-reference-spots] 各スポットの特性ベクトル (embeddings) を生成し、9次元特徴ベクトルを構築します...",
+    );
     const docList = [];
     const vectors: number[][] = [];
     const embeddings: number[][] = [];
@@ -69,8 +92,15 @@ async function main() {
       // reference-spots.json に登録されている sensoryScores から9次元の特徴ベクトルを構築
       const s = spotsData.find((x) => x.id === row.id);
       const scores = s?.sensoryScores || {
-        nature: 0.1, history: 0.1, art: 0.1, entertainment: 0.1, gourmet: 0.1,
-        activity: 0.1, quietness: 0.3, indoor: 0.1, popularity: 0.4
+        nature: 0.1,
+        history: 0.1,
+        art: 0.1,
+        entertainment: 0.1,
+        gourmet: 0.1,
+        activity: 0.1,
+        quietness: 0.3,
+        indoor: 0.1,
+        popularity: 0.4,
       };
       vectors.push([
         scores.nature,
@@ -86,7 +116,9 @@ async function main() {
     }
 
     // C. K-Means によるクラスタリングの実行 (K = 6)
-    console.log("[cluster-reference-spots] K-Means (K=6) を実行して事前クラスタリングを行います...");
+    console.log(
+      "[cluster-reference-spots] K-Means (K=6) を実行して事前クラスタリングを行います...",
+    );
     const k = 6;
     const ans = kmeans(vectors, k, {
       seed: 42, // 再現性のためにシード値を固定
@@ -113,38 +145,43 @@ async function main() {
       area: row.area,
       prefecture: row.prefecture,
       address: row.address,
-      tags: row.tags,
+      highlights: row.highlights,
       lat: row.lat,
       lon: row.lon,
-      price: row.price,
       sensoryScores: row.sensoryScores,
       clusterId: ans.clusters[idx], // クラスタIDを付与
     }));
 
     const finalRows = await upsertSpots(db, dbUpdateInput);
-    console.log(`[cluster-reference-spots] PostgreSQL へ cluster_id 付きで ${finalRows.length} 件を更新しました。`);
+    console.log(
+      `[cluster-reference-spots] PostgreSQL へ cluster_id 付きで ${finalRows.length} 件を更新しました。`,
+    );
 
     // E. Elasticsearch への同期 (cluster_id と embedding を含む)
     console.log("[cluster-reference-spots] Elasticsearch へ同期中...");
     const { index } = await ensureIndex(es);
 
     // ESへ渡すドキュメントを構築
-    const esDocuments = finalRows.map((row, idx) => {
+    const esDocuments: SpotDocument[] = finalRows.map((row, idx) => {
       const doc = toSpotDocument(row);
+      const embedding = embeddings[idx];
+      if (!embedding) {
+        throw new Error(`[cluster-reference-spots] embedding が見つかりません: ${row.id}`);
+      }
       return {
         ...doc,
-        cluster_id: row.clusterId,
-        clusterId: row.clusterId,
-        embedding: embeddings[idx],
-        sensoryScores: row.sensoryScores,
+        clusterId: row.clusterId ?? undefined,
+        embedding,
+        sensoryScores: row.sensoryScores as SpotDocument["sensoryScores"],
       };
     });
 
-    const esResult = await bulkIndexDocuments(es, esDocuments as any, { index });
+    const esResult = await bulkIndexDocuments(es, esDocuments, { index });
     await es.indices.refresh({ index });
 
-    console.log(`[cluster-reference-spots] 完了: ${esResult.count} 件の基準観光地を Elasticsearch に投入しました。`);
-
+    console.log(
+      `[cluster-reference-spots] 完了: ${esResult.count} 件の基準観光地を Elasticsearch に投入しました。`,
+    );
   } catch (error) {
     console.error("[cluster-reference-spots] エラーが発生しました:", error);
     process.exitCode = 1;

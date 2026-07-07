@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Storage } from "@google-cloud/storage";
+import { type File, Storage } from "@google-cloud/storage";
 
 const MIME_TO_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -109,14 +109,10 @@ async function removeExistingSpotImagesGcs(spotId: string): Promise<void> {
 
   const bucket = getStorageClient().bucket(bucketName);
   const [files] = await bucket.getFiles({ prefix: `${GCS_OBJECT_PREFIX}/${spotId}.` });
-  await Promise.all(files.map((file: any) => file.delete().catch(() => undefined)));
+  await Promise.all(files.map((file: File) => file.delete().catch(() => undefined)));
 }
 
-async function saveSpotImageLocal(
-  spotId: string,
-  ext: string,
-  buffer: Buffer,
-): Promise<string> {
+async function saveSpotImageLocal(spotId: string, ext: string, buffer: Buffer): Promise<string> {
   const uploadDir = getSpotUploadDir();
   await mkdir(uploadDir, { recursive: true });
   await removeExistingSpotImagesLocal(spotId, uploadDir);
@@ -205,4 +201,3 @@ export async function deleteSpotImageFiles(spotId: string): Promise<void> {
   }
   await removeExistingSpotImagesLocal(spotId, getSpotUploadDir());
 }
-

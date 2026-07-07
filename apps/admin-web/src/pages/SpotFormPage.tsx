@@ -406,7 +406,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
       prefecture: getFixedPrefecture(),
       ...(address ? { address } : {}),
       ...(area ? { area } : {}),
-      tags: [],
       ...(highlights.length ? { highlights } : {}),
       ...(form.lat && form.lon
         ? { location: { lat: Number(form.lat), lon: Number(form.lon) } }

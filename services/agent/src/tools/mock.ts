@@ -7,8 +7,6 @@ export const searchMock: SearchFn = async (i) => {
   let r = KOMORO_SPOTS;
   const cats = i.category;
   if (cats?.length) r = r.filter((s) => cats.includes(s.category));
-  const priceMax = i.priceLevelMax;
-  if (priceMax != null) r = r.filter((s) => s.priceLevel <= priceMax);
   return r.slice(0, i.k ?? 5);
 };
 

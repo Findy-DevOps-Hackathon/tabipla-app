@@ -4,6 +4,20 @@ import { resolveSpotImageSrc } from "./lib/spotImage.ts";
 import type { BulkImportResponse, Spot, SpotListResponse } from "./types.ts";
 
 const BASE = API_BASE;
+const API_REQUEST_TIMEOUT_MS = 30_000;
+const AGENT_REQUEST_TIMEOUT_MS = 240_000;
+const IMAGE_FETCH_TIMEOUT_MS = 15_000;
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = API_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(timeoutMs),
+  });
+}
 
 function authHeaders(): HeadersInit {
   const token = getAuthToken();
@@ -20,7 +34,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
 
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetchWithTimeout(`${BASE}${path}`, {
     ...init,
     headers,
   });
@@ -37,6 +51,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+function agentHeaders(init?: HeadersInit): Headers {
+  const headers = new Headers(init);
+  for (const [key, value] of Object.entries(authHeaders())) {
+    headers.set(key, value);
+  }
+  return headers;
+}
+
+function handleUnauthorized(res: Response): void {
+  if (res.status === 401) {
+    logout();
+  }
+}
+
 export type LoginResponse = {
   token: string;
   user: {
@@ -47,7 +75,7 @@ export type LoginResponse = {
 };
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
-  const res = await fetch(`${BASE}/auth/login`, {
+  const res = await fetchWithTimeout(`${BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -182,7 +210,7 @@ export async function resolveReferenceImageForGenerate(params: {
   if (!src) return undefined;
 
   const headers = new Headers(authHeaders());
-  const res = await fetch(src, { headers, cache: "no-store" });
+  const res = await fetchWithTimeout(src, { headers, cache: "no-store" }, IMAGE_FETCH_TIMEOUT_MS);
   if (!res.ok) {
     throw new Error("アップロード画像の取得に失敗しました");
   }
@@ -232,7 +260,6 @@ export type CollectedSpotPayload = {
   area: string;
   prefecture: string;
   address: string;
-  tags: string[];
 };
 
 export type CollectSpotsParams = {
@@ -245,11 +272,16 @@ export type CollectSpotsParams = {
 
 /** AI 収集: 指定自治体の観光地を agent 経由で Web から収集する。 */
 export async function collectSpots(params: CollectSpotsParams): Promise<CollectedSpotPayload[]> {
-  const res = await fetch(`${AGENT_BASE}/v1/collect-spots`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
+  const res = await fetchWithTimeout(
+    `${AGENT_BASE}/v1/collect-spots`,
+    {
+      method: "POST",
+      headers: agentHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(params),
+    },
+    AGENT_REQUEST_TIMEOUT_MS,
+  );
+  handleUnauthorized(res);
   const body = (await res.json().catch(() => null)) as {
     spots?: CollectedSpotPayload[];
     error?: string;
@@ -348,18 +380,22 @@ export async function generateSpotImage(
   const name = params.name.trim() || (params.referenceImage ? "観光スポット" : "");
   if (!name) throw new Error("観光地名を入力してください");
 
-  const res = await fetch(`${AGENT_BASE}/v1/generate-spot-image`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-    body: JSON.stringify({
-      name,
-      prefecture: params.prefecture,
-      municipality: params.municipality,
-      address: params.address?.trim() || undefined,
-      referenceImage: params.referenceImage,
-    }),
-  });
+  const res = await fetchWithTimeout(
+    `${AGENT_BASE}/v1/generate-spot-image`,
+    {
+      method: "POST",
+      headers: agentHeaders({ "Content-Type": "application/json" }),
+      cache: "no-store",
+      body: JSON.stringify({
+        name,
+        prefecture: params.prefecture,
+        municipality: params.municipality,
+        address: params.address?.trim() || undefined,
+        referenceImage: params.referenceImage,
+      }),
+    },
+    AGENT_REQUEST_TIMEOUT_MS,
+  );
   const body = (await res.json().catch(() => null)) as
     | GenerateSpotImageResult
     | { error?: string }
@@ -391,17 +427,21 @@ export async function generateSpotContent(
   if (!name) return null;
 
   try {
-    const res = await fetch(`${AGENT_BASE}/v1/describe-spot`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        prefecture: params.prefecture,
-        municipality: params.municipality,
-        address: params.address?.trim() || undefined,
-        mode,
-      }),
-    });
+    const res = await fetchWithTimeout(
+      `${AGENT_BASE}/v1/describe-spot`,
+      {
+        method: "POST",
+        headers: agentHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          name,
+          prefecture: params.prefecture,
+          municipality: params.municipality,
+          address: params.address?.trim() || undefined,
+          mode,
+        }),
+      },
+      AGENT_REQUEST_TIMEOUT_MS,
+    );
     const body = (await res.json().catch(() => null)) as
       | DescribeSpotResult
       | { error?: string }

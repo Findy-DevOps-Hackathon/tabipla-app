@@ -37,18 +37,12 @@ const spotOptionalProps = {
   area: { type: "string", maxLength: 256 },
   prefecture: { type: "string", maxLength: 64 },
   address: { type: "string", maxLength: 512 },
-  tags: {
-    type: "array",
-    items: { type: "string", minLength: 1, maxLength: 64 },
-    maxItems: 50,
-  },
   highlights: {
     type: "array",
     items: { type: "string", minLength: 1, maxLength: 30 },
     maxItems: 5,
   },
   location: geoPointSchema,
-  price: { type: "integer", minimum: 0 },
   imageUrl: { type: "string", maxLength: 2048 },
   clusterId: { type: "integer" },
   sensoryScores: {
@@ -295,7 +289,7 @@ export const travelTimesSchema = {
   },
 } as const;
 
-/** POST /search/candidates（A3: kNN × geo × price/category） */
+/** POST /search/candidates（A3: kNN × geo × category） */
 export const searchCandidateSpotsSchema = {
   body: {
     type: "object",
@@ -314,8 +308,6 @@ export const searchCandidateSpotsSchema = {
           },
         ],
       },
-      priceMin: { type: "integer", minimum: 0 },
-      priceMax: { type: "integer", minimum: 0 },
       near: geoPointSchema,
       radiusKm: { type: "number", exclusiveMinimum: 0 },
       size: { type: "integer", minimum: 1, maximum: 1000 },
@@ -496,4 +488,3 @@ export const nextPairSchema = {
     },
   },
 } as const;
-

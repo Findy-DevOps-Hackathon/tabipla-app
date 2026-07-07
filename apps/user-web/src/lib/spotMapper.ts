@@ -75,7 +75,6 @@ export function documentToSwipeSpot(
     category: displayCategory(doc),
     description: doc.description,
     highlights: doc.highlights ?? [],
-    tags: doc.tags ?? [],
     image: spotImageUrl(doc),
   };
 }
@@ -103,10 +102,7 @@ export function planItemToRecommendation(
     highlights?: string[];
     prefecture?: string;
     area?: string;
-    tags?: string[];
-    why?: string[];
     score?: number;
-    memberOnly?: boolean;
     image?: string;
     imageUrl?: string;
     address?: string;
@@ -137,10 +133,9 @@ export function planItemToRecommendation(
     category: displayCategoryFromAgent(item.category),
     description: item.description ?? "",
     highlights: item.highlights ?? [],
-    tags: item.tags ?? [],
-    reason: (item.why ?? []).join(" / "),
+    reason: "",
     match: Math.round((item.score ?? 0.8) * 100),
-    memberOnly: item.memberOnly ?? false,
+    memberOnly: false,
     image:
       item.imageUrl != null && item.imageUrl !== ""
         ? spotImageUrl({ id: item.id, imageUrl: item.imageUrl })

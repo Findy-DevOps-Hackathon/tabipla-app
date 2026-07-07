@@ -17,7 +17,6 @@ export const recommendAgent = new LlmAgent({
 
 【条件の抽出】
 - category: 文意に合うものを入れる。使える値は nature / gourmet / history のみ（該当が無ければ省略）。
-- priceLevelMax: 「安い/リーズナブル/節約」等なら 0〜1 を指定。価格の指定が無ければ省略。
 - 上記で表せない意図（雰囲気・目的・季節・フィードバックメモなど）は、そのまま query の文字列に入れる。
 
 【振る舞い】
@@ -36,6 +35,3 @@ export const recommendAgent = new LlmAgent({
     maxOutputTokens: 1024,
   },
 });
-
-// `npm run agent` (adk run) のエントリ用
-export const rootAgent = recommendAgent;

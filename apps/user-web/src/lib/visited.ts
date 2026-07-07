@@ -2,7 +2,6 @@
  * 「行った」スポットの訪問履歴をクライアントサイド（localStorage）で管理する。
  *
  * backend-api には訪問履歴 API が存在しないため、ブラウザ完結のデモ実装。
- * 現状は匿名ユーザー ID（`guest`）のみを使う。
  */
 
 import type { SpotCategory } from "../data/spots.ts";
@@ -20,8 +19,8 @@ export type VisitedSpot = {
   visitedAt: string;
 };
 
-/** localStorage 上の保存形（ユーザー ID → 訪問履歴）。 */
-type VisitedStore = Record<string, VisitedSpot[]>;
+/** localStorage 上の保存形（訪問履歴）。 */
+type VisitedStore = VisitedSpot[];
 
 /** 「行った」マークの対象となるスポットの最小情報。 */
 export type VisitableSpot = {
@@ -35,27 +34,34 @@ export type VisitableSpot = {
 function readStore(): VisitedStore {
   try {
     const raw = localStorage.getItem(VISITED_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as VisitedStore;
-    return parsed && typeof parsed === "object" ? parsed : {};
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed as VisitedStore;
+    }
+    // 旧形式（ユーザー ID 別オブジェクト）からの移行
+    if (parsed && typeof parsed === "object") {
+      const legacy = parsed as Record<string, VisitedSpot[]>;
+      return legacy.guest ?? legacy.local ?? Object.values(legacy).flat();
+    }
+    return [];
   } catch {
-    return {};
+    return [];
   }
 }
 
-function writeStore(store: VisitedStore): void {
-  localStorage.setItem(VISITED_KEY, JSON.stringify(store));
+function writeStore(items: VisitedStore): void {
+  localStorage.setItem(VISITED_KEY, JSON.stringify(items));
 }
 
-/** 指定ユーザーの訪問履歴を新しい順で返す。 */
-export function listVisited(userId: string): VisitedSpot[] {
-  const items = readStore()[userId] ?? [];
-  return [...items].sort((a, b) => b.visitedAt.localeCompare(a.visitedAt));
+/** 訪問履歴を新しい順で返す。 */
+export function listVisited(): VisitedSpot[] {
+  return [...readStore()].sort((a, b) => b.visitedAt.localeCompare(a.visitedAt));
 }
 
 /** 指定スポットが「行った」済みかどうか。 */
-export function isVisited(userId: string, spotId: string): boolean {
-  return (readStore()[userId] ?? []).some((item) => item.id === spotId);
+export function isVisited(spotId: string): boolean {
+  return readStore().some((item) => item.id === spotId);
 }
 
 /**
@@ -64,9 +70,8 @@ export function isVisited(userId: string, spotId: string): boolean {
  * クーポン利用など「行ったことが確定する操作」で使う。既に記録済みの場合は
  * 何もしない（重複追加や削除はしない）。戻り値は新規に追加したかどうか。
  */
-export function markVisited(userId: string, spot: VisitableSpot): boolean {
-  const store = readStore();
-  const items = store[userId] ?? [];
+export function markVisited(spot: VisitableSpot): boolean {
+  const items = readStore();
   if (items.some((item) => item.id === spot.id)) {
     return false;
   }
@@ -79,8 +84,7 @@ export function markVisited(userId: string, spot: VisitableSpot): boolean {
     category: spot.category,
     visitedAt: new Date().toISOString(),
   };
-  store[userId] = [...items, record];
-  writeStore(store);
+  writeStore([...items, record]);
   return true;
 }
 
@@ -88,14 +92,12 @@ export function markVisited(userId: string, spot: VisitableSpot): boolean {
  * 「行った」マークを付け外しする。
  * 未記録なら現在時刻で追加し、記録済みなら削除する。戻り値は操作後の「行った済み」状態。
  */
-export function toggleVisited(userId: string, spot: VisitableSpot): boolean {
-  const store = readStore();
-  const items = store[userId] ?? [];
+export function toggleVisited(spot: VisitableSpot): boolean {
+  const items = readStore();
   const exists = items.some((item) => item.id === spot.id);
 
   if (exists) {
-    store[userId] = items.filter((item) => item.id !== spot.id);
-    writeStore(store);
+    writeStore(items.filter((item) => item.id !== spot.id));
     return false;
   }
 
@@ -107,7 +109,6 @@ export function toggleVisited(userId: string, spot: VisitableSpot): boolean {
     category: spot.category,
     visitedAt: new Date().toISOString(),
   };
-  store[userId] = [...items, record];
-  writeStore(store);
+  writeStore([...items, record]);
   return true;
 }

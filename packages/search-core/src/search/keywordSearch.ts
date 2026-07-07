@@ -5,9 +5,9 @@ import type { SearchResult, SpotDocument } from "../types/spot.js";
 
 /**
  * キーワード検索のデフォルト対象フィールド。
- * name を強めに重み付けし、説明・エリア・タグも対象にする。
+ * name を強めに重み付けし、説明・エリア・おすすめポイントも対象にする。
  */
-export const DEFAULT_SEARCH_FIELDS = ["name^3", "description", "area", "tags"] as const;
+export const DEFAULT_SEARCH_FIELDS = ["name^3", "description", "area", "highlights"] as const;
 
 /** 1ページあたりのデフォルト取得件数。 */
 export const DEFAULT_SIZE = 10;

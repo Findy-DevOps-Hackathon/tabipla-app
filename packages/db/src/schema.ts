@@ -35,7 +35,7 @@ export type NewMunicipalityRow = typeof municipalities.$inferInsert;
  *
  * 設計メモ:
  *   - 緯度経度は `lat` / `lon` の2カラムで保持し、reindex 時に `{ lat, lon }` へ組み立てる。
- *   - `tags` は PostgreSQL の text[] で保持する。
+ *   - `highlights` は PostgreSQL の text[] で保持する。
  *   - `embedding` は本テーブルでは保持しない（ベクトルは Elasticsearch 側で管理する方針）。
  *     Embedding 生成・投入は RAG パイプライン側（別タスク）で行う。
  */
@@ -60,16 +60,12 @@ export const spots = pgTable(
     prefecture: text("prefecture"),
     /** 住所。 */
     address: text("address"),
-    /** タグ（例: ["寺", "世界遺産"]）。 */
-    tags: text("tags").array(),
     /** おすすめポイント（例: ["紅葉の名所", "城址散策"]）。 */
     highlights: text("highlights").array(),
     /** 緯度。 */
     lat: doublePrecision("lat"),
     /** 経度。 */
     lon: doublePrecision("lon"),
-    /** 参考価格（円）。 */
-    price: integer("price"),
     /** スポット画像 URL（相対パス `/uploads/spots/...` または外部 URL）。 */
     imageUrl: text("image_url"),
     /** クラスタリングID（事前クラスタリングによる分類）。 */
