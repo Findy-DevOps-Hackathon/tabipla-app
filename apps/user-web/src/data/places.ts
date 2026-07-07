@@ -12,12 +12,12 @@ import {
   NOTO_MUNICIPALITY_NAMES,
   NOTO_SUBREGIONS,
 } from "./notoAreas.ts";
+import placesDataJson from "./places-data.json";
 import {
   compressToshinSelectionLabels,
   TOSHIN_MUNICIPALITY_NAMES,
   TOSHIN_SUBREGIONS,
 } from "./toshinAreas.ts";
-import placesDataJson from "./places-data.json";
 
 /** 実在地名の 1 件。`prefecture` が null のものは都道府県そのもの。 */
 export type Place = {
@@ -186,8 +186,8 @@ export function toggleDestinationSelection(selected: string[], area: string): st
 
 /** user-web が対応している全市区町村の旅先一覧。 */
 export function getAllSupportedDestinations(): TripDestination[] {
-  return AVAILABLE_DESTINATIONS.filter(
-    (place): place is Place & { prefecture: string } => Boolean(place.prefecture),
+  return AVAILABLE_DESTINATIONS.filter((place): place is Place & { prefecture: string } =>
+    Boolean(place.prefecture),
   ).map((place) => ({ area: place.name, prefecture: place.prefecture }));
 }
 
@@ -256,7 +256,11 @@ export function searchDestinationPlaces(query: string): Place[] {
   if (q === "") return AVAILABLE_DESTINATIONS;
 
   return AVAILABLE_DESTINATIONS.filter((place) => {
-    if (place.name.includes(q) || place.reading.includes(q) || (place.prefecture?.includes(q) ?? false)) {
+    if (
+      place.name.includes(q) ||
+      place.reading.includes(q) ||
+      (place.prefecture?.includes(q) ?? false)
+    ) {
       return true;
     }
     if ((q.includes("能登") || q.includes("のと")) && place.prefecture === ISHIKAWA_PREFECTURE) {

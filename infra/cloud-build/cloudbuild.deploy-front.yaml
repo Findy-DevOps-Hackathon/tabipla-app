@@ -1,0 +1,22 @@
+# user-web / admin-web → Firebase Hosting 自動デプロイ
+steps:
+  - name: node:22-bookworm
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        corepack enable
+        corepack prepare pnpm@10.30.3 --activate
+        pnpm install --frozen-lockfile
+        bash infra/cloud-build/deploy-user-web.sh
+        bash infra/cloud-build/deploy-admin-web.sh
+    env:
+      - PROJECT_ID=${PROJECT_ID}
+      - _REGION=${_REGION}
+
+substitutions:
+  _REGION: asia-northeast1
+
+options:
+  logging: CLOUD_LOGGING_ONLY

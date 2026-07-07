@@ -1,4 +1,3 @@
-import type { SearchMode, SearchResponse, SpotDocument } from "./types.ts";
 import { API_BASE } from "./config.ts";
 import {
   decodeDestinationsQuery,
@@ -7,6 +6,7 @@ import {
   isDestinationSpot,
   type TripDestination,
 } from "./lib/destination.ts";
+import type { SearchMode, SearchResponse, SpotDocument } from "./types.ts";
 
 /**
  * backend-api への検索リクエストを担う薄いクライアント。

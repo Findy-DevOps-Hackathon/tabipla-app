@@ -17,10 +17,7 @@ export function trimSpotHighlight(text: string): string {
 
 /** おすすめポイント配列を正規化（最大3件・各30字）。 */
 export function normalizeHighlights(items: string[]): string[] {
-  return items
-    .map(trimSpotHighlight)
-    .filter(Boolean)
-    .slice(0, MAX_SPOT_HIGHLIGHT_COUNT);
+  return items.map(trimSpotHighlight).filter(Boolean).slice(0, MAX_SPOT_HIGHLIGHT_COUNT);
 }
 
 /** テキストエリア入力中のおすすめポイントを行数・文字数上限内に収める。 */

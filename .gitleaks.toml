@@ -1,0 +1,21 @@
+# gitleaks CI 用 allowlist（.env.example / README のプレースホルダは除外）
+title = "tabipla gitleaks"
+
+[allowlist]
+description = "example docs and lockfiles"
+paths = [
+  '''(?i)\.env\.example$''',
+  '''(?i)README\.md$''',
+  '''(?i)^docs/''',
+  '''(?i)seed-data/''',
+  '''(?i)pnpm-lock\.yaml$''',
+  '''(?i)\.credentials\.example$''',
+]
+regexes = [
+  '''(?i)tabipla-dev-(admin|user)-secret''',
+  '''(?i)test-admin-password''',
+  '''(?i)your-gcp-project-id''',
+  '''(?i)your-project''',
+  '''(?i)postgresql://tabipla:tabipla@''',
+  '''(?i)admin@example\.com''',
+]

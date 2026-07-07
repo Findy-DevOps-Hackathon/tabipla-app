@@ -82,7 +82,9 @@ export async function runDebate(
         {
           agent: "recommend",
           thought: `ユーザーの好みを考慮し、${pickNames || "候補"} を推薦します。`,
-          message: pickNames ? `${pickNames} の${picks.length}箇所をベースに提案します！` : "候補スポットを提案します。",
+          message: pickNames
+            ? `${pickNames} の${picks.length}箇所をベースに提案します！`
+            : "候補スポットを提案します。",
         },
         {
           agent: "route",
@@ -92,7 +94,10 @@ export async function runDebate(
         {
           agent: "introduce",
           thought: "紹介スタイルに合わせ、各スポットの魅力をバランスよく組み合わせてまとめます。",
-          message: picks.length > 0 ? `${picks.length}箇所を巡るプランで合意しましょう！` : "条件に合うプランで合意しましょう！",
+          message:
+            picks.length > 0
+              ? `${picks.length}箇所を巡るプランで合意しましょう！`
+              : "条件に合うプランで合意しましょう！",
         },
       ],
       finalSpots: picks.map((s) => s.id),
@@ -150,7 +155,7 @@ ${JSON.stringify(spotsCatalog, null, 2)}
   try {
     const parsed = JSON.parse(final) as DebateResult;
     return parsed;
-  } catch (e) {
-    throw new Error("ディベート結果のJSONパースに失敗しました: " + final);
+  } catch (_e) {
+    throw new Error(`ディベート結果のJSONパースに失敗しました: ${final}`);
   }
 }

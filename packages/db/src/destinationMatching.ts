@@ -193,8 +193,7 @@ export function spotMatchesDestinations(
     spot.address?.trim()
   ) {
     return destinations.some(
-      (dest) =>
-        isNotoMunicipality(dest.area, dest.prefecture) && spot.address!.includes(dest.area),
+      (dest) => isNotoMunicipality(dest.area, dest.prefecture) && spot.address?.includes(dest.area),
     );
   }
 

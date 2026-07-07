@@ -1,7 +1,9 @@
 import { copyFile, mkdir, readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createDatabase } from "./client.js";
+import { adminUsers, coupons, municipalities, spots, unchikuFacts } from "./schema.js";
 import {
+  resolveSpotUploadDir,
   SEED_DATA_DIR,
   SEED_IMAGES_DIR,
   type SeedAdminUser,
@@ -11,18 +13,10 @@ import {
   type SeedMunicipality,
   type SeedSpot,
   type SeedUnchikuFact,
-  resolveSpotUploadDir,
   seedImageFilename,
 } from "./seedData.js";
-import {
-  adminUsers,
-  coupons,
-  municipalities,
-  spots,
-  unchikuFacts,
-} from "./schema.js";
 
-function stripSpot(row: (typeof spots.$inferSelect)): SeedSpot {
+function stripSpot(row: typeof spots.$inferSelect): SeedSpot {
   return {
     id: row.id,
     municipalityId: row.municipalityId,
@@ -41,7 +35,7 @@ function stripSpot(row: (typeof spots.$inferSelect)): SeedSpot {
   };
 }
 
-function stripCoupon(row: (typeof coupons.$inferSelect)): SeedCoupon {
+function stripCoupon(row: typeof coupons.$inferSelect): SeedCoupon {
   return {
     id: row.id,
     spotId: row.spotId,
@@ -53,7 +47,7 @@ function stripCoupon(row: (typeof coupons.$inferSelect)): SeedCoupon {
   };
 }
 
-function stripUnchiku(row: (typeof unchikuFacts.$inferSelect)): SeedUnchikuFact {
+function stripUnchiku(row: typeof unchikuFacts.$inferSelect): SeedUnchikuFact {
   return {
     id: row.id,
     spotId: row.spotId,

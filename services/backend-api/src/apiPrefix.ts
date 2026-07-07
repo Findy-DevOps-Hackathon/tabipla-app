@@ -1,13 +1,6 @@
 import type { FastifyInstance, HTTPMethods, RouteOptions } from "fastify";
 
-const MIRROR_METHODS = new Set<HTTPMethods>([
-  "DELETE",
-  "GET",
-  "PATCH",
-  "POST",
-  "PUT",
-  "OPTIONS",
-]);
+const MIRROR_METHODS = new Set<HTTPMethods>(["DELETE", "GET", "PATCH", "POST", "PUT", "OPTIONS"]);
 
 /**
  * Firebase Hosting の `/api/**` rewrite 用。
@@ -19,7 +12,11 @@ export function registerApiMirrorRoutes(app: FastifyInstance): void {
     if (url.startsWith("/api/") || url === "/api") return;
     if (routeOptions.method === "HEAD") return;
     const method = routeOptions.method;
-    if (Array.isArray(method) ? !method.every((m) => MIRROR_METHODS.has(m)) : !MIRROR_METHODS.has(method)) {
+    if (
+      Array.isArray(method)
+        ? !method.every((m) => MIRROR_METHODS.has(m))
+        : !MIRROR_METHODS.has(method)
+    ) {
       return;
     }
 

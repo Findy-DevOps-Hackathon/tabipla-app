@@ -60,7 +60,9 @@ export async function login(email: string, password: string): Promise<LoginRespo
   }
   const body = JSON.parse(text) as LoginResponse | { error?: string };
   if (!res.ok) {
-    throw new Error(body && "error" in body && body.error ? body.error : `API エラー (${res.status})`);
+    throw new Error(
+      body && "error" in body && body.error ? body.error : `API エラー (${res.status})`,
+    );
   }
   return body as LoginResponse;
 }
@@ -131,9 +133,7 @@ export const SPOT_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
 export const SPOT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
 /** スポット画像ファイルを pendingImage 用の Base64 に変換する。 */
-export async function readSpotImageFile(
-  file: File,
-): Promise<{ mimeType: string; data: string }> {
+export async function readSpotImageFile(file: File): Promise<{ mimeType: string; data: string }> {
   if (!SPOT_IMAGE_ACCEPT.split(",").includes(file.type)) {
     throw new Error("JPEG / PNG / WebP のみアップロードできます。");
   }
@@ -250,9 +250,10 @@ export async function collectSpots(params: CollectSpotsParams): Promise<Collecte
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
-  const body = (await res.json().catch(() => null)) as
-    | { spots?: CollectedSpotPayload[]; error?: string }
-    | null;
+  const body = (await res.json().catch(() => null)) as {
+    spots?: CollectedSpotPayload[];
+    error?: string;
+  } | null;
   if (!res.ok || !body || "error" in body) {
     throw new Error(body && "error" in body && body.error ? body.error : `HTTP ${res.status}`);
   }
@@ -364,16 +365,15 @@ export async function generateSpotImage(
     | { error?: string }
     | null;
   if (!res.ok || !body || !("mimeType" in body) || !body.mimeType || !body.data) {
-    throw new Error(
-      body && "error" in body && body.error ? body.error : `HTTP ${res.status}`,
-    );
+    throw new Error(body && "error" in body && body.error ? body.error : `HTTP ${res.status}`);
   }
   return body;
 }
 
 /** 生成画像を File に変換する。 */
 export function spotImageResultToFile(result: GenerateSpotImageResult, spotName: string): File {
-  const ext = result.mimeType === "image/webp" ? "webp" : result.mimeType === "image/png" ? "png" : "jpg";
+  const ext =
+    result.mimeType === "image/webp" ? "webp" : result.mimeType === "image/png" ? "png" : "jpg";
   return base64ToFile(result.data, result.mimeType, `${spotName}.${ext}`);
 }
 
@@ -402,7 +402,10 @@ export async function generateSpotContent(
         mode,
       }),
     });
-    const body = (await res.json().catch(() => null)) as DescribeSpotResult | { error?: string } | null;
+    const body = (await res.json().catch(() => null)) as
+      | DescribeSpotResult
+      | { error?: string }
+      | null;
     if (!res.ok || !body || "error" in body) return null;
     if (mode === "description" && !("description" in body && body.description)) return null;
     if (mode === "highlights" && !("highlights" in body && body.highlights?.length)) return null;

@@ -46,12 +46,7 @@ export default function SpotAddPage() {
     <AdminShell title="観光地追加" wide={wide}>
       <div className={ADMIN_TAB_BAR_CLASS}>
         <div className="w-full max-w-lg">
-          <SegmentedControl
-            value={tab}
-            onChange={setTab}
-            items={ADD_TABS}
-            disabled={tabsLocked}
-          />
+          <SegmentedControl value={tab} onChange={setTab} items={ADD_TABS} disabled={tabsLocked} />
         </div>
       </div>
       <div hidden={tab !== "manual"}>

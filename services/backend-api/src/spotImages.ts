@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Storage } from "@google-cloud/storage";
@@ -205,3 +206,4 @@ export async function deleteSpotImageFiles(spotId: string): Promise<void> {
   }
   await removeExistingSpotImagesLocal(spotId, getSpotUploadDir());
 }
+

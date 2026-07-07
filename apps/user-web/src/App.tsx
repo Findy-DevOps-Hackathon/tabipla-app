@@ -4,7 +4,20 @@ import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
 import { API_BASE } from "./config.ts";
 import { getAllSupportedDestinations, resolveTripDestinations } from "./data/places.ts";
-import { AI_GUIDE_LOADING_TEXT, formatAiGuideAnswer, isAiGuideLoadingMessage } from "./lib/aiGuide.ts";
+import {
+  EXPLORE_SPOTS,
+  type Recommendation,
+  SWIPE_LIMIT,
+  SWIPE_LIMIT_REFINE,
+  SWIPE_SPOTS,
+  SWIPE_SPOTS_REFINE,
+  type SwipeSpot,
+} from "./data/spots.ts";
+import {
+  AI_GUIDE_LOADING_TEXT,
+  formatAiGuideAnswer,
+  isAiGuideLoadingMessage,
+} from "./lib/aiGuide.ts";
 import {
   formatDestinationLabel,
   getCurrentDestination,
@@ -13,32 +26,20 @@ import {
   setCurrentDestinations,
 } from "./lib/destination.ts";
 import {
-  EXPLORE_SPOTS,
-  type Recommendation,
-  type SwipeSpot,
-  SWIPE_LIMIT,
-  SWIPE_LIMIT_REFINE,
-  SWIPE_SPOTS,
-  SWIPE_SPOTS_REFINE,
-} from "./data/spots.ts";
-import {
   isDetailedDiagnosisComplete,
   isDiagnosisComplete,
   markDetailedDiagnosisComplete,
   markDiagnosisComplete,
 } from "./lib/diagnosis.ts";
+import { preloadImages } from "./lib/preloadImage.ts";
 import {
   loadSpotCatalogBundle,
   planItemToRecommendation,
   refreshRecommendationImages,
   resolveSpotById,
 } from "./lib/spotCatalog.ts";
+import { readSpotIdFromLocation, setSpotIdInLocation } from "./lib/spotLink.ts";
 import { documentToRecommendation } from "./lib/spotMapper.ts";
-import { preloadImages } from "./lib/preloadImage.ts";
-import {
-  readSpotIdFromLocation,
-  setSpotIdInLocation,
-} from "./lib/spotLink.ts";
 import { InputScreen } from "./screens/InputScreen.tsx";
 import { MemoryScreen } from "./screens/MemoryScreen.tsx";
 import { ProcessingScreen } from "./screens/ProcessingScreen.tsx";
@@ -171,16 +172,6 @@ export default function App() {
   const [step, setStep] = useState<Step>(readStoredStep);
   const [, setLocation] = useState("");
   const [swipedCount, setSwipedCount] = useState(0);
-  const [runId, setRunId] = useState(0);
-  const [catalog, setCatalog] = useState<SwipeSpot[]>([]);
-  const [refineCatalog, setRefineCatalog] = useState<SwipeSpot[]>([]);
-  const [exploreSpots, setExploreSpots] = useState<Recommendation[]>([]);
-  const [homeFeaturedSpots, setHomeFeaturedSpots] = useState<Recommendation[]>(EXPLORE_SPOTS);
-  const [swipeDeck, setSwipeDeck] = useState<SwipeSpot[]>([]);
-  const [refining, setRefining] = useState(false);
-  const [diagnosisComplete, setDiagnosisComplete] = useState(isDiagnosisComplete);
-  const [, setDetailedComplete] = useState(isDetailedDiagnosisComplete);
-
   const [likes, setLikes] = useState<string[]>([]);
   const [nopes, setNopes] = useState<string[]>([]);
   const [timeBudget, setTimeBudget] = useState("half");
@@ -195,6 +186,17 @@ export default function App() {
     readStoredRecommendations,
   );
   const [profileSummary, setProfileSummary] = useState(readStoredProfileSummary);
+  const [runId, setRunId] = useState(0);
+  const [catalog, setCatalog] = useState<SwipeSpot[]>([]);
+  const [refineCatalog, setRefineCatalog] = useState<SwipeSpot[]>([]);
+  const [exploreSpots, setExploreSpots] = useState<Recommendation[]>([]);
+  const [homeFeaturedSpots, setHomeFeaturedSpots] = useState<Recommendation[]>(EXPLORE_SPOTS);
+  const [swipeDeck, setSwipeDeck] = useState<SwipeSpot[]>([]);
+  const [refining, setRefining] = useState(false);
+  const [diagnosisComplete, setDiagnosisComplete] = useState(isDiagnosisComplete);
+  const [, setDetailedComplete] = useState(isDetailedDiagnosisComplete);
+
+
   const [planMessage, setPlanMessage] = useState("");
   const [isFetchDone, setIsFetchDone] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -203,9 +205,7 @@ export default function App() {
   >({});
   const [travelMemory, setTravelMemory] = useState("");
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
-  const detailReturnStepRef = useRef<Step>(
-    initialSpotId ? readStoredStep() : "recommendations",
-  );
+  const detailReturnStepRef = useRef<Step>(initialSpotId ? readStoredStep() : "recommendations");
   const shellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -239,11 +239,7 @@ export default function App() {
     if (!initialSpotId) return;
     let active = true;
     (async () => {
-      const rec = await resolveSpotById(
-        initialSpotId,
-        readStoredRecommendations(),
-        exploreSpots,
-      );
+      const rec = await resolveSpotById(initialSpotId, readStoredRecommendations(), exploreSpots);
       if (active && rec) setDetailRec(rec);
     })();
     return () => {
@@ -439,9 +435,7 @@ export default function App() {
 
         const primary = destinations[0] ?? getCurrentDestination();
         const finalRecommendations =
-          mapped.length > 0
-            ? mapped
-            : docs.map((doc) => documentToRecommendation(doc, primary));
+          mapped.length > 0 ? mapped : docs.map((doc) => documentToRecommendation(doc, primary));
 
         setRecommendations(refreshRecommendationImages(finalRecommendations, docs));
 
@@ -561,7 +555,10 @@ export default function App() {
             ...prev,
             [spotId]: [
               ...nextThread,
-              { role: "ai" as const, text: formatAiGuideAnswer(data.answer || "回答が得られませんでした。") },
+              {
+                role: "ai" as const,
+                text: formatAiGuideAnswer(data.answer || "回答が得られませんでした。"),
+              },
             ],
           };
         });

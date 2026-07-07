@@ -536,104 +536,112 @@ export default function CollectPage() {
                       className="border-b border-[#e2e8f0] bg-[#f8fafc] p-4 last:border-0"
                     >
                       <fieldset disabled={isRegistering} className="min-w-0 border-0 p-0">
-                      <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2">
+                          <input
+                            type="text"
+                            value={spot.name}
+                            onChange={(e) => updateSpot(index, { name: e.target.value })}
+                            placeholder="例: 道の駅 〇〇"
+                            className="min-w-[200px] flex-1 rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm font-medium"
+                          />
+                        </div>
+                        <div className="mt-3 max-w-28">
+                          <p className="mb-2 text-xs font-medium text-[#475569]">画像</p>
+                          <CollectSpotImageCell
+                            spot={spot}
+                            busy={imageBusy?.index === index ? imageBusy.kind : null}
+                            disabled={step === "registering" || isImageBusy || isRegistering}
+                            onGenerate={() => void handleGenerateSpotImage(index)}
+                            onUpload={(file) => void handleUploadSpotImage(index, file)}
+                            onRemove={() => handleRemoveSpotImage(index)}
+                          />
+                        </div>
+                        <div className="mt-3">
+                          <p className="mb-2 text-xs font-medium text-[#475569]">
+                            カテゴリ{" "}
+                            <span className="font-normal text-[#64748b]">
+                              複数選択可・最大 {MAX_SPOT_CATEGORIES} 件
+                            </span>
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {SPOT_CATEGORIES.map((category) => {
+                              const active = normalizeCategories(spot.categories).includes(
+                                category,
+                              );
+                              const atMax =
+                                normalizeCategories(spot.categories).length >= MAX_SPOT_CATEGORIES;
+                              return (
+                                <button
+                                  key={category}
+                                  type="button"
+                                  disabled={!active && atMax}
+                                  onClick={() => toggleSpotCategory(index, category)}
+                                  className={`rounded-full px-3 py-1.5 text-[13px] transition ${
+                                    active
+                                      ? "cursor-pointer bg-[#2563eb] font-medium text-white"
+                                      : atMax
+                                        ? "cursor-not-allowed bg-white text-[#94a3b8]"
+                                        : "cursor-pointer bg-white text-[#475569] hover:bg-[#e2e8f0]"
+                                  }`}
+                                >
+                                  {category}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                         <input
                           type="text"
-                          value={spot.name}
-                          onChange={(e) => updateSpot(index, { name: e.target.value })}
-                          placeholder="例: 道の駅 〇〇"
-                          className="min-w-[200px] flex-1 rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm font-medium"
+                          value={spot.address}
+                          onChange={(e) => updateSpot(index, { address: e.target.value })}
+                          placeholder="例: 国道沿い1丁目"
+                          className="mt-2 w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm"
                         />
-                      </div>
-                      <div className="mt-3 max-w-28">
-                        <p className="mb-2 text-xs font-medium text-[#475569]">画像</p>
-                        <CollectSpotImageCell
-                          spot={spot}
-                          busy={imageBusy?.index === index ? imageBusy.kind : null}
-                          disabled={step === "registering" || isImageBusy || isRegistering}
-                          onGenerate={() => void handleGenerateSpotImage(index)}
-                          onUpload={(file) => void handleUploadSpotImage(index, file)}
-                          onRemove={() => handleRemoveSpotImage(index)}
-                        />
-                      </div>
-                      <div className="mt-3">
-                        <p className="mb-2 text-xs font-medium text-[#475569]">
-                          カテゴリ{" "}
-                          <span className="font-normal text-[#64748b]">
-                            複数選択可・最大 {MAX_SPOT_CATEGORIES} 件
-                          </span>
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {SPOT_CATEGORIES.map((category) => {
-                            const active = normalizeCategories(spot.categories).includes(category);
-                            const atMax =
-                              normalizeCategories(spot.categories).length >= MAX_SPOT_CATEGORIES;
-                            return (
-                              <button
-                                key={category}
-                                type="button"
-                                disabled={!active && atMax}
-                                onClick={() => toggleSpotCategory(index, category)}
-                                className={`rounded-full px-3 py-1.5 text-[13px] transition ${
-                                  active
-                                    ? "cursor-pointer bg-[#2563eb] font-medium text-white"
-                                    : atMax
-                                      ? "cursor-not-allowed bg-white text-[#94a3b8]"
-                                      : "cursor-pointer bg-white text-[#475569] hover:bg-[#e2e8f0]"
-                                }`}
-                              >
-                                {category}
-                              </button>
-                            );
-                          })}
+                        <div>
+                          <textarea
+                            value={spot.description}
+                            onChange={(e) =>
+                              updateSpot(index, {
+                                description: e.target.value.slice(0, MAX_SPOT_DESCRIPTION_LENGTH),
+                              })
+                            }
+                            placeholder="例: 地元の特産品や食堂が楽しめる道の駅。旅の休憩・お土産選びに便利です。"
+                            rows={3}
+                            maxLength={MAX_SPOT_DESCRIPTION_LENGTH}
+                            className="mt-2 w-full resize-y rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm leading-relaxed"
+                          />
+                          <p className="mt-1 text-xs text-[#64748b]">
+                            最大 {MAX_SPOT_DESCRIPTION_LENGTH} 文字（{spot.description.length}/
+                            {MAX_SPOT_DESCRIPTION_LENGTH}）
+                          </p>
                         </div>
-                      </div>
-                      <input
-                        type="text"
-                        value={spot.address}
-                        onChange={(e) => updateSpot(index, { address: e.target.value })}
-                        placeholder="例: 国道沿い1丁目"
-                        className="mt-2 w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm"
-                      />
-                      <div>
-                        <textarea
-                          value={spot.description}
-                          onChange={(e) =>
-                            updateSpot(index, {
-                              description: e.target.value.slice(0, MAX_SPOT_DESCRIPTION_LENGTH),
-                            })
-                          }
-                          placeholder="例: 地元の特産品や食堂が楽しめる道の駅。旅の休憩・お土産選びに便利です。"
-                          rows={3}
-                          maxLength={MAX_SPOT_DESCRIPTION_LENGTH}
-                          className="mt-2 w-full resize-y rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm leading-relaxed"
-                        />
-                        <p className="mt-1 text-xs text-[#64748b]">
-                          最大 {MAX_SPOT_DESCRIPTION_LENGTH} 文字（{spot.description.length}/
-                          {MAX_SPOT_DESCRIPTION_LENGTH}）
-                        </p>
-                      </div>
-                      <div>
-                        <textarea
-                          value={spot.highlights.join("\n")}
-                          onChange={(e) =>
-                            updateSpot(index, {
-                              highlights: parseHighlightsText(
-                                enforceHighlightsText(e.target.value),
-                              ),
-                            })
-                          }
-                          placeholder={`例: 地元野菜の直売所が充実している（1行1件・最大${MAX_SPOT_HIGHLIGHT_COUNT}件・各${MAX_SPOT_HIGHLIGHT_LENGTH}文字）`}
-                          rows={3}
-                          className="mt-2 w-full resize-y rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm leading-relaxed"
-                        />
-                      </div>
-                      <div className="mt-3 flex justify-end gap-3">
-                        <Button variant="secondary" disabled={isRegistering} onClick={cancelEditing}>
-                          キャンセル
-                        </Button>
-                        <Button disabled={isRegistering} onClick={finishEditing}>完了</Button>
-                      </div>
+                        <div>
+                          <textarea
+                            value={spot.highlights.join("\n")}
+                            onChange={(e) =>
+                              updateSpot(index, {
+                                highlights: parseHighlightsText(
+                                  enforceHighlightsText(e.target.value),
+                                ),
+                              })
+                            }
+                            placeholder={`例: 地元野菜の直売所が充実している（1行1件・最大${MAX_SPOT_HIGHLIGHT_COUNT}件・各${MAX_SPOT_HIGHLIGHT_LENGTH}文字）`}
+                            rows={3}
+                            className="mt-2 w-full resize-y rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm leading-relaxed"
+                          />
+                        </div>
+                        <div className="mt-3 flex justify-end gap-3">
+                          <Button
+                            variant="secondary"
+                            disabled={isRegistering}
+                            onClick={cancelEditing}
+                          >
+                            キャンセル
+                          </Button>
+                          <Button disabled={isRegistering} onClick={finishEditing}>
+                            完了
+                          </Button>
+                        </div>
                       </fieldset>
                     </div>
                   ) : (
@@ -709,7 +717,11 @@ export default function CollectPage() {
                 )}
               </div>
               <div className="flex gap-6">
-                <Button variant="secondary" disabled={isRegistering} onClick={() => setAbortConfirmOpen(true)}>
+                <Button
+                  variant="secondary"
+                  disabled={isRegistering}
+                  onClick={() => setAbortConfirmOpen(true)}
+                >
                   キャンセル
                 </Button>
                 <Button
@@ -761,7 +773,11 @@ export default function CollectPage() {
           AIが提案した観光地の一覧を破棄し、収集の最初に戻ります。編集内容は保存されません。
         </p>
         <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" disabled={isRegistering} onClick={() => setAbortConfirmOpen(false)}>
+          <Button
+            variant="secondary"
+            disabled={isRegistering}
+            onClick={() => setAbortConfirmOpen(false)}
+          >
             戻る
           </Button>
           <Button variant="danger" disabled={isRegistering} onClick={abortCollectPreview}>

@@ -168,56 +168,56 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
 
               {isExpanded &&
                 group.subregions.map((subregion, subregionIndex) => {
-                const isLastSubregion =
-                  isLastGroup && subregionIndex === group.subregions.length - 1;
-                const cityNames = subregion.cities.map((place) => place.name);
-                const subregionSelected =
-                  afterDiagnosis && isSubregionFullySelected(selected, cityNames);
+                  const isLastSubregion =
+                    isLastGroup && subregionIndex === group.subregions.length - 1;
+                  const cityNames = subregion.cities.map((place) => place.name);
+                  const subregionSelected =
+                    afterDiagnosis && isSubregionFullySelected(selected, cityNames);
 
-                return (
-                  <div key={subregion.name}>
-                    {afterDiagnosis ? (
-                      <button
-                        type="button"
-                        onClick={() => toggleSubregion(cityNames)}
-                        className={`flex w-full items-center gap-3 border-b border-[#f1f5f9] px-4 py-2.5 text-left transition active:bg-[#f1f5f9] ${
-                          subregionSelected ? "bg-[#f0fdfa]" : "bg-[#fafbfc]"
-                        }`}
-                      >
-                        <span
-                          className={`flex size-5 shrink-0 items-center justify-center rounded border ${
-                            subregionSelected
-                              ? "border-[#0aa19b] bg-[#0aa19b] text-white"
-                              : "border-[#cbd5e1] bg-white"
+                  return (
+                    <div key={subregion.name}>
+                      {afterDiagnosis ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleSubregion(cityNames)}
+                          className={`flex w-full items-center gap-3 border-b border-[#f1f5f9] px-4 py-2.5 text-left transition active:bg-[#f1f5f9] ${
+                            subregionSelected ? "bg-[#f0fdfa]" : "bg-[#fafbfc]"
                           }`}
                         >
-                          {subregionSelected ? <CheckIcon className="size-3" /> : null}
-                        </span>
-                        <span
-                          className={`text-[14px] font-semibold tracking-wide ${
-                            subregionSelected ? "text-[#0f766e]" : "text-[#64748b]"
-                          }`}
-                        >
-                          {subregion.name}
-                        </span>
-                      </button>
-                    ) : (
-                      <div className="border-b border-[#f1f5f9] bg-[#fafbfc] px-4 py-2 pl-6">
-                        <p className="text-[11px] font-semibold tracking-wide text-[#94a3b8]">
-                          {subregion.name}
-                        </p>
-                      </div>
-                    )}
-                    <ul>
-                      {subregion.cities.map((place, cityIndex) => {
-                        const isLastItem =
-                          isLastSubregion && cityIndex === subregion.cities.length - 1;
-                        return renderDestinationItem(place, isLastItem);
-                      })}
-                    </ul>
-                  </div>
-                );
-              })}
+                          <span
+                            className={`flex size-5 shrink-0 items-center justify-center rounded border ${
+                              subregionSelected
+                                ? "border-[#0aa19b] bg-[#0aa19b] text-white"
+                                : "border-[#cbd5e1] bg-white"
+                            }`}
+                          >
+                            {subregionSelected ? <CheckIcon className="size-3" /> : null}
+                          </span>
+                          <span
+                            className={`text-[14px] font-semibold tracking-wide ${
+                              subregionSelected ? "text-[#0f766e]" : "text-[#64748b]"
+                            }`}
+                          >
+                            {subregion.name}
+                          </span>
+                        </button>
+                      ) : (
+                        <div className="border-b border-[#f1f5f9] bg-[#fafbfc] px-4 py-2 pl-6">
+                          <p className="text-[11px] font-semibold tracking-wide text-[#94a3b8]">
+                            {subregion.name}
+                          </p>
+                        </div>
+                      )}
+                      <ul>
+                        {subregion.cities.map((place, cityIndex) => {
+                          const isLastItem =
+                            isLastSubregion && cityIndex === subregion.cities.length - 1;
+                          return renderDestinationItem(place, isLastItem);
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })}
 
               {isExpanded && allItems.length === 0 && (
                 <p className="px-4 py-3 text-[13px] text-[#94a3b8]">

@@ -17,8 +17,7 @@ a[href],
 [role="button"]:not([aria-disabled="true"]),
 [role="tab"]:not([aria-disabled="true"]),
 label:has(input[type="file"]:not(:disabled)) {
-  transition-property: color, background-color, border-color, opacity, box-shadow, fill,
-    stroke !important;
+  transition-property: color, background-color, border-color, opacity, box-shadow, fill, stroke;
 }
 
 button:not(:disabled),
@@ -33,7 +32,7 @@ input[type="file"]:not(:disabled),
 label:has(input[type="file"]:not(:disabled)),
 [role="button"]:not([aria-disabled="true"]),
 [role="tab"]:not([aria-disabled="true"]) {
-  cursor: pointer !important;
+  cursor: pointer;
 }
 
 button:not(:disabled) *,
@@ -44,7 +43,7 @@ a[href] *,
 [role="button"]:not([aria-disabled="true"]) *,
 [role="tab"]:not([aria-disabled="true"]) *,
 label:has(input[type="file"]:not(:disabled)) * {
-  cursor: pointer !important;
+  cursor: pointer;
 }
 
 button:disabled,
@@ -52,11 +51,11 @@ select:disabled,
 input:disabled,
 [role="button"][aria-disabled="true"],
 [role="tab"][aria-disabled="true"] {
-  cursor: not-allowed !important;
+  cursor: not-allowed;
 }
 
 button:disabled *,
 [role="button"][aria-disabled="true"] *,
 [role="tab"][aria-disabled="true"] * {
-  cursor: not-allowed !important;
+  cursor: not-allowed;
 }

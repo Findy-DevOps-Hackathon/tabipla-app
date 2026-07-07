@@ -64,10 +64,7 @@ function toAgentSpot(row: SeedSpotRow): Spot {
     id: row.id,
     name: row.name,
     category: toAgentCategory(categories),
-    location:
-      row.lat != null && row.lon != null
-        ? { lat: row.lat, lon: row.lon }
-        : KOMORO_CENTER,
+    location: row.lat != null && row.lon != null ? { lat: row.lat, lon: row.lon } : KOMORO_CENTER,
     priceLevel: Math.min(4, Math.max(0, row.price ?? 1)),
     description: row.description,
     tags,
@@ -80,9 +77,7 @@ const seedRows = loadSeedSpotRows();
 export const KOMORO_SPOTS: Spot[] = seedRows.map(toAgentSpot);
 
 export const SPOT_IMAGES: Record<string, string> = Object.fromEntries(
-  seedRows
-    .filter((row) => row.imageUrl)
-    .map((row) => [row.id, row.imageUrl as string]),
+  seedRows.filter((row) => row.imageUrl).map((row) => [row.id, row.imageUrl as string]),
 );
 
 export const SPOT_HOURS: Record<string, { open: string; close: string; stayMin: number }> =

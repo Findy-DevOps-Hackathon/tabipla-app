@@ -1,8 +1,5 @@
 import type { ReactNode } from "react";
-import {
-  ADMIN_CONTENT_MAX_WIDTH_CLASS,
-  ADMIN_TABLE_MAX_WIDTH_CLASS,
-} from "../../lib/layout.ts";
+import { ADMIN_CONTENT_MAX_WIDTH_CLASS, ADMIN_TABLE_MAX_WIDTH_CLASS } from "../../lib/layout.ts";
 import { Sidebar } from "./Sidebar.tsx";
 
 type Props = {
