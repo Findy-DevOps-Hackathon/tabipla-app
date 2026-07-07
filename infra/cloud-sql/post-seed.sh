@@ -48,5 +48,8 @@ pnpm -C "$ROOT/packages/db" exec tsx scratch/delete-legacy-noto-spots.ts
 echo "Reindexing Elasticsearch from production PostgreSQL..."
 pnpm -C "$ROOT/services/backend-api" reindex
 
+echo "Embedding spots (Gemini)..."
+pnpm -C "$ROOT/services/backend-api" embed-spots
+
 echo ""
 echo "Post-seed sync complete."

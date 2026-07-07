@@ -32,6 +32,7 @@ import {
   markDiagnosisComplete,
 } from "./lib/diagnosis.ts";
 import { preloadImages } from "./lib/preloadImage.ts";
+import { type FlowStep, readFlowSession, writeFlowSession } from "./lib/session.ts";
 import {
   loadSpotCatalogBundle,
   planItemToRecommendation,
@@ -45,9 +46,6 @@ import { ProcessingScreen } from "./screens/ProcessingScreen.tsx";
 import { RecommendationsScreen } from "./screens/RecommendationsScreen.tsx";
 import { SwipeScreen } from "./screens/SwipeScreen.tsx";
 import { WelcomeScreen } from "./screens/WelcomeScreen.tsx";
-
-/** 匿名ユーザー向け user-web の体験フロー。 */
-type Step = "welcome" | "input" | "swipe" | "memory" | "processing" | "recommendations";
 
 /** `/api/v1/personalized/plan` のレスポンス（利用フィールドのみ）。 */
 type PlanApiRecommendation = {
@@ -79,26 +77,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-/** リロードしても直前の画面を保つために step を保存する localStorage キー。 */
-const STEP_KEY = "tabipla-step";
-const STEP_VALUES: Step[] = [
-  "welcome",
-  "input",
-  "swipe",
-  "memory",
-  "processing",
-  "recommendations",
-];
-
-/** localStorage に保存された step を読み出す（未保存・不正値なら welcome）。 */
-function readStoredStep(): Step {
-  try {
-    const raw = localStorage.getItem(STEP_KEY);
-    return raw && (STEP_VALUES as string[]).includes(raw) ? (raw as Step) : "welcome";
-  } catch {
-    return "welcome";
-  }
-}
+/** 匿名ユーザー向け user-web の体験フロー。 */
+type Step = FlowStep;
 
 /** リロードしてもおすすめ結果を保つための localStorage キー。 */
 const RECOMMENDATIONS_KEY = "tabipla-recommendations";
@@ -160,6 +140,31 @@ function viewKey(s: ViewSnapshot): string {
 /** history.state 内に画面スナップショットを格納するためのキー。 */
 const HISTORY_STATE_KEY = "tabiplaNav";
 
+function resolveSwipeDeckFromIds(
+  ids: string[],
+  isRefining: boolean,
+  catalog: SwipeSpot[],
+  refineCatalog: SwipeSpot[],
+): SwipeSpot[] {
+  const fallback = isRefining ? [...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE] : SWIPE_SPOTS;
+  const pool =
+    (isRefining ? refineCatalog : catalog).length > 0
+      ? isRefining
+        ? refineCatalog
+        : catalog
+      : fallback;
+  const limit = isRefining ? SWIPE_LIMIT_REFINE : SWIPE_LIMIT;
+
+  if (ids.length > 0) {
+    const restored = ids
+      .map((id) => pool.find((spot) => spot.id === id))
+      .filter((spot): spot is SwipeSpot => spot !== undefined);
+    if (restored.length >= 2) return restored;
+  }
+
+  return pool.slice(0, limit);
+}
+
 /**
  * tabipla ユーザー向け Web のメインフロー。
  *
@@ -167,29 +172,30 @@ const HISTORY_STATE_KEY = "tabiplaNav";
  * レコメンド体験をステップ状態機械で制御する（Figma デザイン準拠）。
  */
 export default function App() {
+  const initialFlow = readFlowSession();
   const initialSpotId = readInitialSpotIdFromUrl();
-  const [step, setStep] = useState<Step>(readStoredStep);
+  const [step, setStep] = useState<Step>(initialFlow.step);
   const [, setLocation] = useState("");
-  const [swipedCount, setSwipedCount] = useState(0);
-  const [runId, setRunId] = useState(0);
+  const [swipedCount, setSwipedCount] = useState(initialFlow.swipedCount);
+  const [runId, setRunId] = useState(initialFlow.runId);
   const [catalog, setCatalog] = useState<SwipeSpot[]>([]);
   const [refineCatalog, setRefineCatalog] = useState<SwipeSpot[]>([]);
   const [exploreSpots, setExploreSpots] = useState<Recommendation[]>([]);
   const [homeFeaturedSpots, setHomeFeaturedSpots] = useState<Recommendation[]>(EXPLORE_SPOTS);
   const [swipeDeck, setSwipeDeck] = useState<SwipeSpot[]>([]);
-  const [refining, setRefining] = useState(false);
+  const [refining, setRefining] = useState(initialFlow.refining);
   const [diagnosisComplete, setDiagnosisComplete] = useState(isDiagnosisComplete);
   const [, setDetailedComplete] = useState(isDetailedDiagnosisComplete);
 
-  const [likes, setLikes] = useState<string[]>([]);
-  const [likeWeights, setLikeWeights] = useState<Record<string, number>>({});
-  const [nopes, setNopes] = useState<string[]>([]);
+  const [likes, setLikes] = useState<string[]>(initialFlow.likes);
+  const [likeWeights, setLikeWeights] = useState<Record<string, number>>(initialFlow.likeWeights);
+  const [nopes, setNopes] = useState<string[]>(initialFlow.nopes);
   const [recommendations, setRecommendations] =
     useState<Recommendation[]>(readStoredRecommendations);
   const [planMessage, setPlanMessage] = useState(readStoredPlanMessage);
   const [planTotal, setPlanTotal] = useState(readStoredPlanTotal);
   const [planPage, setPlanPage] = useState(1);
-  const [planKey, setPlanKey] = useState("");
+  const [planKey, setPlanKey] = useState(initialFlow.planKey);
   const planKeyRef = useRef(planKey);
   planKeyRef.current = planKey;
   const [planLoadingMore, setPlanLoadingMore] = useState(false);
@@ -200,9 +206,13 @@ export default function App() {
   const [chatThreads, setChatThreads] = useState<
     Record<string, { role: "user" | "ai"; text: string; isError?: boolean; image?: string }[]>
   >({});
-  const [travelMemory, setTravelMemory] = useState("");
+  const [travelMemory, setTravelMemory] = useState(initialFlow.travelMemory);
+  const [selectedDestinationNames, setSelectedDestinationNames] = useState(
+    initialFlow.selectedDestinationNames,
+  );
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
-  const detailReturnStepRef = useRef<Step>(initialSpotId ? readStoredStep() : "recommendations");
+  const detailReturnStepRef = useRef<Step>(initialSpotId ? initialFlow.step : "recommendations");
+  const pendingSwipeDeckIdsRef = useRef(initialFlow.swipeDeckIds);
   const shellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -231,6 +241,26 @@ export default function App() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (step !== "swipe" || swipeDeck.length > 0) return;
+    if (catalog.length === 0 && refineCatalog.length === 0) return;
+
+    const restored = resolveSwipeDeckFromIds(
+      pendingSwipeDeckIdsRef.current,
+      refining,
+      catalog,
+      refineCatalog,
+    );
+    pendingSwipeDeckIdsRef.current = [];
+
+    if (restored.length >= 2) {
+      setSwipeDeck(restored);
+      return;
+    }
+
+    setStep(refining && isDiagnosisComplete() ? "recommendations" : "welcome");
+  }, [step, swipeDeck.length, catalog, refineCatalog, refining]);
 
   useEffect(() => {
     if (!initialSpotId) return;
@@ -320,12 +350,32 @@ export default function App() {
   }, [step]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STEP_KEY, step);
-    } catch {
-      // localStorage 不可環境では復元を諦める。
-    }
-  }, [step]);
+    writeFlowSession({
+      step,
+      likes,
+      nopes,
+      likeWeights,
+      travelMemory,
+      refining,
+      swipedCount,
+      runId,
+      swipeDeckIds: swipeDeck.map((spot) => spot.id),
+      selectedDestinationNames,
+      planKey,
+    });
+  }, [
+    step,
+    likes,
+    nopes,
+    likeWeights,
+    travelMemory,
+    refining,
+    swipedCount,
+    runId,
+    swipeDeck,
+    selectedDestinationNames,
+    planKey,
+  ]);
 
   useEffect(() => {
     try {
@@ -348,7 +398,9 @@ export default function App() {
   }, [detailRec]);
 
   const beginSwipe = useCallback(() => {
-    setSwipeDeck(catalog.slice(0, SWIPE_LIMIT));
+    const pool = catalog.length > 0 ? catalog : SWIPE_SPOTS;
+    pendingSwipeDeckIdsRef.current = [];
+    setSwipeDeck(pool.slice(0, SWIPE_LIMIT));
     setLikes([]);
     setLikeWeights({});
     setNopes([]);
@@ -357,6 +409,7 @@ export default function App() {
     setPlanTotal(0);
     setPlanPage(1);
     setPlanKey("");
+    planKeyRef.current = "";
     setRefining(false);
     setRunId((id) => id + 1);
     setStep("swipe");
@@ -367,13 +420,16 @@ export default function App() {
     if (destinations.length > 0) {
       setCurrentDestinations(destinations);
     }
+    setSelectedDestinationNames(locations);
     setLocation(locations.join("、"));
     setStep("memory");
   }, []);
 
   const refinePreferences = useCallback(() => {
+    const pool = refineCatalog.length > 0 ? refineCatalog : [...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE];
+    pendingSwipeDeckIdsRef.current = [];
     setPlanNeedsRefinement(false);
-    setSwipeDeck(refineCatalog.slice(0, SWIPE_LIMIT_REFINE));
+    setSwipeDeck(pool.slice(0, SWIPE_LIMIT_REFINE));
     setRefining(true);
     setRunId((id) => id + 1);
     setStep("swipe");
@@ -638,7 +694,13 @@ export default function App() {
       )}
 
       {step === "input" && (
-        <InputScreen afterDiagnosis onBack={() => goBack("welcome")} onSearch={selectDestination} />
+        <InputScreen
+          afterDiagnosis
+          initialSelected={selectedDestinationNames}
+          onSelectedChange={setSelectedDestinationNames}
+          onBack={() => goBack("welcome")}
+          onSearch={selectDestination}
+        />
       )}
 
       {step === "swipe" && (

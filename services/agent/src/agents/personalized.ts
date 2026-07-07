@@ -1,4 +1,9 @@
-import { createElasticsearchClient, type SpotDocument, VECTOR_DIMS } from "@tabipla/search-core";
+import {
+  createElasticsearchClient,
+  DEFAULT_INDEX_NAME,
+  type SpotDocument,
+  VECTOR_DIMS,
+} from "@tabipla/search-core";
 import type { Spot } from "../contracts.js";
 import {
   assessProfileFocus,
@@ -108,7 +113,7 @@ async function fetchSpotsFromEsByIds(ids: string[]): Promise<Map<string, EsSpotR
   const es = createElasticsearchClient();
   try {
     const res = await es.search({
-      index: "spots",
+      index: DEFAULT_INDEX_NAME,
       size: ids.length,
       query: { ids: { values: ids } },
     });
@@ -126,6 +131,65 @@ async function fetchSpotsFromEsByIds(ids: string[]): Promise<Map<string, EsSpotR
   }
 }
 
+/** 目的地カタログ内のスポットを ES kNN でランキングする（_source.embedding 非依存）。 */
+async function rankCatalogByKnn(
+  queryVector: number[],
+  catalogSpots: Spot[],
+  excludeIds: string[],
+): Promise<RankedCandidate[]> {
+  const exclude = new Set(excludeIds);
+  const targetSpots = catalogSpots.filter((spot) => !exclude.has(spot.id));
+  if (targetSpots.length === 0) return [];
+
+  const catalogIds = targetSpots.map((spot) => spot.id);
+  const k = catalogIds.length;
+  const es = createElasticsearchClient();
+
+  try {
+    const res = await es.search({
+      index: DEFAULT_INDEX_NAME,
+      knn: {
+        field: "embedding",
+        query_vector: queryVector,
+        k,
+        num_candidates: Math.max(50, k * 2),
+        filter: {
+          bool: {
+            filter: [{ ids: { values: catalogIds } }],
+          },
+        },
+      },
+      size: k,
+    });
+
+    const esById = new Map<string, EsSpotRecord>();
+    for (const h of res.hits.hits) {
+      const id = h._id;
+      if (!id) continue;
+      esById.set(id, { id, ...(h._source as Record<string, unknown>) });
+    }
+
+    const catalogById = new Map(targetSpots.map((spot) => [spot.id, spot]));
+    const ranked: RankedCandidate[] = [];
+
+    for (const [index, h] of res.hits.hits.entries()) {
+      const id = h._id;
+      if (!id) continue;
+      const catalogSpot = catalogById.get(id);
+      if (!catalogSpot) continue;
+      ranked.push({
+        candidate: mergeCatalogSpot(catalogSpot, esById.get(id)),
+        similarity: typeof h._score === "number" ? h._score : Math.max(0, 1 - index * 0.05),
+      });
+    }
+
+    return ranked;
+  } catch (e) {
+    console.error("[personalized] rankCatalogByKnnエラー:", e);
+    return [];
+  }
+}
+
 function mergeCatalogSpot(catalogSpot: Spot, es?: EsSpotRecord): EsSpotRecord {
   return {
     ...es,
@@ -136,28 +200,6 @@ function mergeCatalogSpot(catalogSpot: Spot, es?: EsSpotRecord): EsSpotRecord {
     highlights: catalogSpot.highlights ?? es?.highlights,
     location: catalogSpot.location ?? es?.location,
   };
-}
-
-/** 目的地カタログ内の全スポットを好みベクトルとの類似度でランキングする。 */
-function rankAllCandidatesInCatalog(
-  queryVector: number[],
-  catalog: Spot[],
-  esById: Map<string, EsSpotRecord>,
-  excludeIds: string[],
-): RankedCandidate[] {
-  const exclude = new Set(excludeIds);
-
-  return catalog
-    .filter((spot) => !exclude.has(spot.id))
-    .map((catalogSpot) => {
-      const es = esById.get(catalogSpot.id);
-      const embedding = es?.embedding;
-      const similarity =
-        embedding && embedding.length > 0 ? cosineSimilarity(queryVector, embedding) : -Infinity;
-      return { candidate: mergeCatalogSpot(catalogSpot, es), similarity };
-    })
-    .filter((entry) => entry.similarity > -Infinity)
-    .sort((a, b) => b.similarity - a.similarity);
 }
 
 /** catalog 未指定時のフォールバック: ES 全件 k-NN。 */
@@ -190,7 +232,7 @@ async function searchCandidatesGlobal(
     };
 
     const res = await es.search({
-      index: "spots",
+      index: DEFAULT_INDEX_NAME,
       knn,
       size: GLOBAL_KNN_LIMIT,
     });
@@ -368,7 +410,7 @@ async function computeAndCachePlan(
 
   const rankedAll =
     catalogSpots.length > 0
-      ? rankAllCandidatesInCatalog(vQuery, catalogSpots, esById, sw.nopes)
+      ? await rankCatalogByKnn(vQuery, catalogSpots, sw.nopes)
       : await searchCandidatesGlobal(vQuery, sw.nopes);
 
   console.log(

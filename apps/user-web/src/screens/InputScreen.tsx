@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -23,6 +23,10 @@ import { useAutoResizeTextarea } from "../lib/useAutoResizeTextarea.ts";
 type InputScreenProps = {
   /** 好み診断の後に表示する場合。見出し・説明文を切り替える。 */
   afterDiagnosis?: boolean;
+  /** リロード復元用の選択済み旅先。 */
+  initialSelected?: string[];
+  /** 旅先選択の変更時（永続化用）。 */
+  onSelectedChange?: (locations: string[]) => void;
   /** 「戻る」タップ時。 */
   onBack: () => void;
   /** 目的地を確定して検索する。 */
@@ -34,9 +38,15 @@ function formatSelectionLabel(selected: string[]): string {
 }
 
 /** フロー 2: 目的地（市区町村・都道府県）を入力する画面（frame-2-input）。 */
-export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputScreenProps) {
+export function InputScreen({
+  afterDiagnosis = false,
+  initialSelected = [],
+  onSelectedChange,
+  onBack,
+  onSearch,
+}: InputScreenProps) {
   const [value, setValue] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>(initialSelected);
   const [collapsedPrefectures, setCollapsedPrefectures] = useState<Set<string>>(() => new Set());
   const location = value.trim();
   const placeMatches = afterDiagnosis
@@ -50,6 +60,10 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
   const showPlaceSuggestions = !afterDiagnosis && location.length > 0;
 
   const inputRef = useAutoResizeTextarea({ minHeight: 24, maxHeight: 160 });
+
+  useEffect(() => {
+    onSelectedChange?.(selected);
+  }, [onSelectedChange, selected]);
 
   const destinationGroups = groupDestinationsByPrefecture(
     afterDiagnosis ? AVAILABLE_DESTINATIONS : placeMatches,
