@@ -221,10 +221,8 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
   const currentBottom = challenger;
 
   useEffect(() => {
-    if (spots.length === 0 && !completedRef.current) {
-      completedRef.current = true;
-      onComplete({ likedIds: [], wins: {} });
-    } else if (spots.length === 1 && !completedRef.current) {
+    // リロード直後など deck 未復元の空配列では input へ飛ばさない。
+    if (spots.length === 1 && !completedRef.current) {
       const only = spots[0];
       if (only) {
         completedRef.current = true;
