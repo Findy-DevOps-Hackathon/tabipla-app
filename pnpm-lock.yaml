@@ -97,6 +97,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@google-cloud/storage':
+        specifier: ^7.21.0
+        version: 7.21.0(encoding@0.1.13)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2

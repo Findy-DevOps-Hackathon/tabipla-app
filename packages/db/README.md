@@ -94,7 +94,7 @@ pnpm -C packages/db db:push
 pnpm -C packages/db seed
 ```
 
-自治体・管理ユーザー・スポット・クーポン・蘊蓄を冪等に upsert し、`seed-data/images/` の画像を `services/backend-api/data/uploads/spots/` へコピーします。
+自治体・管理ユーザー・スポット・クーポン・蘊蓄を冪等に upsert し、`seed-data/images/` の画像を `services/backend-api/data/uploads/spots/` へコピーします。`GCS_BUCKET` が設定されている場合は画像を GCS の `GCS_OBJECT_PREFIX`（既定 `spots`）へアップロードし、DB の `imageUrl` には公開 URL を保存します。
 
 管理画面ログイン（パスワードは `ADMIN_SEED_PASSWORD`、未設定時 `test-admin-password`）:
 

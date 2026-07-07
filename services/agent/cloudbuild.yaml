@@ -12,3 +12,4 @@ images:
   - ${_IMAGE}
 options:
   logging: CLOUD_LOGGING_ONLY
+  defaultLogsBucketBehavior: REGIONAL_USER_OWNED_BUCKET

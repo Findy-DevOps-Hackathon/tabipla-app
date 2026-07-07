@@ -13,7 +13,8 @@ fi
 
 # 東京リージョン（Cloud Run と同一。GCS 画像バケットも東京推奨）
 LOCATION="${GCS_BUCKET_LOCATION:-asia-northeast1}"
-BUCKET="${GCS_BUCKET:-${PROJECT}-spot-images}"
+DEFAULT_BUCKET="${PROJECT}-spot-images"
+BUCKET="${GCS_BUCKET:-$DEFAULT_BUCKET}"
 OBJECT_PREFIX="${GCS_OBJECT_PREFIX:-spots}"
 
 echo "Project:  ${PROJECT}"
@@ -25,14 +26,34 @@ echo "Enabling Cloud Storage API..."
 gcloud services enable storage.googleapis.com --project="$PROJECT" --quiet
 
 if gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT" >/dev/null 2>&1; then
-  echo "Bucket gs://${BUCKET} already exists."
+  EXISTING_LOCATION="$(gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT" --format='value(location)')"
+  if [[ "$EXISTING_LOCATION" != "$LOCATION" ]]; then
+    if [[ -n "${GCS_BUCKET:-}" ]]; then
+      echo "Bucket gs://${BUCKET} は ${EXISTING_LOCATION} にあります。GCS のロケーションは変更できません。" >&2
+      echo "東京にするには GCS_BUCKET に新しいバケット名を指定して再実行してください。" >&2
+      exit 1
+    fi
+    BUCKET="${DEFAULT_BUCKET}-${LOCATION}"
+    echo "Default bucket gs://${DEFAULT_BUCKET} is in ${EXISTING_LOCATION}; using gs://${BUCKET} for ${LOCATION} instead."
+  else
+    echo "Bucket gs://${BUCKET} already exists in ${LOCATION}."
+  fi
+fi
+
+if gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT" >/dev/null 2>&1; then
+  EXISTING_LOCATION="$(gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT" --format='value(location)')"
+  if [[ "$EXISTING_LOCATION" != "$LOCATION" ]]; then
+    echo "Bucket gs://${BUCKET} は ${EXISTING_LOCATION} にあります。GCS のロケーションは変更できません。" >&2
+    echo "GCS_BUCKET に東京リージョン用の新しいバケット名を指定してください。" >&2
+    exit 1
+  fi
 else
   echo "Creating bucket gs://${BUCKET}..."
   gcloud storage buckets create "gs://${BUCKET}" \
     --project="$PROJECT" \
     --location="$LOCATION" \
     --uniform-bucket-level-access \
-    --public-access-prevention=inherited \
+    --no-public-access-prevention \
     --quiet
 fi
 

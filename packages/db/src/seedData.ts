@@ -64,10 +64,14 @@ export async function loadSeedBundle(): Promise<SeedBundle> {
   return { manifest, municipalities, adminUsers, spots, coupons, unchikuFacts };
 }
 
-/** `/uploads/spots/foo.webp` から seed-data 内のファイル名を得る。 */
+/** `/uploads/spots/foo.webp` や GCS/CDN の `/spots/foo.webp` から seed-data 内のファイル名を得る。 */
 export function seedImageFilename(imageUrl: string | null | undefined): string | null {
   if (!imageUrl) return null;
-  const match = imageUrl.match(/\/uploads\/spots\/([^/?#]+)$/);
+  const pathname =
+    imageUrl.startsWith("http://") || imageUrl.startsWith("https://")
+      ? new URL(imageUrl).pathname
+      : imageUrl;
+  const match = pathname.match(/\/(?:uploads\/)?spots\/([^/?#]+)$/);
   return match?.[1] ?? null;
 }
 

@@ -19,6 +19,12 @@ pnpm --filter @tabipla/backend-api run deploy
 #    → DB の imageUrl が https://storage.googleapis.com/... に更新される
 ```
 
+GCS バケットのロケーションは作成後に変更できません。既定名のバケットが
+`US` など東京以外に既にある場合、`setup.sh` は
+`{project}-spot-images-asia-northeast1` を東京リージョン用に作成します。
+任意の名前にしたい場合は `GCS_BUCKET=... bash infra/gcs/setup.sh` で新しい
+バケット名を指定してください。
+
 ### Cloud CDN（任意）
 
 GCS 直 URL でも Google のエッジキャッシュは効きますが、さらに CDN を有効にする場合:

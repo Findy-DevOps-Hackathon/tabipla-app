@@ -60,8 +60,8 @@ images:
 substitutions:
   _REGION: asia-northeast1
   _CORS_ORIGINS: https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com
-  _GCS_BUCKET: ""
-  _GCS_PUBLIC_BASE_URL: ""
+  _GCS_BUCKET: ${PROJECT_ID}-spot-images
+  _GCS_PUBLIC_BASE_URL: https://storage.googleapis.com/${PROJECT_ID}-spot-images
   _GCS_OBJECT_PREFIX: spots
   _ES_NODE: ""
   _ES_INDEX: ""
@@ -70,3 +70,4 @@ substitutions:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  defaultLogsBucketBehavior: REGIONAL_USER_OWNED_BUCKET
