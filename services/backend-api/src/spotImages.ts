@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Storage } from "@google-cloud/storage";
