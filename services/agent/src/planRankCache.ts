@@ -21,6 +21,7 @@ export type CachedPlanRank = {
   planKey: string;
   profileSummary: string;
   result: string;
+  needsRefinement: boolean;
   ranked: CachedRankedItem[];
   createdAt: number;
 };

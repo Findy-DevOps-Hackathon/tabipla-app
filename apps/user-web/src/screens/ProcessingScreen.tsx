@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { AiGuideAvatar } from "../components/AiGuideAvatar.tsx";
+import { AiGuideSpeechBubble } from "../components/AiGuideSpeechBubble.tsx";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
 import { presentPlanError } from "../lib/planError.ts";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "../lib/ui.ts";
 
 type ProcessingScreenProps = {
-  /** スワイプした件数（本文に表示）。 */
+  /** 比較した件数（本文に表示）。 */
   count: number;
   /** 分析完了時。 */
   onDone: () => void;
@@ -12,6 +14,12 @@ type ProcessingScreenProps = {
   isFetchDone?: boolean;
   /** APIエラーメッセージ */
   apiError?: string | null;
+  /** 好みが幅広く、追加の比較選択を促すか */
+  needsRefinement?: boolean;
+  /** 分析結果の説明文 */
+  interpretationMessage?: string;
+  /** 追加の好み診断へ進む */
+  onRefineMore?: () => void;
   /** 同じ入力のまま再試行 */
   onRetry?: () => void;
   /** 好み診断からやり直す */
@@ -28,19 +36,23 @@ export function ProcessingScreen({
   onDone,
   isFetchDone = false,
   apiError = null,
+  needsRefinement = false,
+  interpretationMessage = "",
+  onRefineMore,
   onRetry,
   onRestart,
   onGoBack,
   goBackLabel = "入力内容を変更する",
 }: ProcessingScreenProps) {
   const [progress, setProgress] = useState(0);
+  const showRefinePrompt = isFetchDone && !apiError && needsRefinement;
   const errorPresentation = useMemo(
     () => (apiError ? presentPlanError(apiError) : null),
     [apiError],
   );
 
   useEffect(() => {
-    if (apiError) return;
+    if (apiError || showRefinePrompt) return;
     const timer = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 95) {
@@ -52,15 +64,19 @@ export function ProcessingScreen({
     }, 150);
 
     return () => clearInterval(timer);
-  }, [apiError]);
+  }, [apiError, showRefinePrompt]);
 
   useEffect(() => {
+    if (showRefinePrompt) {
+      setProgress(100);
+      return;
+    }
     if (isFetchDone && !apiError) {
       setProgress(100);
       const timer = setTimeout(onDone, 600);
       return () => clearTimeout(timer);
     }
-  }, [isFetchDone, apiError, onDone]);
+  }, [isFetchDone, apiError, onDone, showRefinePrompt]);
 
   return (
     <div className="relative flex flex-1 flex-col justify-between overflow-hidden bg-(--page)">
@@ -115,6 +131,36 @@ export function ProcessingScreen({
                   最初からやり直す
                 </button>
               )}
+            </div>
+          </div>
+        ) : showRefinePrompt ? (
+          <div className="flex w-full max-w-[320px] flex-col items-center gap-6">
+            <div className="flex w-full items-end gap-1">
+              <AiGuideAvatar size={40} className="shrink-0" />
+              <AiGuideSpeechBubble>
+                <span className="text-[13px] leading-[1.6]">
+                  {interpretationMessage ||
+                    "好みがまだ幅広く見えます。あと少し選んでいただくと、よりあなたに合ったおすすめに絞れます。"}
+                </span>
+              </AiGuideSpeechBubble>
+            </div>
+            <div className="flex w-full flex-col gap-2.5">
+              {onRefineMore && (
+                <button
+                  type="button"
+                  onClick={onRefineMore}
+                  className={`${PRIMARY_BUTTON} px-6 py-3 text-[14px]`}
+                >
+                  もう少し選んで絞り込む
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onDone}
+                className={`${SECONDARY_BUTTON} px-6 py-3 text-[14px]`}
+              >
+                このままおすすめを見る
+              </button>
             </div>
           </div>
         ) : (

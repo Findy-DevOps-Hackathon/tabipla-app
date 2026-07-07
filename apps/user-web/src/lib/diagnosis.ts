@@ -19,7 +19,7 @@ export function markDiagnosisComplete(): void {
   }
 }
 
-/** 「好みをより詳しく設定する」（深掘り診断）を済ませたか。 */
+/** 「好み診断を追加で行う」（深掘り診断）を済ませたか。 */
 export function isDetailedDiagnosisComplete(): boolean {
   try {
     return localStorage.getItem(DETAILED_KEY) === "1";

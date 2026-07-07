@@ -68,6 +68,7 @@ type PersonalizedPlanResponse = {
   error?: string;
   recommendations?: PlanApiRecommendation[];
   result?: string;
+  needsRefinement?: boolean;
   total?: number;
   page?: number;
   limit?: number;
@@ -162,8 +163,8 @@ const HISTORY_STATE_KEY = "tabiplaNav";
 /**
  * tabipla ユーザー向け Web のメインフロー。
  *
- * ようこそ → 好み診断（スワイプ）→ 目的地選択 → 分析中 → おすすめ一覧、という
- * スワイプ型レコメンド体験をステップ状態機械で制御する（Figma デザイン準拠）。
+ * ようこそ → 好み診断（比較選択）→ 目的地選択 → 分析中 → おすすめ一覧、という
+ * レコメンド体験をステップ状態機械で制御する（Figma デザイン準拠）。
  */
 export default function App() {
   const initialSpotId = readInitialSpotIdFromUrl();
@@ -189,10 +190,13 @@ export default function App() {
   const [planTotal, setPlanTotal] = useState(readStoredPlanTotal);
   const [planPage, setPlanPage] = useState(1);
   const [planKey, setPlanKey] = useState("");
+  const planKeyRef = useRef(planKey);
+  planKeyRef.current = planKey;
   const [planLoadingMore, setPlanLoadingMore] = useState(false);
   const [isFetchDone, setIsFetchDone] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [planFetchKey, setPlanFetchKey] = useState(0);
+  const [planNeedsRefinement, setPlanNeedsRefinement] = useState(false);
   const [chatThreads, setChatThreads] = useState<
     Record<string, { role: "user" | "ai"; text: string; isError?: boolean; image?: string }[]>
   >({});
@@ -368,6 +372,7 @@ export default function App() {
   }, []);
 
   const refinePreferences = useCallback(() => {
+    setPlanNeedsRefinement(false);
     setSwipeDeck(refineCatalog.slice(0, SWIPE_LIMIT_REFINE));
     setRefining(true);
     setRunId((id) => id + 1);
@@ -415,6 +420,7 @@ export default function App() {
   const fetchPlanPage = useCallback(
     async (page: number, append: boolean) => {
       const destinations = getCurrentDestinations();
+      const currentPlanKey = planKeyRef.current;
       const res = await fetch(`${API_BASE}/v1/personalized/plan`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -426,7 +432,7 @@ export default function App() {
           destinations,
           page,
           limit: RECOMMENDATIONS_PAGE_SIZE,
-          ...(planKey ? { planKey } : {}),
+          ...(currentPlanKey ? { planKey: currentPlanKey } : {}),
         }),
       });
 
@@ -447,16 +453,20 @@ export default function App() {
       setPlanTotal(data.total ?? refreshed.length);
       setPlanPage(data.page ?? page);
       if (data.planKey) {
+        planKeyRef.current = data.planKey;
         setPlanKey(data.planKey);
       }
       if (!append && data.result) {
         setPlanMessage(data.result);
       }
+      if (!append) {
+        setPlanNeedsRefinement(Boolean(data.needsRefinement));
+      }
     },
-    [likes, likeWeights, nopes, travelMemory, planKey],
+    [likes, likeWeights, nopes, travelMemory],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: planFetchKey is an explicit retry trigger.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: step / planFetchKey の変化時のみ初回取得する。
   useEffect(() => {
     if (step !== "processing") return;
 
@@ -464,6 +474,8 @@ export default function App() {
     setIsFetchDone(false);
     setApiError(null);
     setPlanPage(1);
+    setPlanNeedsRefinement(false);
+    planKeyRef.current = "";
     setPlanKey("");
 
     async function fetchPlan() {
@@ -484,7 +496,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [step, planFetchKey, fetchPlanPage]);
+  }, [step, planFetchKey]);
 
   const loadMoreRecommendations = useCallback(async () => {
     if (planLoadingMore || recommendations.length >= planTotal) return;
@@ -663,6 +675,9 @@ export default function App() {
           }}
           isFetchDone={isFetchDone}
           apiError={apiError}
+          needsRefinement={planNeedsRefinement && !refining}
+          interpretationMessage={planMessage}
+          onRefineMore={refinePreferences}
           onRetry={retryPlanFetch}
           onRestart={beginSwipe}
           onGoBack={() => setStep(refining ? "recommendations" : "memory")}
