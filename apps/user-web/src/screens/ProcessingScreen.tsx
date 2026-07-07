@@ -140,7 +140,7 @@ export function ProcessingScreen({
               <AiGuideSpeechBubble>
                 <span className="text-[13px] leading-[1.6]">
                   {interpretationMessage ||
-                    "好みがまだ幅広く見えます。あと少し選んでいただくと、よりあなたに合ったおすすめに絞れます。"}
+                    "もう少し選んでいただければ、胸が高鳴るようなおすすめだけに絞れます。"}
                 </span>
               </AiGuideSpeechBubble>
             </div>

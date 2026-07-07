@@ -7,6 +7,7 @@ import {
   buildProfile,
   buildRecommendationReason,
   buildWeightedPreferenceVector,
+  resolveLikeWeight,
   type SpotEmbeddingRecord,
   type Swipes,
   summarizeProfile,
@@ -332,7 +333,7 @@ async function computeAndCachePlan(
 
   if (hasLikedEmbeddings && sw.likeWeights) {
     const weightSummary = sw.likes
-      .map((id) => `${id}:${Math.max(1, sw.likeWeights?.[id] ?? 1)}`)
+      .map((id) => `${id}:${resolveLikeWeight(sw.likeWeights?.[id])}`)
       .join(", ");
     console.log(`[personalizedPlan] Like 加重 weights: ${weightSummary}`);
   }

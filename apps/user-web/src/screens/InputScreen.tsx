@@ -276,7 +276,7 @@ export function InputScreen({ afterDiagnosis = false, onBack, onSearch }: InputS
               {afterDiagnosis
                 ? selectedPrefecture
                   ? `${selectedPrefecture}内で複数選択できます`
-                  : "行きたい地域を選んでください（同一都道府県内で複数選択可）"
+                  : "行きたい地域を選んでください"
                 : "市区町村または都道府県名を入力してください"}
             </p>
           </div>

@@ -3,26 +3,29 @@ import type { Spot } from "./contracts.js";
 import { extractThemesFromText } from "./themeRules.js";
 
 // ── 好みプロフィール ────────────────────────────────────
-// カテゴリ集計に加え、選択スポットの embedding ベクトルでも好みを解釈する。
-// サブテーマは themeRules.ts のカテゴリ別辞書から抽出する。
-
-const CAT_JP: Record<string, string> = {
-  nature: "自然",
-  gourmet: "グルメ",
-  history: "歴史・文化",
-};
+// 選択スポットの embedding ベクトルとサブテーマ（themeRules）で好みを解釈する。
+// 大カテゴリ（自然・歴史など）の集計は分析に使わない。
 
 const EMPTY_PROFILE_HINT = "まだ好みが少なめ（もう少し比較して選ぶと精度が上がります）";
 const MIN_LIKES_FOR_FOCUS = 3;
 /** 吹き出し・理由文に載せるサブテーマの上限 */
 export const BUBBLE_THEME_LIMIT = 2;
 const MAX_FOCUSED_THEMES = BUBBLE_THEME_LIMIT;
-const MAX_FOCUSED_CATEGORIES = 2;
 const MIN_THEME_COUNT_FOR_REFINE = 5;
-const MIN_CATEGORY_COUNT_FOR_REFINE = 3;
 const VECTOR_FOCUS_COHESION = 0.68;
 const VECTOR_SCATTER_COHESION = 0.55;
 const VECTOR_SUMMARY_TOP_K = 8;
+/** SwipeScreen の MAX_WINS_PER_SPOT と揃える */
+const MAX_COMPARE_WINS = 3;
+/** 3回選ばれたスポットは線形加重(3)より強く好みへ反映する */
+const TRIPLE_WIN_LIKE_WEIGHT = 4;
+
+/** 比較選択の勝ち数を、好みベクトル・テーマ集計用の重みに変換する。 */
+export function resolveLikeWeight(rawWins?: number): number {
+  const wins = Math.max(1, Math.floor(rawWins ?? 1));
+  if (wins >= MAX_COMPARE_WINS) return TRIPLE_WIN_LIKE_WEIGHT;
+  return wins;
+}
 
 type ScoredLabel = { label: string; score: number };
 
@@ -82,7 +85,6 @@ export interface Swipes {
 }
 
 export interface PreferenceProfile {
-  categoryScore: Record<string, number>;
   highlightScore: Record<string, number>;
   themeScore: Record<string, number>;
   likedIds: string[];
@@ -92,7 +94,6 @@ export interface PreferenceProfile {
 export type ProfileFocusAssessment = {
   focused: boolean;
   needsRefinement: boolean;
-  topCategories: string[];
   topThemes: string[];
   vectorCohesion: number | null;
   usedVectorSummary: boolean;
@@ -111,7 +112,7 @@ export function buildWeightedPreferenceVector(
     const embedding = embeddingsById.get(id)?.embedding;
     if (!embedding || embedding.length === 0) continue;
 
-    const weight = Math.max(1, likeWeights?.[id] ?? 1);
+    const weight = resolveLikeWeight(likeWeights?.[id]);
     totalWeight += weight;
     for (let i = 0; i < VECTOR_DIMS; i++) {
       vPref[i] += (embedding[i] ?? 0) * weight;
@@ -124,7 +125,6 @@ export function buildWeightedPreferenceVector(
 
 export function buildProfile(sw: Swipes, catalog: Spot[]): PreferenceProfile {
   const byId = new Map(catalog.map((spot) => [spot.id, spot]));
-  const categoryScore: Record<string, number> = {};
   const highlightScore: Record<string, number> = {};
   const themeScore: Record<string, number> = {};
   const bump = (scores: Record<string, number>, key: string, delta: number) => {
@@ -149,19 +149,16 @@ export function buildProfile(sw: Swipes, catalog: Spot[]): PreferenceProfile {
   for (const id of sw.likes) {
     const spot = byId.get(id);
     if (!spot) continue;
-    const weight = Math.max(1, sw.likeWeights?.[id] ?? 1);
-    bump(categoryScore, spot.category, weight);
+    const weight = resolveLikeWeight(sw.likeWeights?.[id]);
     bumpThemes(spot, weight);
   }
   for (const id of sw.nopes) {
     const spot = byId.get(id);
     if (!spot) continue;
-    bump(categoryScore, spot.category, -1);
     bumpThemes(spot, -1);
   }
 
   return {
-    categoryScore,
     highlightScore,
     themeScore,
     likedIds: [...sw.likes],
@@ -198,7 +195,7 @@ export function buildLikedEmbeddings(
     if (!embedding || embedding.length === 0) continue;
     liked.push({
       embedding,
-      weight: Math.max(1, sw.likeWeights?.[id] ?? 1),
+      weight: resolveLikeWeight(sw.likeWeights?.[id]),
     });
   }
   return liked;
@@ -243,7 +240,7 @@ export function summarizeVectorPreference(
   catalog: Spot[],
   embeddingsById: Map<string, SpotEmbeddingRecord>,
   nopedIds: string[],
-): { topCategories: ScoredLabel[]; topThemes: ScoredLabel[] } {
+): { topThemes: ScoredLabel[] } {
   const excluded = new Set(nopedIds);
   const nearest = catalog
     .filter((spot) => !excluded.has(spot.id))
@@ -261,12 +258,10 @@ export function summarizeVectorPreference(
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, VECTOR_SUMMARY_TOP_K);
 
-  const categoryScores: Record<string, number> = {};
   const themeScores: Record<string, number> = {};
 
   for (const { spot, record, similarity } of nearest) {
     const category = spot.category || record.category || "観光";
-    categoryScores[category] = (categoryScores[category] ?? 0) + similarity;
     for (const highlight of spot.highlights ?? record.highlights ?? []) {
       for (const theme of extractThemesFromText(highlight, category, spot.description)) {
         themeScores[theme] = (themeScores[theme] ?? 0) + similarity;
@@ -275,13 +270,8 @@ export function summarizeVectorPreference(
   }
 
   return {
-    topCategories: toScoredLabels(categoryScores, (key) => CAT_JP[key] ?? key),
     topThemes: toScoredLabels(themeScores),
   };
-}
-
-function topCategoriesWithScores(profile: PreferenceProfile): ScoredLabel[] {
-  return toScoredLabels(profile.categoryScore, (key) => CAT_JP[key] ?? key);
 }
 
 function topThemesWithScores(profile: PreferenceProfile): ScoredLabel[] {
@@ -290,32 +280,17 @@ function topThemesWithScores(profile: PreferenceProfile): ScoredLabel[] {
 
 function assessProfileFocusRules(profile: PreferenceProfile): {
   needsRefinement: boolean;
-  topCategories: string[];
   topThemes: string[];
 } {
-  const positiveCats = topCategoriesWithScores(profile);
   const positiveThemes = topThemesWithScores(profile);
 
   let needsRefinement = profile.likedIds.length < MIN_LIKES_FOR_FOCUS;
-  if (positiveCats.length >= MIN_CATEGORY_COUNT_FOR_REFINE) {
-    needsRefinement = true;
-  }
   if (positiveThemes.length >= MIN_THEME_COUNT_FOR_REFINE) {
     needsRefinement = true;
   }
 
-  const topCategories = positiveCats
-    .slice(0, 2)
-    .filter((entry, index, list) => {
-      if (index === 0) return true;
-      const top = list[0];
-      return top ? entry.score >= top.score * 0.6 : false;
-    })
-    .map((entry) => entry.label);
-
   return {
     needsRefinement,
-    topCategories,
     topThemes: [],
   };
 }
@@ -342,7 +317,6 @@ export function assessProfileFocus(
   vector?: VectorPreferenceContext,
 ): ProfileFocusAssessment {
   const ruleFallback = assessProfileFocusRules(profile);
-  let topCategories = ruleFallback.topCategories;
   let topThemes = ruleFallback.topThemes;
   let vectorCohesion: number | null = null;
   let usedVectorSummary = false;
@@ -354,10 +328,6 @@ export function assessProfileFocus(
       vector.embeddingsById,
       vector.nopedIds,
     );
-    if (summary.topCategories.length > 0) {
-      topCategories = pickFocusedLabels(summary.topCategories, MAX_FOCUSED_CATEGORIES, true);
-      usedVectorSummary = true;
-    }
     if (summary.topThemes.length > 0) {
       topThemes = pickFocusedLabels(summary.topThemes, MAX_FOCUSED_THEMES, true);
       usedVectorSummary = true;
@@ -389,7 +359,6 @@ export function assessProfileFocus(
   return {
     focused: !needsRefinement,
     needsRefinement,
-    topCategories,
     topThemes: limitThemesForDisplay(topThemes),
     vectorCohesion,
     usedVectorSummary,
@@ -401,40 +370,50 @@ export function summarizeProfile(
   assessment?: ProfileFocusAssessment,
 ): string {
   const resolved = assessment ?? assessProfileFocus(profile);
-  const parts: string[] = [];
-  if (resolved.topCategories.length) {
-    parts.push(`カテゴリ: ${resolved.topCategories.join("・")}`);
+  const themes = limitThemesForDisplay(resolved.topThemes);
+  if (themes.length) {
+    return `心が動く体験: ${themes.join("・")}`;
   }
-  if (resolved.topThemes.length) {
-    parts.push(`重視しそうな体験: ${limitThemesForDisplay(resolved.topThemes).join("・")}`);
-  }
-  return parts.length ? parts.join(" / ") : EMPTY_PROFILE_HINT;
+  return EMPTY_PROFILE_HINT;
 }
 
-function formatCategoryPreference(categories: string[]): string | null {
-  if (categories.length === 0) return null;
-  return `${categories.join("・")}に近い体験を多く選んでいただきました`;
+function formatThemesLabel(themes: string[]): string {
+  if (themes.length === 0) return "";
+  if (themes.length === 1) return themes[0]!;
+  if (themes.length === 2) return `${themes[0]}と${themes[1]}`;
+  return themes.join("・");
 }
 
 function formatThemePreference(themes: string[], usedVectorSummary: boolean): string | null {
   const limited = limitThemesForDisplay(themes);
   if (limited.length === 0) return null;
+  const label = formatThemesLabel(limited);
   if (usedVectorSummary) {
-    return `内容の似たスポットでは、${limited.join("・")}の方向に好みが集まっていました`;
+    if (limited.length === 1) {
+      return `${label}に、心がふっと踊るような体験がお好きなんですね`;
+    }
+    return `${label}…どちらも「行ってみたい」と思わせてくれる、そんな旅の感性を感じました`;
   }
-  return `${limited.join("・")}の体験に特に惹かれる傾向がありました`;
+  if (limited.length === 1) {
+    return `${label}の時間が、あなたには特別に響きそうです`;
+  }
+  return `${label}、どちらも心惹かれる選び方でしたね`;
 }
 
 function formatBroadPreferenceHint(assessment: ProfileFocusAssessment): string {
-  if (assessment.topCategories.length === 0) {
-    return "いくつかの方向に関心がありそうですが、";
+  const themes = limitThemesForDisplay(assessment.topThemes);
+  if (themes.length === 0) {
+    return "わくわくする体験、いろいろ広がりそうですが、";
   }
-  const label = assessment.topCategories.join("・");
+  const label = formatThemesLabel(themes);
   if (assessment.vectorCohesion !== null && assessment.vectorCohesion < VECTOR_SCATTER_COHESION) {
-    return `選び方の内容がまだ${label}など複数の方向に分散しているようですが、`;
+    return `${label}など、ときめきがいろいろ散らばっている感じですが、`;
   }
-  return `${label}などに関心がありそうですが、`;
+  return `${label}にも心が動きそうですが、`;
 }
+
+const RECOMMENDATION_CLOSING =
+  "そんなあなた向けのおすすめを、ここに集めました。私の視点でのおすすめスポットも載せました。";
 
 /** 好み診断結果の解釈と旅の要望から、ユーザー向けのおすすめ理由文を組み立てる。 */
 export function buildRecommendationReason(
@@ -449,26 +428,21 @@ export function buildRecommendationReason(
 
   if (resolved.needsRefinement && hasProfile) {
     const hint = formatBroadPreferenceHint(resolved);
-    return `${hint}好みがまだ幅広く見えます。あと少し比較して選んでいただくと、よりあなたに合ったおすすめに絞れます。`;
+    return `${hint}もう少し選んでいただければ、胸が高鳴るようなおすすめだけに絞れます。`;
   }
 
-  const interpretation = [
-    formatCategoryPreference(resolved.topCategories),
-    formatThemePreference(resolved.topThemes, resolved.usedVectorSummary),
-  ]
-    .filter((part): part is string => Boolean(part))
-    .join("。");
+  const interpretation = formatThemePreference(resolved.topThemes, resolved.usedVectorSummary);
 
   if (hasProfile && memory) {
-    const base = interpretation || "好み診断の回答から好みの傾向を読み取りました";
-    return `${base}。さらに「${memory}」というご要望も踏まえて、おすすめを選びました。`;
+    const base = interpretation || "選び方から、あなたの旅への想いが伝わってきました";
+    return `${base}。「${memory}」という気持ちも込めて、${RECOMMENDATION_CLOSING}`;
   }
   if (hasProfile) {
-    const base = interpretation || "好み診断の回答から好みの傾向を読み取りました";
-    return `${base}。そのような体験を中心におすすめを選びました。`;
+    const base = interpretation || "選び方から、あなたの旅への想いが伝わってきました";
+    return `${base}。${RECOMMENDATION_CLOSING}`;
   }
   if (memory) {
-    return `「${memory}」というご要望を踏まえて、合いそうなスポットを選びました。`;
+    return `「${memory}」という想いに応えたいと思い、あなた向けのスポットを選びました。`;
   }
-  return "人気の観光スポットを中心におすすめしています。";
+  return "まずは楽しめそうな場所を、わくわくする気持ちのまま集めてみました。";
 }
