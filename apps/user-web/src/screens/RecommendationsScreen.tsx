@@ -127,7 +127,7 @@ export function RecommendationsScreen({
             <div className="flex flex-col gap-1">
               <p className="text-[14px] font-bold text-[#0f172a]">好み診断でさらに絞り込む</p>
               <p className="text-[12px] leading-[1.6] text-[#64748b]">
-                スワイプで好みを教えていただくと、あなたに合ったおすすめを表示できます。
+                好み診断で比較して選んでいただくと、あなたに合ったおすすめを表示できます。
               </p>
             </div>
             <button
@@ -283,7 +283,7 @@ export function RecommendationsScreen({
                         className={`${PRIMARY_BUTTON} relative h-8 shrink-0 overflow-hidden py-8 text-[15px] tracking-[1.6px]`}
                       >
                         <CardsIcon className="pointer-events-none absolute left-4 top-3/5 size-24 -translate-y-1/2 text-white/30 opacity-50" />
-                        <span className="relative text-shadow-md">好みをより詳しく設定する</span>
+                        <span className="relative text-shadow-md">好み診断を追加で行う</span>
                       </button>
                     </div>
                   )}

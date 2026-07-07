@@ -115,7 +115,7 @@ export const swipePageHtml = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>旅サキ — 好みスワイプ</title>
+<title>旅サキ — 好み診断</title>
 <style>
   :root{ --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5a6573; --line:#e3e7ee;
     --accent:#2563eb; --accent-soft:#eaf1ff; --like:#e11d6b; --nope:#6b7280; }
@@ -191,7 +191,7 @@ export const swipePageHtml = `<!DOCTYPE html>
 <div class="wrap">
   <header>
     <h1>旅サキ</h1>
-    <p class="sub">好きな観光地を♥／✕でスワイプ → あなた向けのおすすめ</p>
+    <p class="sub">好きな観光地を♥／✕で比較して選ぶ → あなた向けのおすすめ</p>
   </header>
   <div id="stage">
     <div id="deck"></div>
@@ -201,7 +201,7 @@ export const swipePageHtml = `<!DOCTYPE html>
       <button id="resultBtn" class="seebtn" style="display:none">結果を見る →</button>
       <button id="likeBtn" class="rnd like" title="行きたい">♥</button>
     </div>
-    <div class="hint">♥=行きたい／✕=興味なし（数件スワイプすると精度が上がります）　<a href="/dev">開発用パネル</a></div>
+    <div class="hint">♥=行きたい／✕=興味なし（数件比較して選ぶと精度が上がります）　<a href="/dev">開発用パネル</a></div>
   </div>
   <div id="result" style="display:none"></div>
 </div>
@@ -255,7 +255,7 @@ export const swipePageHtml = `<!DOCTYPE html>
       .then(function(r){return r.json();}).then(renderResult)
       .catch(function(e){ R.innerHTML='<div class="err">エラー: '+esc(e.message)+'</div>'+resetHtml(); bindReset(); });
   }
-  function resetHtml(){ return '<div style="text-align:center;margin-top:14px"><button id="resetBtn" class="seebtn">もう一度スワイプする</button></div>'; }
+  function resetHtml(){ return '<div style="text-align:center;margin-top:14px"><button id="resetBtn" class="seebtn">もう一度選び直す</button></div>'; }
   function bindReset(){ var b=$("resetBtn"); if(b) b.onclick=load; }
   function renderResult(d){
     if(d.error){ $("result").innerHTML='<div class="err">'+esc(d.error)+'</div>'+resetHtml(); bindReset(); return; }

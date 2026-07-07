@@ -102,6 +102,7 @@ echo "Building ${IMAGE} with Cloud Build (${REGION})..."
 gcloud builds submit "$ROOT" \
   --project="$PROJECT" \
   --region="$REGION" \
+  --default-buckets-behavior=regional-user-owned-bucket \
   --config=services/backend-api/cloudbuild.yaml \
   --substitutions=_IMAGE="${IMAGE}"
 

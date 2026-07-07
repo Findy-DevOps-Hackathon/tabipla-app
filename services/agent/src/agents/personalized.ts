@@ -1,6 +1,17 @@
 import { createElasticsearchClient, type SpotDocument, VECTOR_DIMS } from "@tabipla/search-core";
 import type { Spot } from "../contracts.js";
-import { buildProfile, type Swipes, summarizeProfile } from "../personalize.js";
+import {
+  assessProfileFocus,
+  buildEmbeddingRecordMap,
+  buildLikedEmbeddings,
+  buildProfile,
+  buildRecommendationReason,
+  buildWeightedPreferenceVector,
+  resolveLikeWeight,
+  type SpotEmbeddingRecord,
+  type Swipes,
+  summarizeProfile,
+} from "../personalize.js";
 import {
   buildPlanCacheKey,
   type CachedPlanRank,
@@ -24,6 +35,7 @@ export interface PersonalizedResult {
   profileSummary: string;
   recommendations: Recommendation[];
   result: string;
+  needsRefinement: boolean;
   total: number;
   page: number;
   limit: number;
@@ -238,27 +250,18 @@ function rankedToCachedItems(rankedAll: RankedCandidate[]): CachedRankedItem[] {
   });
 }
 
-function buildWeightedPrefVector(
-  likes: string[],
-  likeWeights: Record<string, number> | undefined,
-  esById: Map<string, EsSpotRecord>,
-): number[] | null {
-  let totalWeight = 0;
-  const vPref = new Array(VECTOR_DIMS).fill(0);
-
-  for (const id of likes) {
-    const embedding = esById.get(id)?.embedding;
-    if (!embedding || embedding.length === 0) continue;
-
-    const weight = Math.max(1, likeWeights?.[id] ?? 1);
-    totalWeight += weight;
-    for (let i = 0; i < VECTOR_DIMS; i++) {
-      vPref[i] += (embedding[i] ?? 0) * weight;
-    }
+function toEsEmbeddingRecords(esById: Map<string, EsSpotRecord>): Map<string, SpotEmbeddingRecord> {
+  const map = new Map<string, SpotEmbeddingRecord>();
+  for (const [id, record] of esById) {
+    map.set(id, {
+      embedding: record.embedding,
+      category: Array.isArray(record.category)
+        ? String(record.category[0] ?? "")
+        : String(record.category ?? ""),
+      highlights: Array.isArray(record.highlights) ? (record.highlights as string[]) : undefined,
+    });
   }
-
-  if (totalWeight === 0) return null;
-  return l2Normalize(vPref.map((v) => v / totalWeight));
+  return map;
 }
 
 function logRankedScores(
@@ -289,11 +292,19 @@ function sliceCachedPlan(cached: CachedPlanRank, page: number, limit: number): P
     profileSummary: cached.profileSummary,
     recommendations: pageItems.map(({ similarity: _s, ...rec }) => rec),
     result: page === DEFAULT_PAGE ? cached.result : "",
+    needsRefinement: page === DEFAULT_PAGE ? cached.needsRefinement : false,
     total: cached.ranked.length,
     page,
     limit,
     planKey: cached.planKey,
   };
+}
+
+function introMentionsSpotNames(text: string, spots: SpotDocument[]): boolean {
+  return spots.some((spot) => {
+    const name = spot.name?.trim();
+    return Boolean(name && name.length >= 2 && text.includes(name));
+  });
 }
 
 async function computeAndCachePlan(
@@ -303,18 +314,26 @@ async function computeAndCachePlan(
   planKey: string,
 ): Promise<CachedPlanRank> {
   const profile = buildProfile(sw, catalogSpots);
-  const profileSummary = summarizeProfile(profile);
 
   const lookupIds = [...new Set([...sw.likes, ...catalogSpots.map((s) => s.id)])];
   const esById = await fetchSpotsFromEsByIds(lookupIds);
+  const embeddingsById = buildEmbeddingRecordMap(catalogSpots, toEsEmbeddingRecords(esById));
 
-  const vPrefFromLikes = buildWeightedPrefVector(sw.likes, sw.likeWeights, esById);
+  const vPrefFromLikes = buildWeightedPreferenceVector(sw.likes, sw.likeWeights, embeddingsById);
+  const focusAssessment = assessProfileFocus(profile, {
+    preferenceVector: vPrefFromLikes,
+    likedEmbeddings: buildLikedEmbeddings(sw, embeddingsById),
+    catalog: catalogSpots,
+    embeddingsById,
+    nopedIds: sw.nopes,
+  });
+  const profileSummary = summarizeProfile(profile, focusAssessment);
   const vPref = vPrefFromLikes ?? new Array(VECTOR_DIMS).fill(0);
   const hasLikedEmbeddings = vPrefFromLikes !== null;
 
   if (hasLikedEmbeddings && sw.likeWeights) {
     const weightSummary = sw.likes
-      .map((id) => `${id}:${Math.max(1, sw.likeWeights?.[id] ?? 1)}`)
+      .map((id) => `${id}:${resolveLikeWeight(sw.likeWeights?.[id])}`)
       .join(", ");
     console.log(`[personalizedPlan] Like 加重 weights: ${weightSummary}`);
   }
@@ -357,11 +376,17 @@ async function computeAndCachePlan(
       (catalogSpots.length > 0
         ? ` (目的地内 ${catalogSpots.length} 件を全評価)`
         : " (ES全件 k-NN)") +
-      ` → cache key ${planKey.slice(0, 12)}…`,
+      ` → cache key ${planKey.slice(0, 12)}…` +
+      ` / needsRefinement=${focusAssessment.needsRefinement}` +
+      (focusAssessment.vectorCohesion !== null
+        ? ` / vectorCohesion=${focusAssessment.vectorCohesion.toFixed(3)}`
+        : ""),
   );
 
   let result = "";
+  const interpretedReason = buildRecommendationReason(profile, travelMemory, focusAssessment);
   if (rankedAll.length > 0) {
+    result = interpretedReason;
     const introPool = rankedAll
       .slice(0, LLM_INTRO_POOL)
       .map((entry) => toIntroSpot(entry.candidate));
@@ -371,13 +396,15 @@ async function computeAndCachePlan(
         travelMemory,
         spots: introPool,
       });
-      result = introResult.result || "おすすめの観光スポットです。";
+      const llmResult = introResult.result?.trim();
+      if (llmResult && !introMentionsSpotNames(llmResult, introPool)) {
+        result = llmResult;
+      }
     } catch (error) {
-      console.error("[personalized] 紹介文生成に失敗しました。フォールバックします:", error);
-      result = `${rankedAll
-        .slice(0, 3)
-        .map((entry) => String(entry.candidate.name ?? ""))
-        .join("、")}などがおすすめです。`;
+      console.error(
+        "[personalized] 理由文の LLM 生成に失敗しました。ルールベースの解釈文を使用します:",
+        error,
+      );
     }
   } else {
     result = "好みに合う観光地が見つかりませんでした。";
@@ -387,6 +414,7 @@ async function computeAndCachePlan(
     planKey,
     profileSummary,
     result,
+    needsRefinement: focusAssessment.needsRefinement,
     ranked: rankedToCachedItems(rankedAll),
     createdAt: Date.now(),
   };
@@ -433,6 +461,7 @@ export async function personalizedPlan(
       profileSummary: cachedEntry.profileSummary,
       recommendations: [],
       result: cachedEntry.result,
+      needsRefinement: cachedEntry.needsRefinement,
       total: 0,
       page,
       limit,

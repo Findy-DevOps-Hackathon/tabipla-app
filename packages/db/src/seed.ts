@@ -41,8 +41,8 @@ async function main(): Promise<void> {
       });
     }
 
-    const imageCount = await installSeedImages(bundle.spots);
-    const rows = await upsertSpots(db, bundle.spots);
+    const imageInstall = await installSeedImages(bundle.spots);
+    const rows = await upsertSpots(db, imageInstall.spots);
 
     for (const coupon of bundle.coupons) {
       await upsertCoupon(db, coupon);
@@ -55,7 +55,7 @@ async function main(): Promise<void> {
     const { counts } = bundle.manifest;
     console.log(
       `[db] seed 完了: 自治体 ${counts.municipalities} 件、管理ユーザー ${counts.adminUsers} 件、` +
-        `スポット ${rows.length} 件（画像 ${imageCount} 件）、クーポン ${counts.coupons} 件、` +
+        `スポット ${rows.length} 件（画像 ${imageInstall.installed} 件/${imageInstall.target}）、クーポン ${counts.coupons} 件、` +
         `蘊蓄 ${counts.unchikuFacts} 件を upsert しました。`,
     );
     for (const adminUser of bundle.adminUsers) {

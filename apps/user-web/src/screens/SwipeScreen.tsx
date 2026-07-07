@@ -4,22 +4,110 @@ import { SpotImage } from "../components/SpotImage.tsx";
 import type { SwipeSpot } from "../data/spots.ts";
 import { spotPreviewText } from "../lib/spotMapper.ts";
 
+const MAX_WINS_PER_SPOT = 3;
+
+type SwipeMatch = {
+  championId: string;
+  challengerId: string;
+  searchIndex: number;
+};
+
+type HistoryEntry = SwipeMatch & {
+  wins: Record<string, number>;
+  roundNumber: number;
+};
+
 type SwipeScreenProps = {
   spots: SwipeSpot[];
   /** 全ラウンド完了時。好みと判定したスポット ID と勝ち数を渡す。 */
   onComplete: (result: { likedIds: string[]; wins: Record<string, number> }) => void;
-  /** 「好みをより詳しく設定する」からの詳細設定ラウンドか。見出し表示が変わる。 */
+  /** 「好み診断を追加で行う」からの詳細設定ラウンドか。見出し表示が変わる。 */
   refine?: boolean;
   /** 中止ボタン押下時。比較をやめて前の画面へ戻る。 */
   onCancel: () => void;
 };
 
-type HistoryEntry = {
-  roundIndex: number;
-  championId: string;
-  wins: Record<string, number>;
-  winnerId: string;
-};
+function isRetired(spotId: string, wins: Record<string, number>): boolean {
+  return (wins[spotId] ?? 0) >= MAX_WINS_PER_SPOT;
+}
+
+function createInitialMatch(spots: SwipeSpot[]): SwipeMatch | null {
+  if (spots.length < 2) return null;
+  const champion = spots[0];
+  const challenger = spots[1];
+  if (!champion || !challenger) return null;
+  return { championId: champion.id, challengerId: challenger.id, searchIndex: 2 };
+}
+
+function findNextChallenger(
+  spots: SwipeSpot[],
+  championId: string,
+  startIndex: number,
+  wins: Record<string, number>,
+): SwipeSpot | null {
+  for (let index = startIndex; index < spots.length; index++) {
+    const spot = spots[index];
+    if (!spot || spot.id === championId || isRetired(spot.id, wins)) continue;
+    return spot;
+  }
+  return null;
+}
+
+function findFreshPair(
+  spots: SwipeSpot[],
+  startIndex: number,
+  wins: Record<string, number>,
+): { top: SwipeSpot; bottom: SwipeSpot; nextIndex: number } | null {
+  let first: SwipeSpot | null = null;
+  for (let index = startIndex; index < spots.length; index++) {
+    const spot = spots[index];
+    if (!spot || isRetired(spot.id, wins)) continue;
+    if (!first) {
+      first = spot;
+      continue;
+    }
+    return { top: first, bottom: spot, nextIndex: index + 1 };
+  }
+  return null;
+}
+
+/** 勝者決定後の次の対戦カードを決める。3勝したスポットは退場し、以降は別ペアを組む。 */
+function advanceAfterPick(
+  spots: SwipeSpot[],
+  winnerId: string,
+  wins: Record<string, number>,
+  searchIndex: number,
+): SwipeMatch | null {
+  const winnerWins = wins[winnerId] ?? 0;
+
+  if (winnerWins >= MAX_WINS_PER_SPOT) {
+    const fresh = findFreshPair(spots, searchIndex, wins);
+    if (!fresh) return null;
+    return {
+      championId: fresh.top.id,
+      challengerId: fresh.bottom.id,
+      searchIndex: fresh.nextIndex,
+    };
+  }
+
+  const challenger = findNextChallenger(spots, winnerId, searchIndex, wins);
+  if (challenger) {
+    const challengerIndex = spots.findIndex((spot) => spot.id === challenger.id);
+    return {
+      championId: winnerId,
+      challengerId: challenger.id,
+      searchIndex: Math.max(searchIndex, challengerIndex + 1),
+    };
+  }
+
+  const fresh = findFreshPair(spots, searchIndex, wins);
+  if (!fresh) return null;
+  return {
+    championId: fresh.top.id,
+    challengerId: fresh.bottom.id,
+    searchIndex: fresh.nextIndex,
+  };
+}
 
 /** 勝ち数上位（同数は元の並び順）から好み候補 ID を返す。 */
 function computeLikedIds(spots: SwipeSpot[], wins: Record<string, number>): string[] {
@@ -111,9 +199,12 @@ function ComparisonCard({
 
 /** フロー 3: 2つのスポットを比較して好みを伝える画面。 */
 export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: SwipeScreenProps) {
-  const totalRounds = Math.max(0, spots.length - 1);
-  const [roundIndex, setRoundIndex] = useState(0);
-  const [championId, setChampionId] = useState(() => spots[0]?.id ?? "");
+  const initialMatch = createInitialMatch(spots);
+  const totalRounds = Math.max(1, spots.length - 1);
+  const [roundNumber, setRoundNumber] = useState(1);
+  const [championId, setChampionId] = useState(() => initialMatch?.championId ?? "");
+  const [challengerId, setChallengerId] = useState(() => initialMatch?.challengerId ?? "");
+  const [searchIndex, setSearchIndex] = useState(() => initialMatch?.searchIndex ?? 0);
   const [wins, setWins] = useState<Record<string, number>>({});
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [locked, setLocked] = useState(false);
@@ -124,8 +215,8 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
   const completedRef = useRef(false);
   const hintTimerRef = useRef<number | null>(null);
 
-  const challenger = spots[roundIndex + 1];
-  const champion = spots.find((s) => s.id === championId);
+  const champion = spots.find((spot) => spot.id === championId);
+  const challenger = spots.find((spot) => spot.id === challengerId);
   const currentTop = champion;
   const currentBottom = challenger;
 
@@ -169,19 +260,28 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
     setPick({ winnerId, loserId });
 
     const nextWins = { ...wins, [winnerId]: (wins[winnerId] ?? 0) + 1 };
-    const nextRound = roundIndex + 1;
-    const isLast = nextRound >= totalRounds;
+    const nextRoundNumber = roundNumber + 1;
+    const isLastRound = roundNumber >= totalRounds;
 
-    setHistory((prev) => [...prev, { roundIndex, championId, wins, winnerId }]);
+    setHistory((prev) => [...prev, { championId, challengerId, searchIndex, wins, roundNumber }]);
 
     window.setTimeout(() => {
-      if (isLast) {
+      if (isLastRound) {
         finish(nextWins);
         return;
       }
+
+      const nextMatch = advanceAfterPick(spots, winnerId, nextWins, searchIndex);
+      if (!nextMatch) {
+        finish(nextWins);
+        return;
+      }
+
       setWins(nextWins);
-      setChampionId(winnerId);
-      setRoundIndex(nextRound);
+      setChampionId(nextMatch.championId);
+      setChallengerId(nextMatch.challengerId);
+      setSearchIndex(nextMatch.searchIndex);
+      setRoundNumber(nextRoundNumber);
       setPick(null);
       setLocked(false);
       playHint();
@@ -195,9 +295,11 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
 
     completedRef.current = false;
     setHistory((prev) => prev.slice(0, -1));
-    setRoundIndex(last.roundIndex);
     setChampionId(last.championId);
+    setChallengerId(last.challengerId);
+    setSearchIndex(last.searchIndex);
     setWins(last.wins);
+    setRoundNumber(last.roundNumber);
     setPick(null);
     setLocked(false);
     playHint();
@@ -211,7 +313,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
     );
   }
 
-  const progress = totalRounds > 0 ? ((roundIndex + 1) / totalRounds) * 100 : 0;
+  const progress = totalRounds > 0 ? (roundNumber / totalRounds) * 100 : 0;
   const canUndo = history.length > 0 && !locked;
 
   return (
@@ -231,7 +333,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
             </div>
             <div className="flex items-center gap-3">
               <p className="text-[13px] text-[#64748b]">
-                {Math.min(roundIndex + 1, totalRounds)} / {totalRounds}
+                {Math.min(roundNumber, totalRounds)} / {totalRounds}
               </p>
               <button
                 type="button"

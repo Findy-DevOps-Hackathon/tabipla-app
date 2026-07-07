@@ -4,6 +4,7 @@ set -euo pipefail
 # Cloud SQL Auth Proxy 経由で開発用管理ユーザー等を seed する。
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CREDS_FILE="$ROOT/infra/cloud-sql/.credentials"
+GCS_CREDS="$ROOT/infra/gcs/.credentials"
 
 if [[ ! -f "$CREDS_FILE" ]]; then
   echo "先に bash infra/cloud-sql/setup.sh を実行してください" >&2
@@ -12,6 +13,13 @@ fi
 
 # shellcheck disable=SC1090
 source "$CREDS_FILE"
+
+if [[ -f "$GCS_CREDS" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$GCS_CREDS"
+  set +a
+fi
 
 PROXY_BIN="${CLOUD_SQL_PROXY_BIN:-cloud-sql-proxy}"
 PROXY_PORT="${CLOUD_SQL_PROXY_PORT:-5434}"

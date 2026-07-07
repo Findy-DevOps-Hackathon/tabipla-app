@@ -1028,7 +1028,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
 
     if (dbRows.length === 0) {
       return {
-        profileSummary: "まだ好みが少なめ（もう少しスワイプすると精度が上がります）",
+        profileSummary: "まだ好みが少なめ（もう少し比較して選ぶと精度が上がります）",
         recommendations: [],
         result: `${destinations.map((dest) => dest.area).join("・")}の観光スポットが登録されていません。`,
         total: 0,
