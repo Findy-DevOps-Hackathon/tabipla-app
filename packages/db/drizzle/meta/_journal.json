@@ -66,6 +66,13 @@
       "breakpoints": true
     },
     {
+      "idx": 9,
+      "version": "7",
+      "when": 1783300000000,
+      "tag": "0009_legal_franklin_storm",
+      "breakpoints": true
+    },
+    {
       "idx": 10,
       "version": "7",
       "when": 1783400000000,
