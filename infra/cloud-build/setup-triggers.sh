@@ -141,7 +141,7 @@ repositoryEventConfig:
   repository: ${REPO_RESOURCE}
   pullRequest:
     branch: ${MAIN_BRANCH}
-    commentControl: COMMENTS_ENABLED
+    commentControl: COMMENTS_DISABLED
 serviceAccount: ${SERVICE_ACCOUNT}
 EOF
   echo "$out"
