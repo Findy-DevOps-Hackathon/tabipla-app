@@ -1,8 +1,8 @@
 import { createElasticsearchClient, searchCandidateSpots } from "@tabipla/search-core";
 import { embedText } from "../agents/embedding.js";
-import { mapSpotDocumentToAgentSpot } from "../fixtures/spots.js";
 import type { GetUnchikuSourceFn, SearchFn, TravelTimesFn } from "../contracts.js";
-import { fetchSpotFactsFromBackend, backendApiBase } from "./spotFacts.js";
+import { mapSpotDocumentToAgentSpot } from "../fixtures/spots.js";
+import { backendApiBase, fetchSpotFactsFromBackend } from "./spotFacts.js";
 
 /** 同一リクエスト内で backend から渡された facts をツール呼び出しでも返す。 */
 let pendingAskFacts: Map<string, string[]> | null = null;
@@ -44,7 +44,8 @@ export const searchEs: SearchFn = async (input) => {
   const size = input.k ?? 8;
   const query = input.query?.trim() || undefined;
   const embedding = query ? await embedText(query, { taskType: "RETRIEVAL_QUERY" }) : undefined;
-  const esCategories = input.category?.flatMap((category) => AGENT_TO_ES_CATEGORIES[category] ?? []) ?? [];
+  const esCategories =
+    input.category?.flatMap((category) => AGENT_TO_ES_CATEGORIES[category] ?? []) ?? [];
 
   const results = await searchCandidateSpots(client, {
     query,

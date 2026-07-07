@@ -459,6 +459,4 @@ app.post("/v1/generate-spot-image", async (c) => {
 
 const port = Number(process.env.PORT ?? 8080);
 serve({ fetch: app.fetch, port });
-console.log(
-  `agent listening on http://localhost:${port}`,
-);
+console.log(`agent listening on http://localhost:${port}`);
