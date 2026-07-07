@@ -27,9 +27,21 @@ sync_db 5432 "Homebrew PostgreSQL"
 sync_db 5433 "Docker PostgreSQL"
 
 echo ""
-echo "=== Elasticsearch reindex (backend-api .env の DB) ==="
+echo "=== Elasticsearch（index 再作成 + reindex + embedding）==="
+if ! curl -sf http://localhost:9200 >/dev/null; then
+  echo "Elasticsearch が起動していません。先に以下を実行してください:"
+  echo "  pnpm docker:up"
+  exit 1
+fi
+
+curl -s -X DELETE "http://localhost:9200/spots" >/dev/null 2>&1 || true
 pnpm -C "$ROOT/packages/db" build
 pnpm -C "$ROOT/services/backend-api" reindex
+pnpm -C "$ROOT/services/backend-api" embed-spots
 
+echo ""
+echo "=== 動作確認 ==="
+echo "  curl http://localhost:3001/health"
+echo "  curl -G 'http://localhost:3001/search' --data-urlencode 'q=能登' --data-urlencode 'size=5'"
 echo ""
 echo "Local sync complete."
