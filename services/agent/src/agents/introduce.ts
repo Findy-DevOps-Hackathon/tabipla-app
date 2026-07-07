@@ -47,7 +47,6 @@ export type AskSpotContext = {
   name: string;
   description?: string;
   highlights?: string[];
-  tags?: string[];
   area?: string;
   prefecture?: string;
   address?: string;
@@ -70,31 +69,7 @@ function formatFactsBlock(facts: string[]): string {
   return facts.map((f) => `- ${f}`).join("\n");
 }
 
-function buildMockIntroduceAnswer(input: MultimodalInput): string {
-  const name = input.spot?.name ?? input.spotId;
-  const question = input.text?.trim() || "このスポットについて教えてください";
-  const facts = input.facts ?? [];
-
-  if (facts.length === 0) {
-    return (
-      `【ローカルモック】${name} についての「${question}」です。\n` +
-      "backend-api (3001) が起動しているか、DB にスポットが登録されているか確認してください。\n" +
-      "Gemini 応答は services/agent/.env で USE_MOCK=0 にしてください。"
-    );
-  }
-
-  const body = facts.slice(0, 6).join("\n\n");
-  return (
-    `${name}について、登録情報からお答えします。\n\n${body}\n\n` +
-    "※ ローカルモック（USE_MOCK=1）。自然な会話応答は USE_MOCK=0 + gcloud auth application-default login が必要です。"
-  );
-}
-
 export async function askIntroduce(input: MultimodalInput, userId = "demo"): Promise<string> {
-  if (process.env.USE_MOCK !== "0") {
-    return buildMockIntroduceAnswer(input);
-  }
-
   const facts = input.facts ?? [];
   if (facts.length > 0) {
     setPendingAskFacts(input.spotId, facts);

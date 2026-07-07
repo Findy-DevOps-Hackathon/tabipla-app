@@ -13,7 +13,12 @@ type TokenPayload = AdminAuthUser & {
 };
 
 function getSecret(): string {
-  return process.env.ADMIN_JWT_SECRET ?? "tabipla-dev-admin-secret";
+  const secret = process.env.ADMIN_JWT_SECRET?.trim();
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("ADMIN_JWT_SECRET is required in production.");
+  }
+  return "tabipla-dev-admin-secret";
 }
 
 function encodePayload(payload: TokenPayload): string {
@@ -75,5 +80,10 @@ export function extractBearerToken(authorization?: string): string | null {
 /** 管理画面 API かどうか（検索 API は除外）。 */
 export function isAdminApiPath(url: string): boolean {
   const path = url.split("?")[0] ?? url;
-  return path === "/geocode" || path.startsWith("/places/") || path.startsWith("/spots");
+  return (
+    path === "/geocode" ||
+    path === "/indices" ||
+    path.startsWith("/places/") ||
+    path.startsWith("/spots")
+  );
 }

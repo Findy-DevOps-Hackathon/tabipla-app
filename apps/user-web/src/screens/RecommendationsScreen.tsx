@@ -15,8 +15,6 @@ type RecommendationsScreenProps = {
   destinationArea?: string;
   /** 好み診断を完了済みか。 */
   diagnosisComplete: boolean;
-  /** ユーザーの ID。 */
-  userId: string;
   /** 「好み診断を開始する」タップ時。 */
   onStartDiagnosis: () => void;
   /** 「好みを再学習する」タップ時。 */
@@ -25,48 +23,15 @@ type RecommendationsScreenProps = {
   onGoHome: () => void;
   /** スポット詳細を開く。 */
   onOpenSpot: (recommendation: Recommendation) => void;
-  /** AI がまとめた好みの概要 */
-  profileSummary?: string;
-  /** おすすめが空のときに表示する補足メッセージ */
-  emptyMessage?: string;
+  /** AI が生成したおすすめ紹介文（API の result） */
+  aiIntroMessage?: string;
+  /** 診断後: API に未読込のおすすめが残っているか。 */
+  hasMoreRecommendations?: boolean;
+  /** 診断後: 次ページ読み込み中。 */
+  loadingMoreRecommendations?: boolean;
+  /** 診断後: 次ページを API から取得。 */
+  onLoadMoreRecommendations?: () => void;
 };
-
-/**
- * AI が生成した好み概要文字列を、自然な1文の説明に組み立てる。
- * 例: "カテゴリ: 歴史・自然 / 好みの要素: 絶景・ワイン / 価格感: ¥¥前後まで" →
- *     "歴史・自然 が好みの傾向で、絶景・ワイン といった要素に惹かれるようです。予算は ¥¥前後まで が目安です。"
- * 構造化できない場合は元の文字列をそのまま返す。
- */
-function buildPreferenceSentence(summary: string): string {
-  const sections = summary
-    .split("/")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const [label, ...rest] = part.split(/[:：]/);
-      const value = rest.join(":").trim();
-      if (!label || !value) return null;
-      return { label: label.trim(), value };
-    })
-    .filter((s): s is { label: string; value: string } => s !== null);
-
-  if (sections.length === 0) return summary;
-
-  const find = (key: string) => sections.find((s) => s.label.includes(key))?.value;
-  const category = find("カテゴリ");
-  const elements = find("要素");
-
-  const clauses: string[] = [];
-  if (category) clauses.push(`${category}に関心が高く`);
-  if (elements) clauses.push(`${elements}といった要素に惹かれる傾向があります`);
-
-  return clauses.length > 0
-    ? `${clauses.join("、")}${elements ? "" : "が好みの傾向です"}。`
-    : `${sections
-        .filter((s) => !s.label.includes("価格"))
-        .map((s) => s.value)
-        .join("、")}が好みの傾向です。`;
-}
 
 /** フロー 5: 厳選したおすすめスポット一覧（ai-recommendations）。 */
 export function RecommendationsScreen({
@@ -74,20 +39,21 @@ export function RecommendationsScreen({
   exploreSpots = [],
   destinationArea = "小諸市",
   diagnosisComplete,
-  userId,
   onStartDiagnosis,
   onRestart,
   onGoHome,
   onOpenSpot,
-  profileSummary = "",
-  emptyMessage = "",
+  aiIntroMessage = "",
+  hasMoreRecommendations = false,
+  loadingMoreRecommendations = false,
+  onLoadMoreRecommendations,
 }: RecommendationsScreenProps) {
   const listSource = diagnosisComplete ? recommendations : exploreSpots;
   const [initiallyVisitedIds] = useState<Set<string>>(
     () =>
       new Set(
         diagnosisComplete
-          ? recommendations.filter((rec) => isVisited(userId, rec.id)).map((rec) => rec.id)
+          ? recommendations.filter((rec) => isVisited(rec.id)).map((rec) => rec.id)
           : [],
       ),
   );
@@ -95,15 +61,19 @@ export function RecommendationsScreen({
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const visibleRecommendations = listSource.filter((rec) => !initiallyVisitedIds.has(rec.id));
-  const displayedRecommendations = visibleRecommendations.slice(0, visibleCount);
-  const hasMore = visibleCount < visibleRecommendations.length;
+  const displayedRecommendations = diagnosisComplete
+    ? visibleRecommendations
+    : visibleRecommendations.slice(0, visibleCount);
+  const hasMore = diagnosisComplete
+    ? hasMoreRecommendations
+    : visibleCount < visibleRecommendations.length;
 
   // カテゴリ配色設定
   const CAT: Record<string, { l: string; c: string }> = {
-    歴史: { l: "歴史", c: "bg-blue-600" },
-    自然: { l: "自然", c: "bg-teal-600" },
-    グルメ: { l: "グルメ", c: "bg-amber-600" },
-    観光: { l: "観光", c: "bg-slate-600" },
+    歴史: { l: "歴史", c: "bg-blue-600/90" },
+    自然: { l: "自然", c: "bg-teal-600/90" },
+    グルメ: { l: "グルメ", c: "bg-amber-600/90" },
+    観光: { l: "観光", c: "bg-slate-600/90" },
   };
 
   useEffect(() => {
@@ -112,18 +82,21 @@ export function RecommendationsScreen({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setVisibleCount((count) =>
-            Math.min(count + RECOMMENDATIONS_PAGE_SIZE, visibleRecommendations.length),
-          );
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        if (diagnosisComplete) {
+          onLoadMoreRecommendations?.();
+          return;
         }
+        setVisibleCount((count) =>
+          Math.min(count + RECOMMENDATIONS_PAGE_SIZE, visibleRecommendations.length),
+        );
       },
       { root: null, rootMargin: "80px", threshold: 0 },
     );
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMore, visibleRecommendations.length]);
+  }, [hasMore, diagnosisComplete, onLoadMoreRecommendations, visibleRecommendations.length]);
 
   return (
     <div className="flex flex-1 flex-col bg-(--page)">
@@ -139,12 +112,12 @@ export function RecommendationsScreen({
           </button>
         </div>
 
-        {/* ① AIによる好みの概要 */}
-        {diagnosisComplete && profileSummary && visibleRecommendations.length > 0 && (
+        {/* ① AI によるおすすめ紹介文 */}
+        {diagnosisComplete && visibleRecommendations.length > 0 && aiIntroMessage && (
           <div className="flex items-end gap-1">
             <AiGuideAvatar size={40} className="shrink-0" />
             <AiGuideSpeechBubble>
-              <span className="text-[13px]">{buildPreferenceSentence(profileSummary)}</span>
+              <span className="text-[13px]">{aiIntroMessage}</span>
             </AiGuideSpeechBubble>
           </div>
         )}
@@ -174,7 +147,7 @@ export function RecommendationsScreen({
         {!diagnosisComplete && visibleRecommendations.length > 0 && (
           <div className="grid grid-cols-2 gap-3 w-full">
             {displayedRecommendations.map((rec, index) => {
-              const cat = CAT[rec.category] || { l: rec.category, c: "bg-slate-600" };
+              const cat = CAT[rec.category] || { l: rec.category, c: "bg-slate-600/90" };
 
               return (
                 <Fragment key={rec.id}>
@@ -193,7 +166,9 @@ export function RecommendationsScreen({
                         lazy={index >= 4}
                       />
                       <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/20 to-transparent" />
-                      <span className="absolute top-1.5 left-1.5 inline-block rounded-md bg-slate-600/90 px-1.5 py-0.5 text-[10px] font-extrabold text-white">
+                      <span
+                        className={`absolute top-1.5 left-1.5 inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold text-white ${cat.c}`}
+                      >
                         {cat.l}
                       </span>
                       <div className="absolute inset-x-0 bottom-0 p-2 gap-0.5 flex flex-col">
@@ -241,7 +216,7 @@ export function RecommendationsScreen({
                   おすすめのスポットが見つかりませんでした
                 </span>
                 <span className="text-[13px]">
-                  {emptyMessage ||
+                  {aiIntroMessage ||
                     `${destinationArea}の観光スポットが登録されていないか、選択した条件に合うスポットがありません。`}
                 </span>
               </AiGuideSpeechBubble>
@@ -264,7 +239,7 @@ export function RecommendationsScreen({
         {diagnosisComplete && visibleRecommendations.length > 0 && (
           <div className="grid grid-cols-2 gap-3 w-full">
             {displayedRecommendations.map((rec, index) => {
-              const cat = CAT[rec.category] || { l: rec.category, c: "bg-slate-600" };
+              const cat = CAT[rec.category] || { l: rec.category, c: "bg-slate-600/90" };
 
               return (
                 <Fragment key={rec.id}>
@@ -283,7 +258,9 @@ export function RecommendationsScreen({
                         lazy={index >= 4}
                       />
                       <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/20 to-transparent" />
-                      <span className="absolute top-1.5 left-1.5 inline-block rounded-md bg-slate-600/90 px-1.5 py-0.5 text-[10px] font-extrabold text-white">
+                      <span
+                        className={`absolute top-1.5 left-1.5 inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold text-white ${cat.c}`}
+                      >
                         {cat.l}
                       </span>
                       <div className="absolute inset-x-0 bottom-0 p-2 gap-0.5 flex flex-col">
@@ -318,7 +295,9 @@ export function RecommendationsScreen({
 
         {diagnosisComplete && hasMore && (
           <div ref={loadMoreRef} className="flex justify-center py-2">
-            <div className="size-6 animate-spin rounded-full border-2 border-[#e2e8f0] border-t-[#0f172a]" />
+            <div
+              className={`size-6 rounded-full border-2 border-[#e2e8f0] border-t-[#0f172a] ${loadingMoreRecommendations ? "animate-spin" : ""}`}
+            />
           </div>
         )}
 

@@ -3,6 +3,7 @@ import {
   NOTO_MUNICIPALITY_AREAS,
   NOTO_UMBRELLA_AREA,
 } from "@tabipla/db";
+import { fetchWithTimeout } from "./fetchWithTimeout.js";
 import {
   geocodeViaGoogle,
   getGoogleMapsApiKey,
@@ -11,6 +12,7 @@ import {
 } from "./geoProviders.js";
 
 type MunicipalityContext = { prefecture: string; municipality: string };
+const GOOGLE_PLACES_TIMEOUT_MS = 12_000;
 
 function isNotoRegionContext(context: MunicipalityContext): boolean {
   return (
@@ -82,21 +84,25 @@ async function lookupViaPlacesApiNew(
   key: string,
   context: MunicipalityContext,
 ): Promise<PlaceLookupResult | null> {
-  const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": key,
-      "X-Goog-FieldMask":
-        "places.displayName,places.formattedAddress,places.location,places.types,places.editorialSummary",
+  const res = await fetchWithTimeout(
+    "https://places.googleapis.com/v1/places:searchText",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask":
+          "places.displayName,places.formattedAddress,places.location,places.types,places.editorialSummary",
+      },
+      body: JSON.stringify({
+        textQuery: query,
+        languageCode: "ja",
+        regionCode: "JP",
+        maxResultCount: 5,
+      }),
     },
-    body: JSON.stringify({
-      textQuery: query,
-      languageCode: "ja",
-      regionCode: "JP",
-      maxResultCount: 5,
-    }),
-  });
+    GOOGLE_PLACES_TIMEOUT_MS,
+  );
 
   if (!res.ok) return null;
 
@@ -141,7 +147,7 @@ async function lookupViaFindPlace(
   url.searchParams.set("language", "ja");
   url.searchParams.set("key", key);
 
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url, {}, GOOGLE_PLACES_TIMEOUT_MS);
   if (!res.ok) return null;
 
   const data = (await res.json()) as {
@@ -184,7 +190,7 @@ async function lookupViaGeocoding(
   url.searchParams.set("region", "jp");
   url.searchParams.set("key", key);
 
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url, {}, GOOGLE_PLACES_TIMEOUT_MS);
   if (!res.ok) return null;
 
   const data = (await res.json()) as {

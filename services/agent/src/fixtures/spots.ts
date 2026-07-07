@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { SpotDocument } from "@tabipla/search-core";
 import type { Spot } from "../contracts.js";
 
 type SeedSpotRow = {
@@ -8,11 +9,9 @@ type SeedSpotRow = {
   name: string;
   description: string;
   category?: string | string[];
-  tags?: string[];
   highlights?: string[];
   lat?: number | null;
   lon?: number | null;
-  price?: number | null;
   imageUrl?: string | null;
 };
 
@@ -54,20 +53,27 @@ function toAgentCategory(categories: string[]): Spot["category"] {
 
 function toAgentSpot(row: SeedSpotRow): Spot {
   const categories = normalizeCategories(row.category);
-  const tags = row.tags?.length
-    ? row.tags
-    : row.highlights?.length
-      ? row.highlights.slice(0, 3)
-      : categories.slice(0, 2);
 
   return {
     id: row.id,
     name: row.name,
     category: toAgentCategory(categories),
     location: row.lat != null && row.lon != null ? { lat: row.lat, lon: row.lon } : KOMORO_CENTER,
-    priceLevel: Math.min(4, Math.max(0, row.price ?? 1)),
     description: row.description,
-    tags,
+    highlights: row.highlights?.slice(0, 3) ?? [],
+  };
+}
+
+/** Elasticsearch / backend-api の SpotDocument を agent 契約型へ変換する。 */
+export function mapSpotDocumentToAgentSpot(doc: SpotDocument): Spot {
+  const categories = normalizeCategories(doc.category);
+  return {
+    id: doc.id,
+    name: doc.name,
+    category: toAgentCategory(categories),
+    location: doc.location ?? KOMORO_CENTER,
+    description: doc.description,
+    highlights: doc.highlights?.slice(0, 3) ?? [],
   };
 }
 
@@ -82,7 +88,3 @@ export const SPOT_IMAGES: Record<string, string> = Object.fromEntries(
 
 export const SPOT_HOURS: Record<string, { open: string; close: string; stayMin: number }> =
   Object.fromEntries(KOMORO_SPOTS.map((spot) => [spot.id, DEFAULT_HOURS]));
-
-export const SPOT_TAGS: Record<string, string[]> = Object.fromEntries(
-  KOMORO_SPOTS.map((spot) => [spot.id, spot.tags ?? []]),
-);

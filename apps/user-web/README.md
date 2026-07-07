@@ -52,9 +52,8 @@ pnpm -C apps/user-web dev          # :5173
 | 設定 | 内容 |
 |------|------|
 | `services/backend-api/.env` | `AGENT_API_URL=http://localhost:8080` |
-| `services/agent/.env` | `BACKEND_API_URL=http://localhost:3001` |
-| `USE_MOCK=1` | DB の紹介文ベースで即応答（Gemini 不要） |
-| `USE_MOCK=0` | Gemini 本番応答（`gcloud auth application-default login` 必須） |
+| `services/agent/.env` | `BACKEND_API_URL=http://localhost:3001`, `ES_NODE=http://localhost:9200` |
+| Gemini | `gcloud auth application-default login` で Vertex AI 認証 |
 
 管理画面で登録したスポットがローカル DB にあること。
 

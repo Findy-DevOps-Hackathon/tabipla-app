@@ -13,6 +13,8 @@
     "lint": "biome lint .",
     "check": "biome check .",
     "check:fix": "biome check --write .",
+    "ci:check": "pnpm check && pnpm typecheck && pnpm run audit",
+    "ci:fix": "pnpm check:fix && pnpm ci:check",
     "audit": "pnpm audit --audit-level=high",
     "docker:up": "docker compose -f infra/docker/docker-compose.yml up -d",
     "docker:down": "docker compose -f infra/docker/docker-compose.yml down",
@@ -27,9 +29,5 @@
     "overrides": {
       "tar": ">=7.5.4"
     }
-  },
-  "dependencies": {
-    "@humation/assets-humation-1": "^1.0.1",
-    "@humation/react": "^1.0.1"
   }
 }

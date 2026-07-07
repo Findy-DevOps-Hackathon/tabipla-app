@@ -16,22 +16,13 @@ steps:
     waitFor: [build-agent]
     entrypoint: bash
     args:
-      - -c
-      - |
-        set -euo pipefail
-        RUN_ENV_VARS="GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},USE_MOCK=${_USE_MOCK}"
-        gcloud run deploy tabipla-agent \
-          --project="${PROJECT_ID}" \
-          --region="${_REGION}" \
-          --image="gcr.io/${PROJECT_ID}/tabipla-agent" \
-          --allow-unauthenticated \
-          --port=8080 \
-          --memory=1Gi \
-          --cpu=1 \
-          --timeout=300 \
-          --min-instances=0 \
-          --max-instances=5 \
-          --set-env-vars="$${RUN_ENV_VARS}"
+      - infra/cloud-build/deploy-agent.sh
+    env:
+      - PROJECT_ID=${PROJECT_ID}
+      - _REGION=${_REGION}
+      - _ES_NODE=${_ES_NODE}
+      - _ES_INDEX=${_ES_INDEX}
+      - _ES_VECTOR_DIMS=${_ES_VECTOR_DIMS}
 
   - name: gcr.io/cloud-builders/docker
     id: build-backend
@@ -68,7 +59,6 @@ images:
 
 substitutions:
   _REGION: asia-northeast1
-  _USE_MOCK: "1"
   _CORS_ORIGINS: https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com
   _GCS_BUCKET: ""
   _GCS_PUBLIC_BASE_URL: ""

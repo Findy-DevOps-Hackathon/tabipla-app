@@ -16,6 +16,7 @@ IMAGE="gcr.io/${PROJECT}/${SERVICE}"
 ENV_FILE="$ROOT/services/backend-api/.env"
 CREDS_FILE="$ROOT/infra/cloud-sql/.credentials"
 GCS_CREDS_FILE="$ROOT/infra/gcs/.credentials"
+ES_CREDS_FILE="$ROOT/infra/elasticsearch/.credentials"
 
 if [[ -f "$ENV_FILE" ]]; then
   set -a
@@ -39,6 +40,13 @@ if [[ -f "$GCS_CREDS_FILE" ]]; then
   set -a
   # shellcheck disable=SC1090
   source "$GCS_CREDS_FILE"
+  set +a
+fi
+
+if [[ -f "$ES_CREDS_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ES_CREDS_FILE"
   set +a
 fi
 

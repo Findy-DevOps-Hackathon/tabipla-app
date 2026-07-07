@@ -12,45 +12,15 @@ steps:
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
     args:
-      - -c
-      - |
-        set -euo pipefail
-
-        BACKEND_URL=""
-        if gcloud run services describe tabipla-backend-api \
-          --project="${PROJECT_ID}" \
-          --region="${_REGION}" \
-          --format='value(status.url)' >/dev/null 2>&1; then
-          BACKEND_URL="$(gcloud run services describe tabipla-backend-api \
-            --project="${PROJECT_ID}" \
-            --region="${_REGION}" \
-            --format='value(status.url)')"
-        fi
-
-        RUN_ENV_VARS="GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},USE_MOCK=${_USE_MOCK}"
-        if [[ -n "$$BACKEND_URL" ]]; then
-          RUN_ENV_VARS="$${RUN_ENV_VARS},BACKEND_API_URL=$$BACKEND_URL"
-        fi
-
-        gcloud run deploy "${_SERVICE}" \
-          --project="${PROJECT_ID}" \
-          --region="${_REGION}" \
-          --image="${_IMAGE}" \
-          --allow-unauthenticated \
-          --port=8080 \
-          --memory=1Gi \
-          --cpu=1 \
-          --timeout=300 \
-          --min-instances=0 \
-          --max-instances=5 \
-          --set-env-vars="$${RUN_ENV_VARS}"
-
-        SERVICE_URL="$(gcloud run services describe "${_SERVICE}" \
-          --project="${PROJECT_ID}" \
-          --region="${_REGION}" \
-          --format='value(status.url)')"
-        echo "Deployed: $$SERVICE_URL"
-        echo "Health check: $$SERVICE_URL/healthz"
+      - infra/cloud-build/deploy-agent.sh
+    env:
+      - PROJECT_ID=${PROJECT_ID}
+      - _REGION=${_REGION}
+      - _SERVICE=${_SERVICE}
+      - _IMAGE=${_IMAGE}
+      - _ES_NODE=${_ES_NODE}
+      - _ES_INDEX=${_ES_INDEX}
+      - _ES_VECTOR_DIMS=${_ES_VECTOR_DIMS}
 
 images:
   - ${_IMAGE}
@@ -59,7 +29,7 @@ substitutions:
   _REGION: asia-northeast1
   _SERVICE: tabipla-agent
   _IMAGE: gcr.io/${PROJECT_ID}/tabipla-agent
-  _USE_MOCK: "1"
+  _ES_NODE: ""
 
 options:
   logging: CLOUD_LOGGING_ONLY

@@ -1,13 +1,15 @@
 import { createHash } from "node:crypto";
 import { type SpotDocument, VECTOR_DIMS } from "@tabipla/search-core";
+import { fetchWithTimeout } from "./fetchWithTimeout.js";
 
 export type EmbeddingProvider = "gemini" | "hash";
 
 /** Gemini embedContent の taskType（検索用途向け）。 */
 export type EmbedTaskType = "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT";
 
-const DEFAULT_GEMINI_MODEL = "gemini-embedding-001";
+const DEFAULT_GEMINI_MODEL = "gemini-embedding-2";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const EMBEDDING_TIMEOUT_MS = 30_000;
 
 /**
  * 埋め込み生成のプロバイダを解決する。
@@ -26,17 +28,15 @@ export function resolveEmbeddingProvider(): EmbeddingProvider {
   return "hash";
 }
 
-/** スポットドキュメントから埋め込み用テキストを組み立てる。 */
+/** スポットドキュメントから埋め込み用テキストを組み立てる（地理情報はハードフィルタで扱うため除外）。 */
 export function buildSpotEmbedText(
-  doc: Pick<SpotDocument, "name" | "description" | "category" | "area" | "prefecture" | "tags">,
+  doc: Pick<SpotDocument, "name" | "description" | "category" | "highlights">,
 ): string {
   const parts = [
     doc.name,
     doc.description,
     ...(doc.category ? (Array.isArray(doc.category) ? doc.category : [doc.category]) : []),
-    doc.area,
-    doc.prefecture,
-    doc.tags?.join(" "),
+    ...(doc.highlights ?? []),
   ].filter(Boolean);
   return parts.join("\n");
 }
@@ -60,6 +60,25 @@ export async function embedText(text: string, options: EmbedTextOptions = {}): P
   return hashEmbed(trimmed);
 }
 
+/** スポット登録用: embedding 生成に失敗したら例外を投げる（必須）。 */
+export async function requireSpotEmbedding(
+  doc: Pick<SpotDocument, "name" | "description" | "category" | "highlights">,
+): Promise<number[]> {
+  const text = buildSpotEmbedText(doc);
+  if (!text.trim()) {
+    throw new Error(
+      "[backend-api] embedding 用テキストが空です。name と description を入力してください。",
+    );
+  }
+  return embedText(text, { taskType: "RETRIEVAL_DOCUMENT" });
+}
+
+export function formatEmbeddingError(error: unknown, spotId?: string): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  const prefix = spotId ? `スポット ${spotId}: ` : "";
+  return `${prefix}embedding の生成に失敗しました。${detail}`;
+}
+
 function resolveGeminiModel(): string {
   return process.env.GEMINI_EMBEDDING_MODEL ?? DEFAULT_GEMINI_MODEL;
 }
@@ -72,9 +91,9 @@ type GeminiEmbedResponse = {
 /**
  * Gemini Embeddings API（Google AI Studio）でベクトルを生成する。
  *
- * - モデル既定: gemini-embedding-001
+ * - モデル既定: gemini-embedding-2
  * - outputDimensionality: VECTOR_DIMS（ES mapping と一致させる）
- * - 3072 未満の次元では L2 正規化を行う（gemini-embedding-001 の推奨）
+ * - 3072 未満の次元では L2 正規化を行う
  */
 async function geminiEmbed(text: string, taskType: EmbedTaskType): Promise<number[]> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -85,16 +104,20 @@ async function geminiEmbed(text: string, taskType: EmbedTaskType): Promise<numbe
   const model = resolveGeminiModel();
   const url = `${GEMINI_API_BASE}/${model}:embedContent?key=${encodeURIComponent(apiKey)}`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: `models/${model}`,
-      content: { parts: [{ text }] },
-      taskType,
-      outputDimensionality: VECTOR_DIMS,
-    }),
-  });
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: `models/${model}`,
+        content: { parts: [{ text }] },
+        taskType,
+        outputDimensionality: VECTOR_DIMS,
+      }),
+    },
+    EMBEDDING_TIMEOUT_MS,
+  );
 
   const json = (await res.json()) as GeminiEmbedResponse;
 
@@ -114,7 +137,7 @@ async function geminiEmbed(text: string, taskType: EmbedTaskType): Promise<numbe
   return l2Normalize(values);
 }
 
-/** L2 正規化（gemini-embedding-001 で outputDimensionality < 3072 のとき推奨）。 */
+/** L2 正規化（outputDimensionality < 3072 のときのスコア安定化）。 */
 function l2Normalize(values: number[]): number[] {
   let norm = 0;
   for (const v of values) {

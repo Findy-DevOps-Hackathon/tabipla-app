@@ -6,8 +6,8 @@ import { spotPreviewText } from "../lib/spotMapper.ts";
 
 type SwipeScreenProps = {
   spots: SwipeSpot[];
-  /** 全ラウンド完了時。好みと判定したスポット ID を渡す。 */
-  onComplete: (likedIds: string[]) => void;
+  /** 全ラウンド完了時。好みと判定したスポット ID と勝ち数を渡す。 */
+  onComplete: (result: { likedIds: string[]; wins: Record<string, number> }) => void;
   /** 「好みをより詳しく設定する」からの詳細設定ラウンドか。見出し表示が変わる。 */
   refine?: boolean;
   /** 中止ボタン押下時。比較をやめて前の画面へ戻る。 */
@@ -132,12 +132,12 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
   useEffect(() => {
     if (spots.length === 0 && !completedRef.current) {
       completedRef.current = true;
-      onComplete([]);
+      onComplete({ likedIds: [], wins: {} });
     } else if (spots.length === 1 && !completedRef.current) {
       const only = spots[0];
       if (only) {
         completedRef.current = true;
-        onComplete([only.id]);
+        onComplete({ likedIds: [only.id], wins: { [only.id]: 1 } });
       }
     }
   }, [spots, onComplete]);
@@ -159,7 +159,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
     if (completedRef.current) return;
     completedRef.current = true;
     likedRef.current = computeLikedIds(spots, winsSnapshot);
-    onComplete(likedRef.current);
+    onComplete({ likedIds: likedRef.current, wins: winsSnapshot });
   }
 
   function pickWinner(winnerId: string, loserId: string) {

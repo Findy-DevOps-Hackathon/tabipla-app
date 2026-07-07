@@ -2,7 +2,6 @@ export type SpotFactsSource = {
   name?: string;
   description?: string;
   highlights?: string[];
-  tags?: string[];
   address?: string;
   area?: string;
   prefecture?: string;
@@ -15,10 +14,6 @@ export function buildSpotFacts(spot: SpotFactsSource): string[] {
   for (const h of spot.highlights ?? []) {
     const t = h?.trim();
     if (t) facts.push(`おすすめポイント: ${t}`);
-  }
-  for (const tag of spot.tags ?? []) {
-    const t = tag?.trim();
-    if (t) facts.push(`タグ: ${t}`);
   }
   if (spot.address?.trim()) facts.push(`住所: ${spot.address.trim()}`);
   if (spot.prefecture || spot.area) {

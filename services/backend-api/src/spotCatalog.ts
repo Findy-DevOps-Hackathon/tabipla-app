@@ -11,16 +11,6 @@ export function toAgentCategory(adminCategory: string): string {
   return "history";
 }
 
-/** DB の price（円）を agent の priceLevel（0–4）へざっくり変換する。 */
-export function toPriceLevel(price: number | null): number {
-  if (price == null || price <= 0) return 1;
-  if (price < 500) return 0;
-  if (price < 1500) return 1;
-  if (price < 3000) return 2;
-  if (price < 5000) return 3;
-  return 4;
-}
-
 /** PostgreSQL の行を agent personalized 用カタログへ変換する。 */
 export function toAgentCatalogSpot(row: SpotRow) {
   const primaryCategory = row.category?.[0] ?? "歴史・文化";
@@ -32,9 +22,8 @@ export function toAgentCatalogSpot(row: SpotRow) {
       lat: row.lat ?? 36.326,
       lon: row.lon ?? 138.423,
     },
-    priceLevel: toPriceLevel(row.price),
     description: row.description,
-    tags: row.tags ?? [],
+    highlights: row.highlights ?? [],
   };
 }
 
@@ -52,7 +41,6 @@ export function enrichRecommendation(rec: Record<string, unknown>, row: SpotRow 
     prefecture: row.prefecture ?? "長野県",
     area: row.area ?? "小諸市",
     address: row.address ?? undefined,
-    tags: row.tags?.length ? row.tags : rec.tags,
     imageUrl: row.imageUrl ?? undefined,
   };
 }

@@ -164,7 +164,8 @@ export function getPrefectureForArea(area: string): string | null {
 /** 選択中の旅先が属する都道府県（未選択時は null）。 */
 export function getSelectedPrefecture(selected: string[]): string | null {
   if (selected.length === 0) return null;
-  return getPrefectureForArea(selected[0]!) ?? null;
+  const first = selected[0];
+  return first ? getPrefectureForArea(first) : null;
 }
 
 /** 同一都道府県内でのみ複数選択できる市区町村トグル。 */
@@ -213,7 +214,10 @@ export function toggleSubregionSelection(
 ): string[] {
   if (cityNames.length === 0) return selected;
 
-  const prefecture = getPrefectureForArea(cityNames[0]!);
+  const firstCity = cityNames[0];
+  if (!firstCity) return selected;
+
+  const prefecture = getPrefectureForArea(firstCity);
   if (!prefecture) return selected;
 
   const citySet = new Set(cityNames);

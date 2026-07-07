@@ -9,7 +9,7 @@ import { CHAT_MODEL } from "../modelConfig.js";
 // そのためツールは GOOGLE_SEARCH のみ・JSON出力はプロンプト指示 + zodバリデーションで担保する。
 
 // モデルは name/description 以外のフィールドを取りこぼすことがある（特に件数が多いと後半で
-// tags/sources 等が欠落しやすい）。欠落で収集全体を失敗させないよう、非必須項目には
+// sources 等が欠落しやすい）。欠落で収集全体を失敗させないよう、非必須項目には
 // デフォルトを与える。必須は name/description のみ。
 /** 1回の AI 収集で要求できる最大件数。 */
 export const MAX_COLLECT_TARGET_COUNT = 30;
@@ -45,7 +45,6 @@ const spotSchema = z.object({
   area: z.string().default(""),
   prefecture: z.string().default(""),
   address: z.string().default(""),
-  tags: z.array(z.string()).default([]),
   highlights: z.array(z.string()).default([]),
   sources: z.array(z.string()).default([]),
 });
@@ -98,7 +97,6 @@ export const collectAgent = new LlmAgent({
 - area: 市区町村名（例: 七尾市、輪島市）。「能登半島」のような広域名は使わない。各スポットの所在地に応じた正式な市区町村名を書く。
 - prefecture: 都道府県名
 - address: できるだけ正確な住所。不明なら "{都道府県}{市区町村名}" のみ
-- tags: 特徴を表すタグ（3〜5個）例: ["紅葉","城址","公園"]
 - sources: 情報を得たソースのサイト名（URLではなく「じゃらん」「小諸市公式HP」のような名称）
 
 【自治体スコープ（最重要）】
@@ -124,7 +122,7 @@ export const collectAgent = new LlmAgent({
 
 【出力形式】
 前置き・説明・コードフェンスは一切書かず、次の形のJSONだけを出力する:
-{"spots":[{"name":"...","description":"...","highlights":["...","...","..."],"category":"自然","area":"...","prefecture":"...","address":"...","tags":["..."],"sources":["..."]}]}`,
+{"spots":[{"name":"...","description":"...","highlights":["...","...","..."],"category":"自然","area":"...","prefecture":"...","address":"...","sources":["..."]}]}`,
   tools: [GOOGLE_SEARCH],
   generateContentConfig: {
     thinkingConfig: { thinkingBudget: 1024 },
@@ -190,7 +188,7 @@ export const collectFormatAgent = new LlmAgent({
 
 【ルール】
 - 入力に明示されていないスポットは追加しない（創作禁止）
-- 各スポット: name, description(100〜200字), highlights(3件・各15〜30字), category, area, prefecture, address, tags, sources
+- 各スポット: name, description(100〜200字), highlights(3件・各15〜30字), category, area, prefecture, address, sources
 - category は次のいずれか1つ — ${SPOT_CATEGORIES.map((c) => `"${c}"`).join(" | ")}
 - 入力にスポットが見つからない場合は {"spots":[]}
 - 指定スキーマのJSONのみ出力する`,
@@ -219,7 +217,7 @@ export async function resolveCollectResult(
 --- 入力テキスト ---
 ${rawText.slice(0, 14000)}`;
 
-    const { final, errMsg } = await runAgent(collectFormatAgent, formatPrompt);
+    const { final } = await runAgent(collectFormatAgent, formatPrompt);
     if (!final) {
       throw firstErr instanceof Error ? firstErr : new Error(String(firstErr));
     }

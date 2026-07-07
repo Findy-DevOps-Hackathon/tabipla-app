@@ -6,6 +6,7 @@ import { API_BASE } from "./config.ts";
 import { getAllSupportedDestinations, resolveTripDestinations } from "./data/places.ts";
 import {
   EXPLORE_SPOTS,
+  RECOMMENDATIONS_PAGE_SIZE,
   type Recommendation,
   SWIPE_LIMIT,
   SWIPE_LIMIT_REFINE,
@@ -20,7 +21,6 @@ import {
 } from "./lib/aiGuide.ts";
 import {
   formatDestinationLabel,
-  getCurrentDestination,
   getCurrentDestinations,
   isDestinationSpot,
   setCurrentDestinations,
@@ -39,7 +39,6 @@ import {
   resolveSpotById,
 } from "./lib/spotCatalog.ts";
 import { readSpotIdFromLocation, setSpotIdInLocation } from "./lib/spotLink.ts";
-import { documentToRecommendation } from "./lib/spotMapper.ts";
 import { InputScreen } from "./screens/InputScreen.tsx";
 import { MemoryScreen } from "./screens/MemoryScreen.tsx";
 import { ProcessingScreen } from "./screens/ProcessingScreen.tsx";
@@ -47,11 +46,8 @@ import { RecommendationsScreen } from "./screens/RecommendationsScreen.tsx";
 import { SwipeScreen } from "./screens/SwipeScreen.tsx";
 import { WelcomeScreen } from "./screens/WelcomeScreen.tsx";
 
-/** 体験フローのステップ。 */
+/** 匿名ユーザー向け user-web の体験フロー。 */
 type Step = "welcome" | "input" | "swipe" | "memory" | "processing" | "recommendations";
-
-/** 訪問履歴・エージェント連携で使う匿名ユーザー ID（会員機能なし）。 */
-const VISITOR_ID = "guest";
 
 /** `/api/v1/personalized/plan` のレスポンス（利用フィールドのみ）。 */
 type PlanApiRecommendation = {
@@ -62,10 +58,7 @@ type PlanApiRecommendation = {
   highlights?: string[];
   prefecture?: string;
   area?: string;
-  tags?: string[];
-  why?: string[];
   score?: number;
-  memberOnly?: boolean;
   image?: string;
   imageUrl?: string;
   address?: string;
@@ -74,9 +67,11 @@ type PlanApiRecommendation = {
 type PersonalizedPlanResponse = {
   error?: string;
   recommendations?: PlanApiRecommendation[];
-  profileSummary?: string;
   result?: string;
-  debate?: { agent: string; thought?: string; message: string }[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  planKey?: string;
 };
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -106,7 +101,8 @@ function readStoredStep(): Step {
 
 /** リロードしてもおすすめ結果を保つための localStorage キー。 */
 const RECOMMENDATIONS_KEY = "tabipla-recommendations";
-const PROFILE_SUMMARY_KEY = "tabipla-profile-summary";
+const PLAN_MESSAGE_KEY = "tabipla-plan-message";
+const PLAN_TOTAL_KEY = "tabipla-plan-total";
 
 /** 保存済みのおすすめ結果を読み出す（未保存・不正値なら空配列）。 */
 function readStoredRecommendations(): Recommendation[] {
@@ -121,12 +117,23 @@ function readStoredRecommendations(): Recommendation[] {
   }
 }
 
-/** 保存済みの好み概要を読み出す。 */
-function readStoredProfileSummary(): string {
+/** 保存済みの AI 紹介文を読み出す。 */
+function readStoredPlanMessage(): string {
   try {
-    return localStorage.getItem(PROFILE_SUMMARY_KEY) ?? "";
+    return localStorage.getItem(PLAN_MESSAGE_KEY) ?? "";
   } catch {
     return "";
+  }
+}
+
+function readStoredPlanTotal(): number {
+  try {
+    const raw = localStorage.getItem(PLAN_TOTAL_KEY);
+    if (!raw) return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
   }
 }
 
@@ -174,13 +181,18 @@ export default function App() {
   const [, setDetailedComplete] = useState(isDetailedDiagnosisComplete);
 
   const [likes, setLikes] = useState<string[]>([]);
+  const [likeWeights, setLikeWeights] = useState<Record<string, number>>({});
   const [nopes, setNopes] = useState<string[]>([]);
   const [recommendations, setRecommendations] =
     useState<Recommendation[]>(readStoredRecommendations);
-  const [profileSummary, setProfileSummary] = useState(readStoredProfileSummary);
-  const [planMessage, setPlanMessage] = useState("");
+  const [planMessage, setPlanMessage] = useState(readStoredPlanMessage);
+  const [planTotal, setPlanTotal] = useState(readStoredPlanTotal);
+  const [planPage, setPlanPage] = useState(1);
+  const [planKey, setPlanKey] = useState("");
+  const [planLoadingMore, setPlanLoadingMore] = useState(false);
   const [isFetchDone, setIsFetchDone] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [planFetchKey, setPlanFetchKey] = useState(0);
   const [chatThreads, setChatThreads] = useState<
     Record<string, { role: "user" | "ai"; text: string; isError?: boolean; image?: string }[]>
   >({});
@@ -314,11 +326,12 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem(RECOMMENDATIONS_KEY, JSON.stringify(recommendations));
-      localStorage.setItem(PROFILE_SUMMARY_KEY, profileSummary);
+      localStorage.setItem(PLAN_MESSAGE_KEY, planMessage);
+      localStorage.setItem(PLAN_TOTAL_KEY, String(planTotal));
     } catch {
       // localStorage 不可環境では復元を諦める。
     }
-  }, [recommendations, profileSummary]);
+  }, [recommendations, planMessage, planTotal]);
 
   useEffect(() => {
     if (detailRec) {
@@ -333,10 +346,13 @@ export default function App() {
   const beginSwipe = useCallback(() => {
     setSwipeDeck(catalog.slice(0, SWIPE_LIMIT));
     setLikes([]);
+    setLikeWeights({});
     setNopes([]);
     setRecommendations([]);
-    setProfileSummary("");
     setPlanMessage("");
+    setPlanTotal(0);
+    setPlanPage(1);
+    setPlanKey("");
     setRefining(false);
     setRunId((id) => id + 1);
     setStep("swipe");
@@ -359,11 +375,19 @@ export default function App() {
   }, [refineCatalog]);
 
   const handleSwipeComplete = useCallback(
-    (likedIds: string[]) => {
+    ({ likedIds, wins }: { likedIds: string[]; wins: Record<string, number> }) => {
       setLikes((prev) => {
         const next = [...prev];
         for (const id of likedIds) {
           if (!next.includes(id)) next.push(id);
+        }
+        return next;
+      });
+
+      setLikeWeights((prev) => {
+        const next = { ...prev };
+        for (const id of likedIds) {
+          next[id] = (next[id] ?? 0) + Math.max(1, wins[id] ?? 1);
         }
         return next;
       });
@@ -388,58 +412,68 @@ export default function App() {
     [refining, swipeDeck],
   );
 
+  const fetchPlanPage = useCallback(
+    async (page: number, append: boolean) => {
+      const destinations = getCurrentDestinations();
+      const res = await fetch(`${API_BASE}/v1/personalized/plan`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          likes,
+          nopes,
+          likeWeights,
+          travelMemory,
+          destinations,
+          page,
+          limit: RECOMMENDATIONS_PAGE_SIZE,
+          ...(planKey ? { planKey } : {}),
+        }),
+      });
+
+      const data = (await res.json()) as PersonalizedPlanResponse;
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "おすすめの作成に失敗しました。");
+      }
+
+      const mapped: Recommendation[] = (data.recommendations ?? [])
+        .map((r) => planItemToRecommendation(r, destinations))
+        .filter((r): r is Recommendation => r !== null);
+
+      const { docs } = await loadSpotCatalogBundle(100, destinations);
+      const refreshed = refreshRecommendationImages(mapped, docs);
+
+      setRecommendations((prev) => (append ? [...prev, ...refreshed] : refreshed));
+      setPlanTotal(data.total ?? refreshed.length);
+      setPlanPage(data.page ?? page);
+      if (data.planKey) {
+        setPlanKey(data.planKey);
+      }
+      if (!append && data.result) {
+        setPlanMessage(data.result);
+      }
+    },
+    [likes, likeWeights, nopes, travelMemory, planKey],
+  );
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: planFetchKey is an explicit retry trigger.
   useEffect(() => {
     if (step !== "processing") return;
 
     let active = true;
     setIsFetchDone(false);
     setApiError(null);
+    setPlanPage(1);
+    setPlanKey("");
 
     async function fetchPlan() {
       try {
-        const destinations = getCurrentDestinations();
-        const res = await fetch(`${API_BASE}/v1/personalized/plan`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            likes,
-            nopes,
-            userId: VISITOR_ID,
-            timeBudget: "4時間",
-            origin:
-              destinations.length === 1 && destinations[0]?.area === "小諸市"
-                ? "小諸駅"
-                : formatDestinationLabel(destinations),
-            travelMemory,
-            destinations,
-          }),
-        });
-
-        const data = (await res.json()) as PersonalizedPlanResponse;
+        await fetchPlanPage(1, false);
         if (!active) return;
-
-        if (!res.ok || data.error) {
-          throw new Error(data.error || "プランの作成に失敗しました。");
-        }
-
-        const mapped: Recommendation[] = (data.recommendations ?? [])
-          .map((r) => planItemToRecommendation(r, destinations))
-          .filter((r): r is Recommendation => r !== null);
-
-        const { docs } = await loadSpotCatalogBundle(100, destinations);
-        if (!active) return;
-
-        const primary = destinations[0] ?? getCurrentDestination();
-        const finalRecommendations =
-          mapped.length > 0 ? mapped : docs.map((doc) => documentToRecommendation(doc, primary));
-
-        setRecommendations(refreshRecommendationImages(finalRecommendations, docs));
-        setProfileSummary(data.profileSummary ?? "");
-        setPlanMessage(data.result ?? "");
         setIsFetchDone(true);
       } catch (e: unknown) {
         if (active) {
-          setApiError(getErrorMessage(e, "ネットワークエラーが発生しました。"));
+          setApiError(getErrorMessage(e, "おすすめの作成に失敗しました。"));
           setIsFetchDone(true);
         }
       }
@@ -450,7 +484,26 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [step, likes, nopes, travelMemory]);
+  }, [step, planFetchKey, fetchPlanPage]);
+
+  const loadMoreRecommendations = useCallback(async () => {
+    if (planLoadingMore || recommendations.length >= planTotal) return;
+
+    setPlanLoadingMore(true);
+    try {
+      await fetchPlanPage(planPage + 1, true);
+    } catch {
+      // 追加読み込み失敗時はサイレント（一覧は維持）
+    } finally {
+      setPlanLoadingMore(false);
+    }
+  }, [fetchPlanPage, planLoadingMore, planPage, planTotal, recommendations.length]);
+
+  const retryPlanFetch = useCallback(() => {
+    setApiError(null);
+    setIsFetchDone(false);
+    setPlanFetchKey((key) => key + 1);
+  }, []);
 
   const openSpotDetail = useCallback(
     (rec: Recommendation) => {
@@ -499,7 +552,6 @@ export default function App() {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            userId: VISITOR_ID,
             text: text || "写真を解析して解説してください",
             image: img ? { mimeType: img.mimeType, data: img.data } : undefined,
             audio: audio ? { mimeType: audio.mimeType, data: audio.data } : undefined,
@@ -507,7 +559,6 @@ export default function App() {
               name: rec.name,
               description: rec.description,
               highlights: rec.highlights ?? [],
-              tags: rec.tags,
               area: rec.area,
               prefecture: rec.prefecture,
             },
@@ -612,7 +663,10 @@ export default function App() {
           }}
           isFetchDone={isFetchDone}
           apiError={apiError}
+          onRetry={retryPlanFetch}
           onRestart={beginSwipe}
+          onGoBack={() => setStep(refining ? "recommendations" : "memory")}
+          goBackLabel={refining ? "おすすめ一覧に戻る" : "入力内容を変更する"}
         />
       )}
 
@@ -622,13 +676,14 @@ export default function App() {
           exploreSpots={exploreSpots.length > 0 ? exploreSpots : homeFeaturedSpots}
           destinationArea={formatDestinationLabel(getCurrentDestinations())}
           diagnosisComplete={diagnosisComplete}
-          userId={VISITOR_ID}
           onStartDiagnosis={beginSwipe}
           onRestart={refinePreferences}
           onGoHome={() => setStep("welcome")}
           onOpenSpot={openSpotDetail}
-          profileSummary={profileSummary}
-          emptyMessage={planMessage}
+          aiIntroMessage={planMessage}
+          hasMoreRecommendations={diagnosisComplete && recommendations.length < planTotal}
+          loadingMoreRecommendations={planLoadingMore}
+          onLoadMoreRecommendations={loadMoreRecommendations}
         />
       )}
 

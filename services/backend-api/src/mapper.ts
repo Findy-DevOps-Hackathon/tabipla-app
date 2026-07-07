@@ -31,8 +31,11 @@ export function normalizeCategories(value: string | string[] | null | undefined)
  * - embedding はここでは付与しない（生成は別タスク。ES 側で管理）。
  */
 export function toSpotDocument(row: SpotRow): SpotDocument {
-  const location =
-    row.lat !== null && row.lon !== null ? { lat: row.lat, lon: row.lon } : undefined;
+  let location = row.lat !== null && row.lon !== null ? { lat: row.lat, lon: row.lon } : undefined;
+
+  if (!location && row.area === "小諸市") {
+    location = { lat: 36.3268, lon: 138.4211 };
+  }
 
   return {
     id: row.id,
@@ -42,11 +45,13 @@ export function toSpotDocument(row: SpotRow): SpotDocument {
     ...(row.area !== null ? { area: row.area } : {}),
     ...(row.prefecture !== null ? { prefecture: row.prefecture } : {}),
     ...(row.address !== null ? { address: row.address } : {}),
-    ...(row.tags !== null ? { tags: row.tags } : {}),
     ...(row.highlights !== null ? { highlights: row.highlights } : {}),
     ...(row.imageUrl !== null ? { imageUrl: row.imageUrl } : {}),
     ...(location ? { location } : {}),
-    ...(row.price !== null ? { price: row.price } : {}),
+    ...(row.clusterId !== null ? { clusterId: row.clusterId } : {}),
+    ...(row.sensoryScores !== null
+      ? { sensoryScores: row.sensoryScores as SpotDocument["sensoryScores"] }
+      : {}),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -70,12 +75,12 @@ export function toNewSpotRow(doc: SpotDocument): NewSpotRow {
     area,
     prefecture,
     address: doc.address ?? null,
-    tags: doc.tags ?? null,
     highlights: doc.highlights ?? null,
     lat: doc.location?.lat ?? null,
     lon: doc.location?.lon ?? null,
-    price: doc.price ?? null,
     imageUrl: doc.imageUrl ?? null,
+    clusterId: doc.clusterId ?? null,
+    sensoryScores: doc.sensoryScores ?? null,
   };
 }
 
@@ -103,12 +108,12 @@ export function mergeSpotRow(existing: SpotRow, patch: SpotPatch): NewSpotRow {
     area,
     prefecture,
     address,
-    tags: patch.tags ?? existing.tags,
     highlights: patch.highlights ?? existing.highlights,
     lat: patch.location ? patch.location.lat : existing.lat,
     lon: patch.location ? patch.location.lon : existing.lon,
-    price: patch.price !== undefined ? patch.price : existing.price,
     imageUrl: patch.imageUrl !== undefined ? patch.imageUrl : existing.imageUrl,
+    clusterId: patch.clusterId !== undefined ? patch.clusterId : existing.clusterId,
+    sensoryScores: patch.sensoryScores !== undefined ? patch.sensoryScores : existing.sensoryScores,
     createdAt: existing.createdAt,
   };
 }

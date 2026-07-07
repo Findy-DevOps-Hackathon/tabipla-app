@@ -4,7 +4,6 @@ export type AskSpotPayload = {
   name: string;
   description?: string;
   highlights?: string[];
-  tags?: string[];
   area?: string;
   prefecture?: string;
   address?: string;
@@ -18,10 +17,6 @@ function appendSpotFields(facts: string[], spot: AskSpotPayload): void {
     const h = highlight.trim();
     if (h) facts.push(`おすすめポイント: ${h}`);
   }
-  for (const tag of spot.tags ?? []) {
-    const t = tag.trim();
-    if (t) facts.push(`タグ: ${t}`);
-  }
   if (spot.address?.trim()) facts.push(`住所: ${spot.address.trim()}`);
   if (spot.prefecture || spot.area) {
     facts.push(`所在地: ${spot.prefecture ?? ""}${spot.area ?? ""}`);
@@ -33,7 +28,6 @@ function toAskSpotPayload(spot: SpotRow): AskSpotPayload {
     name: spot.name,
     description: spot.description,
     highlights: spot.highlights ?? undefined,
-    tags: spot.tags ?? undefined,
     area: spot.area ?? undefined,
     prefecture: spot.prefecture ?? undefined,
     address: spot.address ?? undefined,

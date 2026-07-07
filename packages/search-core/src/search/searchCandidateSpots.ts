@@ -21,12 +21,7 @@ export type SearchCandidateSpotsParams = CandidateSpotFilterParams & {
 };
 
 function hasStructuredFilters(params: CandidateSpotFilterParams): boolean {
-  return (
-    params.category !== undefined ||
-    params.priceMin !== undefined ||
-    params.priceMax !== undefined ||
-    params.near !== undefined
-  );
+  return params.category !== undefined || params.near !== undefined;
 }
 
 function assertValidEmbedding(embedding: number[]): void {
@@ -45,7 +40,7 @@ function assertValidEmbedding(embedding: number[]): void {
 /**
  * 候補スポット検索（A3 契約 I/F）。
  *
- * kNN × geo_distance × price/category を 1 関数に統合する。
+ * kNN × geo_distance × category を 1 関数に統合する。
  *
  * 挙動:
  *   - query のみ → キーワード + フィルタ

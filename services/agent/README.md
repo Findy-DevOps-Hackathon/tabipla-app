@@ -1,14 +1,14 @@
 # @tabipla/agent
 
 ADKエージェント層。`@google/adk`（LlmAgent + FunctionTool + InMemoryRunner）で
-推薦 / 旅程 / パーソナライズ(スワイプ→制約推論) / Web収集 のエージェントを提供し、Honoで公開する。
+推薦 / 旅程 / パーソナライズ(## 構成
 
-## 構成
-
-- `src/agents/` … LlmAgent（recommend / unchiku / introduce / debate）＋ run(ask)
-- `src/tools/` … FunctionTool（search/travel/unchiku）＋ `tracker.ts`（ループ監視） ＋ `dataSources.ts`（mock↔本物切替）
+- `src/agents/` … LlmAgent（recommend / unchiku / introduce / debate / rerank）＋ run(ask)
+  - `rerank.ts`: **`attendPlannerAgent`**（120点アテンドガイド）。ストーリーテラー、コンシェルジュ、ルートプランナーの3つの知性を協調させ、時間予算（short / half / 1day）に応じた一筆書き旅程と食事時間を考慮したタイムラインを構築。
+- `src/tools/` … FunctionTool（search/travel/unchiku）＋ `tracker.ts`（ループ監視） ＋ `dataSources.ts`（live データ層）
 - `src/personalize.ts` … スワイプ好み学習（決定的）
-- `src/fixtures/spots.ts` … `packages/db/seed-data/spots.json` から読み込むカタログ
+- `src/agents/personalized.ts` … 嗜好ベクトル・要望ベクトルの算出と、タイムラインプランとサブおすすめの最終組み立て。
+- `src/fixtures/spots.ts` … `packages/db/seed-data/spots.json` から読み込むカタログ（モック用）
 - `src/sceneSvg.ts` … カード用の生成SVG風景
 - `src/server.ts` … API（`/`=スワイプUI, `/dev`=開発パネル, `/v1/*`）
 
@@ -72,10 +72,33 @@ docker run --rm -p 8080:8080 \
 
 ## 安全対策・セーフティネットの仕様
 
-本番公開を見据え、エージェントのトークン無駄遣いや無限ループ防止のため、以下の安全機能を搭載しています。
+本本番公開を見据え、エージェントのトークン無駄遣いや無限ループ防止のため、以下の安全機能を搭載しています。
 
 ### 1. ツール呼び出しのループ・上限抑止
 - **仕組み**: `AsyncLocalStorage` を用いて、リクエスト単位でツール実行履歴・回数を追跡しています（`src/tools/tracker.ts`）。
+- **回数上限**: 1つのリクエスト内でツール実行が **5回** を超えた場合、以降 of 呼び出しを遮断します。
+- **ループ検知**: 同一パラメータで同一ツールが連続して呼ばれた場合、ループ状態とみなし遮断します。
+- **挙動**: 遮断時はLLMへエラーを返すのではなく、「手元にある情報のみで回答を簡潔にまとめて完了させてください」という指示を返すため、エージェントが途中でクラッシュせず自然に会話を終了（いい感じに切り上げ）します。
+
+### 2. 目的外（無関係な話題）への定型拒否
+- **対象**: 直接チャット入力を受ける `recommendAgent`（推薦）および `introduceAgent`（紹介）。
+- **対応**: 観光地やプランに全く関係のない話題（プログラミング、雑談、有害な入力など）が入力された場合、ツールを呼び出す前に「申し訳ありませんが、当スポットの解説や観光に関するご質問以外にはお答えできません。」等の最小限の定型文で拒否し、早期終了します。
+
+### 3. 出力トークン予算の最適化
+- 各エージェントの最大出力トークン（`maxOutputTokens`）を必要最小限（例: `1024` または `800` 等）に制限し、トークン浪費を防ぎます。
+
+### 4. 対話ログ表示の簡潔化（ディベート）
+- 会議ログの1回の発言が長くなりすぎないよう、エージェント間のディベート出力（`debateOutputSchema`）に `thought` フィールドを新設しました。
+- 計算や推考などの詳細な検討プロセスは裏で `thought` に出力させ、チャットUIに表示される `message` には 1〜2文（最大80文字程度）の簡潔な発言のみを出力するよう制御しています。また、議論も最大3往復に制限しています。
+
+### 5. 旅程プランナー（personalizedPlan）のモック・フォールバック挙動
+- **API接続エラー時**: `services/backend-api` が `services/agent` (8080) に接続できない場合は `503` エラーを返却します。
+- **LLM/Gemini実行失敗時（フォールバック）**: APIキー不足やタイムアウト、あるいはVertex AIのエラー等でエージェントセッションが失敗した場合でも、システム全体がクラッシュしないよう、検索にヒットした実観光スポットの先頭 3件を時間枠に自動配置した安全なデフォルトプランを構築して返します。この場合でも、PostgreSQLデータベースに登録されている実画像（`/uploads/spots/...webp`）や詳細データが正常にマージされて表示されます。
+
+## 本データ結合（実装済み）
+
+* スワイプ診断、およびパーソナライズ検索は、Elasticsearch（`spots` インデックス）および PostgreSQL 実データベース（`spots` テーブル）と結線完了しています。
+* 同期用のユーティリティコマンド（`reindex`, `embed-spots`, `cluster-reference-spots`）により、データベースの正本データが自動的に ES のベクトル空間およびクラスタへマッピングされます。�数を追跡しています（`src/tools/tracker.ts`）。
 - **回数上限**: 1つのリクエスト内でツール実行が **5回** を超えた場合、以降の呼び出しを遮断します。
 - **ループ検知**: 同一パラメータで同一ツールが連続して呼ばれた場合、ループ状態とみなし遮断します。
 - **挙動**: 遮断時はLLMへエラーを返すのではなく、「手元にある情報のみで回答を簡潔にまとめて完了させてください」という指示を返すため、エージェントが途中でクラッシュせず自然に会話を終了（いい感じに切り上げ）します。
@@ -91,7 +114,7 @@ docker run --rm -p 8080:8080 \
 - 会議ログの1回の発言が長くなりすぎないよう、エージェント間のディベート出力（`debateOutputSchema`）に `thought` フィールドを新設しました。
 - 計算や推考などの詳細な検討プロセスは裏で `thought` に出力させ、チャットUIに表示される `message` には 1〜2文（最大80文字程度）の簡潔な発言のみを出力するよう制御しています。また、議論も最大3往復に制限しています。
 
-## 本データ結合（TODO）
+## 本データ結合
 
-`src/tools/live.ts` の `searchEs` を `@tabipla/search-core` の `searchCandidateSpots` に結線し、
-`USE_MOCK=0` で切替（クエリ埋め込みは agent 側で生成して `embedding` を渡す）。
+`src/tools/live.ts` の `searchEs` は `@tabipla/search-core` の `searchCandidateSpots` に結線済み。
+クエリ埋め込みは agent 側で生成して ES に渡す。`ES_NODE` と `BACKEND_API_URL` を `.env` に設定する。

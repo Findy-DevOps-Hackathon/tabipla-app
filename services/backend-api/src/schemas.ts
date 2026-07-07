@@ -37,19 +37,29 @@ const spotOptionalProps = {
   area: { type: "string", maxLength: 256 },
   prefecture: { type: "string", maxLength: 64 },
   address: { type: "string", maxLength: 512 },
-  tags: {
-    type: "array",
-    items: { type: "string", minLength: 1, maxLength: 64 },
-    maxItems: 50,
-  },
   highlights: {
     type: "array",
     items: { type: "string", minLength: 1, maxLength: 30 },
     maxItems: 5,
   },
   location: geoPointSchema,
-  price: { type: "integer", minimum: 0 },
   imageUrl: { type: "string", maxLength: 2048 },
+  clusterId: { type: "integer" },
+  sensoryScores: {
+    type: "object",
+    properties: {
+      nature: { type: "number" },
+      history: { type: "number" },
+      art: { type: "number" },
+      entertainment: { type: "number" },
+      gourmet: { type: "number" },
+      activity: { type: "number" },
+      quietness: { type: "number" },
+      indoor: { type: "number" },
+      popularity: { type: "number" },
+    },
+    additionalProperties: false,
+  },
   embedding: { type: "array", items: { type: "number" } },
   createdAt: { type: "string", format: "date-time" },
   updatedAt: { type: "string", format: "date-time" },
@@ -279,7 +289,7 @@ export const travelTimesSchema = {
   },
 } as const;
 
-/** POST /search/candidates（A3: kNN × geo × price/category） */
+/** POST /search/candidates（A3: kNN × geo × category） */
 export const searchCandidateSpotsSchema = {
   body: {
     type: "object",
@@ -298,8 +308,6 @@ export const searchCandidateSpotsSchema = {
           },
         ],
       },
-      priceMin: { type: "integer", minimum: 0 },
-      priceMax: { type: "integer", minimum: 0 },
       near: geoPointSchema,
       radiusKm: { type: "number", exclusiveMinimum: 0 },
       size: { type: "integer", minimum: 1, maximum: 1000 },
@@ -458,6 +466,25 @@ export const postSpotStorySchema = {
         },
       },
       tone: { type: "string" },
+    },
+  },
+} as const;
+
+/** POST /v1/diagnosis/next-pair */
+export const nextPairSchema = {
+  body: {
+    type: "object",
+    required: ["likes", "nopes"],
+    additionalProperties: false,
+    properties: {
+      likes: {
+        type: "array",
+        items: { type: "string" },
+      },
+      nopes: {
+        type: "array",
+        items: { type: "string" },
+      },
     },
   },
 } as const;

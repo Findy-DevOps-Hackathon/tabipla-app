@@ -12,6 +12,7 @@ fi
 ENV_FILE="$ROOT/services/backend-api/.env"
 SQL_CREDS="$ROOT/infra/cloud-sql/.credentials"
 GCS_CREDS="$ROOT/infra/gcs/.credentials"
+ES_CREDS="$ROOT/infra/elasticsearch/.credentials"
 
 if [[ -f "$ENV_FILE" ]]; then
   set -a
@@ -32,6 +33,12 @@ if [[ -f "$GCS_CREDS" ]]; then
   set -a
   # shellcheck disable=SC1090
   source "$GCS_CREDS"
+  set +a
+fi
+if [[ -f "$ES_CREDS" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ES_CREDS"
   set +a
 fi
 
@@ -61,7 +68,7 @@ upsert_secret() {
 echo "Project: ${PROJECT}"
 echo ""
 echo "Creating/updating secrets from local files..."
-echo "  sources: .env, infra/cloud-sql/.credentials, infra/gcs/.credentials"
+echo "  sources: .env, infra/cloud-sql/.credentials, infra/gcs/.credentials, infra/elasticsearch/.credentials"
 echo ""
 
 gcloud services enable secretmanager.googleapis.com --project="$PROJECT" --quiet
@@ -73,6 +80,7 @@ upsert_secret tabipla-gemini-api-key "${GEMINI_API_KEY:-}"
 upsert_secret tabipla-google-maps-api-key "${GOOGLE_MAPS_API_KEY:-}"
 upsert_secret tabipla-es-api-key "${ES_API_KEY:-}"
 upsert_secret tabipla-es-password "${ES_PASSWORD:-}"
+upsert_secret tabipla-es-username "${ES_USERNAME:-}"
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
   echo ""

@@ -1,7 +1,8 @@
 import { InMemoryRunner, type LlmAgent, stringifyContent } from "@google/adk";
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
+import { extractBearerToken, verifyAdminToken } from "./adminAuth.js";
 import {
   COLLECT_CATEGORIES,
   collectAgent,
@@ -9,7 +10,6 @@ import {
   resolveCollectResult,
 } from "./agents/collect.js";
 import { type DescribeMode, describeAgent, describeSpot } from "./agents/describe.js";
-import { analyzeFeedback } from "./agents/feedback.js";
 import { askIntroduce } from "./agents/introduce.js";
 import { personalizedPlan } from "./agents/personalized.js";
 import { recommendAgent } from "./agents/recommend.js";
@@ -17,8 +17,7 @@ import { ask } from "./agents/run.js";
 import { generateSpotImage } from "./agents/spotImage.js";
 import { story } from "./agents/unchiku.js";
 import type { Spot } from "./contracts.js";
-import { KOMORO_SPOTS, SPOT_IMAGES, SPOT_TAGS } from "./fixtures/spots.js";
-import { summarizeProfile, userProfiles } from "./personalize.js";
+import { KOMORO_SPOTS, SPOT_IMAGES } from "./fixtures/spots.js";
 import { sceneSvg } from "./sceneSvg.js";
 import { toolCallStorage } from "./tools/tracker.js";
 import { pageHtml, swipePageHtml } from "./ui.js";
@@ -41,6 +40,18 @@ app.use("*", async (c, next) => {
 // admin-web(5174) からのクロスオリジン呼び出しを許可（ローカル開発用）
 app.use("/v1/*", cors());
 
+const requireAdminAuth: MiddlewareHandler = async (c, next) => {
+  const token = extractBearerToken(c.req.header("authorization"));
+  if (!token || !verifyAdminToken(token)) {
+    return c.json({ error: "認証が必要です" }, 401);
+  }
+  return next();
+};
+
+app.use("/v1/collect-spots", requireAdminAuth);
+app.use("/v1/describe-spot", requireAdminAuth);
+app.use("/v1/generate-spot-image", requireAdminAuth);
+
 // スワイプUI(主役)。開発用パネルは /dev。
 app.get("/", (c) => c.html(swipePageHtml));
 app.get("/dev", (c) => c.html(pageHtml));
@@ -60,12 +71,11 @@ app.get("/img/:id", (c) => {
   });
 });
 
-// スワイプ用カタログ（タグ・画像込み）。本番はDB/検索から。
+// スワイプ用カタログ（画像込み）。本番はDB/検索から。
 app.get("/v1/spots", (c) =>
   c.json({
     spots: KOMORO_SPOTS.map((s) => ({
       ...s,
-      tags: SPOT_TAGS[s.id] ?? [],
       image: SPOT_IMAGES[s.id] ?? "",
     })),
   }),
@@ -104,30 +114,29 @@ app.post("/v1/personalized/plan", async (c) => {
   const {
     likes = [],
     nopes = [],
-    userId = "demo",
-    timeBudget = "4時間",
-    origin = "小諸駅",
+    likeWeights,
     travelMemory = "",
     catalog,
+    page,
+    limit,
+    planKey,
   } = await c.req.json<{
     likes?: string[];
     nopes?: string[];
-    userId?: string;
-    timeBudget?: string;
-    origin?: string;
+    likeWeights?: Record<string, number>;
     travelMemory?: string;
     catalog?: Spot[];
+    page?: number;
+    limit?: number;
+    planKey?: string;
   }>();
   try {
     const spotCatalog = catalog ?? KOMORO_SPOTS;
-    const res = await personalizedPlan(
-      { likes, nopes },
-      userId,
-      timeBudget,
-      origin,
-      travelMemory,
-      spotCatalog,
-    );
+    const res = await personalizedPlan({ likes, nopes, likeWeights }, travelMemory, spotCatalog, {
+      page,
+      limit,
+      planKey,
+    });
     return c.json(res);
   } catch (e) {
     console.error(e);
@@ -135,113 +144,17 @@ app.post("/v1/personalized/plan", async (c) => {
   }
 });
 
-// スポットのGood/Badフィードバック
-app.post("/v1/personalized/feedback/spot", async (c) => {
-  const {
-    userId = "demo",
-    spotId,
-    rating,
-  } = await c.req.json<{
-    userId?: string;
-    spotId: string;
-    rating: "good" | "bad";
-  }>();
-
-  try {
-    const profile = userProfiles.get(userId);
-    if (!profile) {
-      return c.json({ error: "プロフィールが見つかりません" }, 400);
-    }
-
-    const result = await analyzeFeedback(
-      {
-        currentFeedbackNotes: profile.feedbackNotes,
-        currentIntroStyle: profile.introStyle,
-        spotFeedbacks: [{ spotId, rating }],
-      },
-      userId,
-    );
-
-    profile.feedbackNotes = result.feedbackNotes;
-    profile.introStyle = result.introStyle;
-    userProfiles.set(userId, profile);
-
-    return c.json({
-      success: true,
-      feedbackNotes: profile.feedbackNotes,
-      introStyle: profile.introStyle,
-    });
-  } catch (e) {
-    console.error(e);
-    return c.json({ error: friendly(e) }, 500);
-  }
-});
-
-// 旅行終了後のフィードバック
-app.post("/v1/personalized/feedback/trip", async (c) => {
-  const {
-    userId = "demo",
-    rating,
-    comment,
-    spotFeedbacks = [],
-  } = await c.req.json<{
-    userId?: string;
-    rating: number;
-    comment: string;
-    spotFeedbacks?: { spotId: string; rating: "good" | "bad" }[];
-  }>();
-
-  try {
-    const profile = userProfiles.get(userId);
-    if (!profile) {
-      return c.json({ error: "プロフィールが見つかりません" }, 400);
-    }
-
-    const result = await analyzeFeedback(
-      {
-        currentFeedbackNotes: profile.feedbackNotes,
-        currentIntroStyle: profile.introStyle,
-        spotFeedbacks,
-        tripFeedback: { rating, comment },
-      },
-      userId,
-    );
-
-    profile.feedbackNotes = result.feedbackNotes;
-    profile.introStyle = result.introStyle;
-    userProfiles.set(userId, profile);
-
-    return c.json({
-      success: true,
-      feedbackNotes: profile.feedbackNotes,
-      introStyle: profile.introStyle,
-    });
-  } catch (e) {
-    console.error(e);
-    return c.json({ error: friendly(e) }, 500);
-  }
-});
-
 // 紹介エージェントへのマルチモーダルな質問
 app.post("/v1/spots/:id/ask", async (c) => {
   const spotId = c.req.param("id");
-  const {
-    text,
-    image,
-    audio,
-    userId = "demo",
-    spot,
-    facts,
-  } = await c.req.json<{
+  const { text, image, audio, spot, facts } = await c.req.json<{
     text?: string;
     image?: { mimeType: string; data: string };
     audio?: { mimeType: string; data: string };
-    userId?: string;
     spot?: {
       name: string;
       description?: string;
       highlights?: string[];
-      tags?: string[];
       area?: string;
       prefecture?: string;
       address?: string;
@@ -250,22 +163,18 @@ app.post("/v1/spots/:id/ask", async (c) => {
   }>();
 
   try {
-    const profile = userProfiles.get(userId);
-    const profileSummary = profile ? summarizeProfile(profile) : "";
-    const introStyle = profile ? profile.introStyle : "";
-
     const answer = await askIntroduce(
       {
         spotId,
         text,
         image,
         audio,
-        introStyle,
-        userProfileSummary: profileSummary,
+        introStyle: "",
+        userProfileSummary: "",
         spot,
         facts,
       },
-      userId,
+      spotId,
     );
 
     return c.json({ answer });
@@ -374,7 +283,7 @@ ${categoryList}
     const prompt = `${prefecture}${municipality}の観光地を${effectiveTargetCount}件を目標に収集してください。
 ${focusBlock}${excludeBlock}
 
-【出力の再確認】Markdown・見出し・箇条書き・説明文は禁止。{"spots":[{"name":"...","description":"...","highlights":["...","...","..."],"category":"自然","area":"...","prefecture":"...","address":"...","tags":["..."],"sources":["..."]}]} 形式のJSONだけを出力すること。`;
+【出力の再確認】Markdown・見出し・箇条書き・説明文は禁止。{"spots":[{"name":"...","description":"...","highlights":["...","...","..."],"category":"自然","area":"...","prefecture":"...","address":"...","sources":["..."]}]} 形式のJSONだけを出力すること。`;
 
     const JSON_RETRY_SUFFIX =
       '\n\n【再指示】前回はMarkdownで返したため失敗しました。JSON以外は一切書かず、{"spots":[...]} だけを出力してください。';
@@ -550,6 +459,4 @@ app.post("/v1/generate-spot-image", async (c) => {
 
 const port = Number(process.env.PORT ?? 8080);
 serve({ fetch: app.fetch, port });
-console.log(
-  `agent listening on http://localhost:${port}  (USE_MOCK=${process.env.USE_MOCK ?? "1"})`,
-);
+console.log(`agent listening on http://localhost:${port}`);

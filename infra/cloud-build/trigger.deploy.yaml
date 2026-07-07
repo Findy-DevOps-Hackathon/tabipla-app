@@ -14,7 +14,6 @@ includedFiles:
   - package.json
 substitutions:
   _REGION: asia-northeast1
-  _USE_MOCK: "1"
   _CORS_ORIGINS: https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com
   _GCS_BUCKET: ""
   _GCS_PUBLIC_BASE_URL: ""

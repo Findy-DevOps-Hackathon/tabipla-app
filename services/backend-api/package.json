@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "reindex": "tsx --env-file-if-exists=.env src/reindex.ts",
     "embed-spots": "tsx --env-file-if-exists=.env src/embed-spots.ts",
+    "cluster-reference-spots": "tsx --env-file-if-exists=.env src/cluster-reference-spots.ts",
     "clean": "rm -rf dist",
     "deploy": "bash scripts/deploy.sh"
   },
@@ -23,7 +24,8 @@
     "@tabipla/db": "workspace:*",
     "@tabipla/maps-core": "workspace:*",
     "@tabipla/search-core": "workspace:*",
-    "fastify": "^5.0.0"
+    "fastify": "^5.0.0",
+    "ml-kmeans": "^7.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

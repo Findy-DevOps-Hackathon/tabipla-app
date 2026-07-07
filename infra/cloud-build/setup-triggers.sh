@@ -21,11 +21,21 @@ GCS_BUCKET=""
 GCS_PUBLIC_BASE_URL=""
 GCS_OBJECT_PREFIX="spots"
 GCS_CREDS="$ROOT/infra/gcs/.credentials"
+ES_CREDS="$ROOT/infra/elasticsearch/.credentials"
 if [[ -f "$GCS_CREDS" ]]; then
   set -a
   # shellcheck disable=SC1090
   source "$GCS_CREDS"
   set +a
+fi
+if [[ -f "$ES_CREDS" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ES_CREDS"
+  set +a
+  if [[ "${ES_NODE:-}" == *localhost* || "${ES_NODE:-}" == *127.0.0.1* ]]; then
+    unset ES_NODE
+  fi
 fi
 
 if ! gcloud builds connections describe "$CONNECTION" \
@@ -131,7 +141,7 @@ repositoryEventConfig:
   repository: ${REPO_RESOURCE}
   pullRequest:
     branch: ${MAIN_BRANCH}
-    commentControl: COMMENTS_ENABLED
+    commentControl: COMMENTS_DISABLED
 serviceAccount: ${SERVICE_ACCOUNT}
 EOF
   echo "$out"
@@ -162,15 +172,14 @@ includedFiles:
 $(write_included_files "${DEPLOY_FILES[@]}")
 substitutions:
   _REGION: ${REGION}
-  _USE_MOCK: "1"
   _CORS_ORIGINS: "${CORS_ORIGINS}"
   _GCS_BUCKET: "${GCS_BUCKET}"
   _GCS_PUBLIC_BASE_URL: "${GCS_PUBLIC_BASE_URL}"
   _GCS_OBJECT_PREFIX: ${GCS_OBJECT_PREFIX}
-  _ES_NODE: ""
-  _ES_INDEX: ""
-  _ES_VECTOR_DIMS: ""
-  _EMBEDDING_PROVIDER: ""
+  _ES_NODE: "${ES_NODE:-}"
+  _ES_INDEX: "${ES_INDEX:-}"
+  _ES_VECTOR_DIMS: "${ES_VECTOR_DIMS:-}"
+  _EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-}"
 repositoryEventConfig:
   repository: ${REPO_RESOURCE}
   push:

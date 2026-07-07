@@ -20,7 +20,12 @@ type TokenPayload = AuthUser & {
 };
 
 function getSecret(): string {
-  return process.env.USER_JWT_SECRET ?? "tabipla-dev-user-secret";
+  const secret = process.env.USER_JWT_SECRET?.trim();
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("USER_JWT_SECRET is required in production.");
+  }
+  return "tabipla-dev-user-secret";
 }
 
 function encodePayload(payload: TokenPayload): string {
