@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { SpotDocument } from "@tabipla/search-core";
 import type { Spot } from "../contracts.js";
 
 type SeedSpotRow = {
@@ -60,6 +61,19 @@ function toAgentSpot(row: SeedSpotRow): Spot {
     location: row.lat != null && row.lon != null ? { lat: row.lat, lon: row.lon } : KOMORO_CENTER,
     description: row.description,
     highlights: row.highlights?.slice(0, 3) ?? [],
+  };
+}
+
+/** Elasticsearch / backend-api の SpotDocument を agent 契約型へ変換する。 */
+export function mapSpotDocumentToAgentSpot(doc: SpotDocument): Spot {
+  const categories = normalizeCategories(doc.category);
+  return {
+    id: doc.id,
+    name: doc.name,
+    category: toAgentCategory(categories),
+    location: doc.location ?? KOMORO_CENTER,
+    description: doc.description,
+    highlights: doc.highlights?.slice(0, 3) ?? [],
   };
 }
 

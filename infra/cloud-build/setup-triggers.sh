@@ -162,7 +162,6 @@ includedFiles:
 $(write_included_files "${DEPLOY_FILES[@]}")
 substitutions:
   _REGION: ${REGION}
-  _USE_MOCK: "1"
   _CORS_ORIGINS: "${CORS_ORIGINS}"
   _GCS_BUCKET: "${GCS_BUCKET}"
   _GCS_PUBLIC_BASE_URL: "${GCS_PUBLIC_BASE_URL}"

@@ -19,7 +19,26 @@ steps:
       - -c
       - |
         set -euo pipefail
-        RUN_ENV_VARS="GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},USE_MOCK=${_USE_MOCK}"
+
+        BACKEND_URL=""
+        if gcloud run services describe tabipla-backend-api \
+          --project="${PROJECT_ID}" \
+          --region="${_REGION}" \
+          --format='value(status.url)' >/dev/null 2>&1; then
+          BACKEND_URL="$(gcloud run services describe tabipla-backend-api \
+            --project="${PROJECT_ID}" \
+            --region="${_REGION}" \
+            --format='value(status.url)')"
+        fi
+
+        RUN_ENV_VARS="GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION}"
+        if [[ -n "$$BACKEND_URL" ]]; then
+          RUN_ENV_VARS="$${RUN_ENV_VARS},BACKEND_API_URL=$$BACKEND_URL"
+        fi
+        if [[ -n "${_ES_NODE}" ]]; then
+          RUN_ENV_VARS="$${RUN_ENV_VARS},ES_NODE=${_ES_NODE}"
+        fi
+
         gcloud run deploy tabipla-agent \
           --project="${PROJECT_ID}" \
           --region="${_REGION}" \
@@ -68,7 +87,6 @@ images:
 
 substitutions:
   _REGION: asia-northeast1
-  _USE_MOCK: "1"
   _CORS_ORIGINS: https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com
   _GCS_BUCKET: ""
   _GCS_PUBLIC_BASE_URL: ""

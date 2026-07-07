@@ -1,5 +1,8 @@
+import { createElasticsearchClient, searchCandidateSpots } from "@tabipla/search-core";
+import { embedText } from "../agents/embedding.js";
+import { mapSpotDocumentToAgentSpot } from "../fixtures/spots.js";
 import type { GetUnchikuSourceFn, SearchFn, TravelTimesFn } from "../contracts.js";
-import { fetchSpotFactsFromBackend } from "./spotFacts.js";
+import { fetchSpotFactsFromBackend, backendApiBase } from "./spotFacts.js";
 
 /** 同一リクエスト内で backend から渡された facts をツール呼び出しでも返す。 */
 let pendingAskFacts: Map<string, string[]> | null = null;
@@ -22,10 +25,70 @@ export const getUnchikuRepo: GetUnchikuSourceFn = async ({ spotId }) => {
   return { spotId, facts };
 };
 
-export const searchEs: SearchFn = async () => {
-  throw new Error("searchEs not ready — A3(searchCandidateSpots)完成後に実装");
+const AGENT_TO_ES_CATEGORIES: Record<string, string[]> = {
+  nature: ["自然", "レジャー・スポーツ"],
+  gourmet: ["食", "ショッピング"],
+  history: ["歴史・文化", "都市", "芸術"],
 };
 
-export const travelTimesReal: TravelTimesFn = async () => {
-  throw new Error("travelTimesReal not ready — A4(getTravelTimes)完成後に実装");
+const TRAVEL_MODE_MAP = {
+  walk: "WALK",
+  drive: "DRIVE",
+  transit: "TRANSIT",
+} as const;
+
+type RoutesTravelMode = (typeof TRAVEL_MODE_MAP)[keyof typeof TRAVEL_MODE_MAP];
+
+export const searchEs: SearchFn = async (input) => {
+  const client = createElasticsearchClient();
+  const size = input.k ?? 8;
+  const query = input.query?.trim() || undefined;
+  const embedding = query ? await embedText(query, { taskType: "RETRIEVAL_QUERY" }) : undefined;
+  const esCategories = input.category?.flatMap((category) => AGENT_TO_ES_CATEGORIES[category] ?? []) ?? [];
+
+  const results = await searchCandidateSpots(client, {
+    query,
+    embedding,
+    category: esCategories.length > 0 ? esCategories : undefined,
+    near: input.center,
+    radiusKm: input.radiusKm,
+    size,
+    k: size,
+  });
+
+  return results.map((result) => mapSpotDocumentToAgentSpot(result.document));
+};
+
+export const travelTimesReal: TravelTimesFn = async (input) => {
+  const base = backendApiBase();
+  if (!base) {
+    throw new Error("[agent] BACKEND_API_URL が未設定です。travel_times を実行できません。");
+  }
+
+  const mode = TRAVEL_MODE_MAP[input.mode];
+  const res = await fetch(`${base}/travel-times`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      origin: input.origin,
+      destinations: input.destinations.map((destination) => destination.at),
+      modes: [mode],
+      maxDestinations: input.destinations.length,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`[agent] travel-times API エラー (${res.status}): ${body}`);
+  }
+
+  const matrix = (await res.json()) as {
+    results?: Partial<Record<RoutesTravelMode, Array<{ durationSeconds: number | null }>>>;
+  };
+  const legs = matrix.results?.[mode] ?? [];
+
+  return input.destinations.map((destination, index) => ({
+    destId: destination.id,
+    durationSec: legs[index]?.durationSeconds ?? 0,
+  }));
 };

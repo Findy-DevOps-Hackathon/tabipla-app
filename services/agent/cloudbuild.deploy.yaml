@@ -27,9 +27,12 @@ steps:
             --format='value(status.url)')"
         fi
 
-        RUN_ENV_VARS="GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},USE_MOCK=${_USE_MOCK}"
+        RUN_ENV_VARS="GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION}"
         if [[ -n "$$BACKEND_URL" ]]; then
           RUN_ENV_VARS="$${RUN_ENV_VARS},BACKEND_API_URL=$$BACKEND_URL"
+        fi
+        if [[ -n "${_ES_NODE}" ]]; then
+          RUN_ENV_VARS="$${RUN_ENV_VARS},ES_NODE=${_ES_NODE}"
         fi
 
         SECRET_ARGS=()
@@ -66,7 +69,7 @@ substitutions:
   _REGION: asia-northeast1
   _SERVICE: tabipla-agent
   _IMAGE: gcr.io/${PROJECT_ID}/tabipla-agent
-  _USE_MOCK: "0"
+  _ES_NODE: ""
 
 options:
   logging: CLOUD_LOGGING_ONLY

@@ -4,7 +4,7 @@ import { getUnchikuSource, search, travelTimes } from "./dataSources.js";
 import { checkToolLoop } from "./tracker.js";
 
 // FunctionTool は Zod スキーマでツールを宣言。
-// execute はデータ層(dataSources)を呼ぶだけ。mock↔本物の切替はそちらで吸収される。
+// execute はデータ層(dataSources)を呼ぶだけ。
 
 export const searchSpotsTool = new FunctionTool({
   name: "search_spots",

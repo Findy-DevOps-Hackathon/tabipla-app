@@ -153,28 +153,6 @@ export async function describeSpot(
   input: DescribeSpotInput,
   runAgent: (prompt: string) => Promise<{ final: string; errMsg: string }>,
 ): Promise<DescribeResult> {
-  const mode = input.mode ?? "description";
-
-  if (process.env.USE_MOCK !== "0") {
-    if (mode === "highlights") {
-      return {
-        description: "",
-        highlights: [
-          `【モック】${input.name}の見どころをゆっくり散策できます`,
-          "季節ごとに表情が変わるのが魅力です",
-          "周辺スポットと合わせて半日コースがおすすめです",
-        ],
-      };
-    }
-    return {
-      description: sanitizeDescription(
-        `【モック】${input.prefecture}${input.municipality}の「${input.name}」です。デモ用の紹介文です。`,
-      ),
-      category: "自然",
-      highlights: [],
-    };
-  }
-
   const prompt = buildDescribePrompt(input);
 
   const { final, errMsg } = await runAgent(prompt);

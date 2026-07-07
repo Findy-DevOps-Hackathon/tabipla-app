@@ -22,10 +22,7 @@ facts が空なら「語れる確かな話がない」と正直に返す。`,
 });
 
 export async function story(spotId: string): Promise<string> {
-  if (process.env.USE_MOCK !== "0") {
-    return `【モック蘊蓄】スポット ID: ${spotId} に関する歴史や特別なエピソードです。実はこの場所は、古くからの言い伝えや地元の隠れた魅力がたくさん詰まっています。ぜひ現地でその風情を感じてみてください！`;
-  }
-  const src = await getUnchikuSource({ spotId }); // 検証用に先取り
+  const src = await getUnchikuSource({ spotId });
   const text = await ask(unchikuAgent, `spotId=${spotId} の蘊蓄を書いて`);
   if (!passesGuard(text, src.facts)) {
     throw new Error("unchiku guard tripped — facts外の内容が混入");
