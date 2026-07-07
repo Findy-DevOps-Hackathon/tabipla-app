@@ -31,8 +31,12 @@ export function normalizeCategories(value: string | string[] | null | undefined)
  * - embedding はここでは付与しない（生成は別タスク。ES 側で管理）。
  */
 export function toSpotDocument(row: SpotRow): SpotDocument {
-  const location =
+  let location =
     row.lat !== null && row.lon !== null ? { lat: row.lat, lon: row.lon } : undefined;
+
+  if (!location && row.area === "小諸市") {
+    location = { lat: 36.3268, lon: 138.4211 };
+  }
 
   return {
     id: row.id,

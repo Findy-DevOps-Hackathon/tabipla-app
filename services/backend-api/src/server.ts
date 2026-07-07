@@ -989,6 +989,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     }
     const data = (await res.json()) as {
       error?: string;
+      plan?: Record<string, unknown>[];
       recommendations?: Record<string, unknown>[];
       profileSummary?: string;
       result?: string;
@@ -996,6 +997,18 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     };
     if (!res.ok) {
       return reply.code(res.status).send(data);
+    }
+
+    if (data.plan && Array.isArray(data.plan)) {
+      data.plan = data.plan.map((item: any) => {
+        if (item.type === "spot" && item.spot) {
+          const id = String(item.spot.id ?? "");
+          const name = String(item.spot.name ?? "");
+          const row = rowById.get(id) ?? rowByName.get(name);
+          item.spot = enrichRecommendation(item.spot, row);
+        }
+        return item;
+      });
     }
 
     if (data.recommendations?.length) {

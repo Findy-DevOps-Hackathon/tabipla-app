@@ -143,10 +143,7 @@ export default function CollectPage() {
   } | null>(null);
 
   const selectedCount = spots.filter((s) => s.selected).length;
-  const imageReadyCount = spots.filter((s) => s.pendingImage).length;
   const selectedImageReadyCount = spots.filter((s) => s.selected && s.pendingImage).length;
-  const imageProgressPercent =
-    spots.length > 0 ? Math.round((imageReadyCount / spots.length) * 100) : 0;
   const isImageBusy = imageBusy !== null;
   const isRegistering = step === "registering";
 

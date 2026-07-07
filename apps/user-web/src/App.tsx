@@ -70,8 +70,17 @@ type PlanApiRecommendation = {
   address?: string;
 };
 
+type PlanItemResponse = {
+  type: "spot" | "break";
+  timeSlot: string;
+  spot?: PlanApiRecommendation;
+  title: string;
+  description: string;
+};
+
 type PersonalizedPlanResponse = {
   error?: string;
+  plan?: PlanItemResponse[];
   recommendations?: PlanApiRecommendation[];
   profileSummary?: string;
   result?: string;
@@ -174,6 +183,14 @@ export default function App() {
 
   const [likes, setLikes] = useState<string[]>([]);
   const [nopes, setNopes] = useState<string[]>([]);
+  const [timeBudget, setTimeBudget] = useState("half");
+  const [plan, setPlan] = useState<{
+    type: "spot" | "break";
+    timeSlot: string;
+    spot?: Recommendation;
+    title: string;
+    description: string;
+  }[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>(
     readStoredRecommendations,
   );
@@ -396,7 +413,7 @@ export default function App() {
             likes,
             nopes,
             userId: VISITOR_ID,
-            timeBudget: "4時間",
+            timeBudget: timeBudget === "1day" ? "丸々一日" : timeBudget === "half" ? "半日" : "隙間時間",
             origin:
               destinations.length === 1 && destinations[0]?.area === "小諸市"
                 ? "小諸駅"
@@ -427,6 +444,30 @@ export default function App() {
             : docs.map((doc) => documentToRecommendation(doc, primary));
 
         setRecommendations(refreshRecommendationImages(finalRecommendations, docs));
+
+        // タイムラインプランのマッピングと保存
+        const mappedPlan = (data.plan ?? []).map((item) => {
+          if (item.type === "spot" && item.spot) {
+            const mappedSpot = planItemToRecommendation(item.spot, destinations);
+            if (mappedSpot) {
+              return {
+                type: "spot" as const,
+                timeSlot: item.timeSlot,
+                title: item.title,
+                description: item.description,
+                spot: refreshRecommendationImages([mappedSpot], docs)[0] || mappedSpot,
+              };
+            }
+          }
+          return {
+            type: "break" as const,
+            timeSlot: item.timeSlot,
+            title: item.title,
+            description: item.description,
+          };
+        });
+        setPlan(mappedPlan);
+
         setProfileSummary(data.profileSummary ?? "");
         setPlanMessage(data.result ?? "");
         setIsFetchDone(true);
@@ -443,7 +484,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [step, likes, nopes, travelMemory]);
+  }, [step, likes, nopes, travelMemory, timeBudget]);
 
   const openSpotDetail = useCallback(
     (rec: Recommendation) => {
@@ -584,8 +625,9 @@ export default function App() {
       {step === "memory" && (
         <MemoryScreen
           onBack={() => goBack("input")}
-          onContinue={(memory) => {
+          onContinue={(memory, budget) => {
             setTravelMemory(memory);
+            setTimeBudget(budget);
             setStep("processing");
           }}
         />
@@ -608,6 +650,7 @@ export default function App() {
       {step === "recommendations" && (
         <RecommendationsScreen
           recommendations={recommendations}
+          plan={plan}
           exploreSpots={exploreSpots.length > 0 ? exploreSpots : homeFeaturedSpots}
           destinationArea={formatDestinationLabel(getCurrentDestinations())}
           diagnosisComplete={diagnosisComplete}
