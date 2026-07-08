@@ -18,70 +18,55 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Post to Discord
+        continue-on-error: true
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          PR_BODY: ${{ github.event.pull_request.body }}
           BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
           REPO: ${{ github.repository }}
         run: |
-          python3 <<'PY'
-          import json
-          import os
-          import urllib.error
-          import urllib.request
+          WEBHOOK="$(printf '%s' "$DISCORD_WEBHOOK_URL" | tr -d '[:space:]')"
+          if [ -z "$WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK_URL is not set. Skipping Discord notification."
+            exit 0
+          fi
 
-          webhook = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
-          if not webhook:
-              print("DISCORD_WEBHOOK_URL is not set. Skipping Discord notification.")
-              raise SystemExit(0)
+          if [[ "$WEBHOOK" != *"/api/webhooks/"* ]]; then
+            echo "DISCORD_WEBHOOK_URL format is invalid."
+            exit 1
+          fi
 
-          body = (os.environ.get("PR_BODY") or "").strip()
-          if len(body) > 500:
-              body = body[:497] + "..."
+          echo "Webhook URL length: ${#WEBHOOK}"
 
-          payload = {
-              "embeds": [
-                  {
-                      "title": f"PR to {os.environ['BASE_BRANCH']}: {os.environ['PR_TITLE']}",
-                      "url": os.environ["PR_URL"],
-                      "description": body or "(説明なし)",
-                      "color": 5793266,
-                      "fields": [
-                          {
-                              "name": "Author",
-                              "value": os.environ["PR_AUTHOR"],
-                              "inline": True,
-                          },
-                          {
-                              "name": "Branch",
-                              "value": f"`{os.environ['HEAD_BRANCH']}` -> `{os.environ['BASE_BRANCH']}`",
-                              "inline": True,
-                          },
-                          {
-                              "name": "Repository",
-                              "value": os.environ["REPO"],
-                              "inline": False,
-                          },
-                      ],
-                  }
-              ]
-          }
-
-          request = urllib.request.Request(
-              webhook,
-              data=json.dumps(payload).encode("utf-8"),
-              headers={"Content-Type": "application/json"},
-              method="POST",
+          PAYLOAD=$(python3 -c '
+          import json, os
+          title = os.environ["PR_TITLE"]
+          if len(title) > 200:
+              title = title[:197] + "..."
+          message = (
+              f"**PR to {os.environ[\"BASE_BRANCH\"]}:** [{title}]({os.environ[\"PR_URL\"]})\n"
+              f"Author: {os.environ[\"PR_AUTHOR\"]}\n"
+              f"Branch: `{os.environ[\"HEAD_BRANCH\"]}` -> `{os.environ[\"BASE_BRANCH\"]}`\n"
+              f"Repository: {os.environ[\"REPO\"]}"
           )
+          print(json.dumps({"content": message}, ensure_ascii=False))
+          ')
 
-          try:
-              with urllib.request.urlopen(request) as response:
-                  print(f"Discord notification sent (HTTP {response.status}).")
-          except urllib.error.HTTPError as error:
-              print(f"Discord webhook failed (HTTP {error.code}).")
-              raise SystemExit(1) from error
-          PY
+          HTTP_CODE=$(curl -sS -o /tmp/discord-response.txt -w "%{http_code}" \
+            -X POST "$WEBHOOK" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "$PAYLOAD")
+
+          if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "Discord notification sent (HTTP ${HTTP_CODE})."
+            exit 0
+          fi
+
+          echo "Discord webhook failed (HTTP ${HTTP_CODE})."
+          if [ -s /tmp/discord-response.txt ]; then
+            cat /tmp/discord-response.txt
+          fi
+          exit 1
