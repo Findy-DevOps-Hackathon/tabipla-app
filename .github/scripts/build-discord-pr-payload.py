@@ -79,38 +79,61 @@ def load_pr_meta() -> dict:
 def build_embed() -> dict:
     title = truncate(os.environ.get("PR_TITLE", ""), 240)
     meta = load_pr_meta()
+    notify_kind = os.environ.get("NOTIFY_KIND", "opened")
+
+    if notify_kind == "merged":
+        embed_title = f"main にマージ: {title}"
+        color = 5763719
+    elif notify_kind == "manual":
+        embed_title = f"通知テスト: {title}"
+        color = 9807270
+    else:
+        embed_title = f"main 向け PR: {title}"
+        color = 5793266
+
+    fields = [
+        {
+            "name": "リリース内容",
+            "value": extract_summary(meta.get("body", os.environ.get("PR_BODY", ""))),
+            "inline": False,
+        },
+        {
+            "name": "変更箇所",
+            "value": summarize_areas(meta.get("files", [])),
+            "inline": False,
+        },
+        {
+            "name": "コミット",
+            "value": summarize_commits(meta.get("commits", [])),
+            "inline": False,
+        },
+        {
+            "name": "Author",
+            "value": os.environ["PR_AUTHOR"],
+            "inline": True,
+        },
+        {
+            "name": "Branch",
+            "value": f"`{os.environ['HEAD_BRANCH']}` -> `{os.environ['BASE_BRANCH']}`",
+            "inline": True,
+        },
+    ]
+
+    merged_by = os.environ.get("MERGED_BY", "").strip()
+    if notify_kind == "merged" and merged_by:
+        fields.append(
+            {
+                "name": "Merged by",
+                "value": merged_by,
+                "inline": True,
+            }
+        )
 
     embed = {
-        "title": f"main 向け PR: {title}",
+        "title": embed_title,
         "url": os.environ["PR_URL"],
-        "color": 5793266,
-        "fields": [
-            {
-                "name": "リリース内容",
-                "value": extract_summary(meta.get("body", os.environ.get("PR_BODY", ""))),
-                "inline": False,
-            },
-            {
-                "name": "変更箇所",
-                "value": summarize_areas(meta.get("files", [])),
-                "inline": False,
-            },
-            {
-                "name": "コミット",
-                "value": summarize_commits(meta.get("commits", [])),
-                "inline": False,
-            },
-            {
-                "name": "Author",
-                "value": os.environ["PR_AUTHOR"],
-                "inline": True,
-            },
-            {
-                "name": "Branch",
-                "value": f"`{os.environ['HEAD_BRANCH']}` -> `{os.environ['BASE_BRANCH']}`",
-                "inline": True,
-            },
-        ],
+        "color": color,
+        "fields": fields,
     }
 
     return embed

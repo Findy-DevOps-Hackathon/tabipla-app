@@ -8,12 +8,14 @@ on:
       - opened
       - reopened
       - ready_for_review
+      - closed
   workflow_dispatch:
 
 jobs:
   notify:
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      (github.event.action == 'closed' && github.event.pull_request.merged == true) ||
       github.event.action == 'ready_for_review' ||
       (github.event.action == 'opened' && github.event.pull_request.draft == false) ||
       github.event.action == 'reopened'
@@ -42,6 +44,8 @@ jobs:
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
           REPO: ${{ github.repository }}
           PR_META_JSON: /tmp/pr-meta.json
+          NOTIFY_KIND: ${{ github.event.action == 'closed' && 'merged' || (github.event_name == 'workflow_dispatch' && 'manual' || 'opened') }}
+          MERGED_BY: ${{ github.event.pull_request.merged_by.login || '' }}
         run: |
           WEBHOOK="$(printf '%s' "$DISCORD_WEBHOOK_URL" | tr -d '[:space:]')"
           if [ -z "$WEBHOOK" ]; then
