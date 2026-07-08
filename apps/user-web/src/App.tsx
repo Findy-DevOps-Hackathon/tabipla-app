@@ -719,14 +719,26 @@ export default function App() {
     [],
   );
 
-  const goBack = useCallback((fallback: Step) => {
-    if (navIndexRef.current > 0) {
-      window.history.back();
-      return;
-    }
-    setDetailRec(null);
-    setStep(fallback);
-  }, []);
+  const goBack = useCallback(
+    (fallback: Step) => {
+      if (navIndexRef.current > 0) {
+        window.history.back();
+        return;
+      }
+
+      const snapshot: ViewSnapshot = {
+        ...navSnapshotRef.current,
+        step: fallback,
+        detailRec: null,
+      };
+      navKeyRef.current = viewKey(snapshot);
+      isPopRef.current = true;
+      navIndexRef.current = 0;
+      applySnapshot(snapshot);
+      window.history.replaceState({ [HISTORY_STATE_KEY]: { idx: 0, snapshot } }, "");
+    },
+    [applySnapshot],
+  );
 
   return (
     <PhoneShell shellRef={shellRef}>
@@ -744,7 +756,7 @@ export default function App() {
           initialSelected={selectedDestinationNames}
           preferredPrefecture={initialQrPreferredPrefecture}
           onSelectedChange={setSelectedDestinationNames}
-          onBack={() => goBack("welcome")}
+          onBack={() => goBack("swipe")}
           onSearch={selectDestination}
         />
       )}

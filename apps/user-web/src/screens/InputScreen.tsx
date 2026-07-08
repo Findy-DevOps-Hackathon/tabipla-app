@@ -269,7 +269,7 @@ export function InputScreen({
   return (
     <div className="flex flex-1 flex-col justify-between">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex h-11 items-center justify-between px-4 pt-3">
+        <div className="flex h-14 items-center justify-between px-4 pt-6">
           <button
             type="button"
             onClick={handleBack}
