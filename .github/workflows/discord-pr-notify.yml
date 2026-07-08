@@ -21,6 +21,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Collect PR metadata
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr view "${{ github.event.pull_request.number }}" \
+            --json body,files,commits \
+            > /tmp/pr-meta.json
+
       - name: Post to Discord
         continue-on-error: true
         env:
@@ -28,9 +37,11 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title || 'Manual Discord notification test' }}
           PR_URL: ${{ github.event.pull_request.html_url || format('{0}/{1}/actions', github.server_url, github.repository) }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login || github.actor }}
+          PR_BODY: ${{ github.event.pull_request.body }}
           BASE_BRANCH: ${{ github.event.pull_request.base.ref || 'main' }}
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
           REPO: ${{ github.repository }}
+          PR_META_JSON: /tmp/pr-meta.json
         run: |
           WEBHOOK="$(printf '%s' "$DISCORD_WEBHOOK_URL" | tr -d '[:space:]')"
           if [ -z "$WEBHOOK" ]; then
