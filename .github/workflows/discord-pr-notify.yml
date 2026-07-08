@@ -8,6 +8,10 @@ on:
       - closed
   workflow_dispatch:
 
+permissions:
+  pull-requests: read
+  contents: read
+
 jobs:
   notify:
     if: >-
@@ -19,6 +23,7 @@ jobs:
 
       - name: Collect PR metadata
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
