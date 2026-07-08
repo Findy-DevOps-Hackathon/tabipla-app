@@ -1,7 +1,9 @@
 # lint / typecheck / audit / secret scan（PR / push 向け CI）
 steps:
+  # secret-scan と cache-restore は並列で起動する
   - name: ghcr.io/gitleaks/gitleaks:v8.24.2
     id: secret-scan
+    waitFor: ['-']
     entrypoint: gitleaks
     args:
       - detect
@@ -11,9 +13,18 @@ steps:
       - --verbose
       - --exit-code=1
 
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: restore-cache
+    waitFor: ['-']
+    entrypoint: bash
+    args:
+      - infra/cloud-build/cache-restore.sh
+    env:
+      - PROJECT_ID=${PROJECT_ID}
+
   - name: node:22-bookworm
     id: quality-checks
-    waitFor: [secret-scan]
+    waitFor: [secret-scan, restore-cache]
     entrypoint: bash
     args:
       - -c
@@ -21,6 +32,7 @@ steps:
         set -euo pipefail
         corepack enable
         corepack prepare pnpm@10.30.3 --activate
+        pnpm config set store-dir /workspace/.pnpm-store
         pnpm install --frozen-lockfile
         echo "=== biome check ==="
         pnpm check
@@ -28,6 +40,15 @@ steps:
         pnpm typecheck
         echo "=== dependency audit (high+) ==="
         pnpm audit --audit-level=high
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: save-cache
+    waitFor: [quality-checks]
+    entrypoint: bash
+    args:
+      - infra/cloud-build/cache-save.sh
+    env:
+      - PROJECT_ID=${PROJECT_ID}
 
 options:
   logging: CLOUD_LOGGING_ONLY

@@ -18,6 +18,7 @@ echo "=== pnpm セットアップ ==="
 npm install -g pnpm@10.30.3 --silent
 
 echo "=== 依存関係インストール ==="
+pnpm config set store-dir /workspace/.pnpm-store
 pnpm install --frozen-lockfile
 
 echo "=== packages/db ビルド ==="

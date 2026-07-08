@@ -1,10 +1,20 @@
 # main 向け: DB マイグレーション → agent → backend-api の順で Cloud Run へ自動デプロイ
 # トリガー例: branch=main, included-files=services/**,packages/**
 steps:
-  # Docker ビルドと並列で DB マイグレーションを実行する
+  # pnpm キャッシュ復元と Docker ビルドを並列で起動する
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: restore-cache
+    waitFor: ['-']
+    entrypoint: bash
+    args:
+      - infra/cloud-build/cache-restore.sh
+    env:
+      - PROJECT_ID=${PROJECT_ID}
+
+  # キャッシュ復元後に DB マイグレーションを実行する
   - name: node:22
     id: db-migrate
-    waitFor: ['-']
+    waitFor: [restore-cache]
     entrypoint: bash
     args:
       - infra/cloud-build/migrate.sh
@@ -13,6 +23,15 @@ steps:
       - _CLOUD_SQL_INSTANCE=${_CLOUD_SQL_INSTANCE}
     secretEnv:
       - DATABASE_URL
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: save-cache
+    waitFor: [db-migrate]
+    entrypoint: bash
+    args:
+      - infra/cloud-build/cache-save.sh
+    env:
+      - PROJECT_ID=${PROJECT_ID}
 
   - name: gcr.io/cloud-builders/docker
     id: build-agent
@@ -51,7 +70,7 @@ steps:
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-backend
-    waitFor: [build-backend, db-migrate]
+    waitFor: [build-backend, save-cache]
     entrypoint: bash
     args:
       - infra/cloud-build/deploy-backend-api.sh
