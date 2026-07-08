@@ -4,6 +4,7 @@ import { AiGuideSpeechBubble } from "../components/AiGuideSpeechBubble.tsx";
 import { CardsIcon, ChevronRightIcon, MapPinIcon } from "../components/icons.tsx";
 import { SpotImage } from "../components/SpotImage.tsx";
 import { RECOMMENDATIONS_PAGE_SIZE, type Recommendation } from "../data/spots.ts";
+import { categoryOverlayBadgeClass } from "../lib/category.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 import { isVisited } from "../lib/visited.ts";
 
@@ -67,14 +68,6 @@ export function RecommendationsScreen({
   const hasMore = diagnosisComplete
     ? hasMoreRecommendations
     : visibleCount < visibleRecommendations.length;
-
-  // カテゴリ配色設定
-  const CAT: Record<string, { l: string; c: string }> = {
-    歴史: { l: "歴史", c: "bg-blue-600/90" },
-    自然: { l: "自然", c: "bg-teal-600/90" },
-    グルメ: { l: "グルメ", c: "bg-amber-600/90" },
-    観光: { l: "観光", c: "bg-slate-600/90" },
-  };
 
   useEffect(() => {
     const target = loadMoreRef.current;
@@ -147,8 +140,6 @@ export function RecommendationsScreen({
         {!diagnosisComplete && visibleRecommendations.length > 0 && (
           <div className="grid grid-cols-2 gap-3 w-full">
             {displayedRecommendations.map((rec, index) => {
-              const cat = CAT[rec.category] || { l: rec.category, c: "bg-slate-600/90" };
-
               return (
                 <Fragment key={rec.id}>
                   <article className="relative aspect-square shrink-0 overflow-hidden rounded-xl border border-[#e2e8f0] bg-slate-100 shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition active:scale-[0.99] w-full">
@@ -167,9 +158,9 @@ export function RecommendationsScreen({
                       />
                       <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/20 to-transparent" />
                       <span
-                        className={`absolute top-1.5 left-1.5 inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold text-white ${cat.c}`}
+                        className={`absolute top-1.5 left-1.5 inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold text-white ${categoryOverlayBadgeClass(rec.category)}`}
                       >
-                        {cat.l}
+                        {rec.category}
                       </span>
                       <div className="absolute inset-x-0 bottom-0 p-2 gap-0.5 flex flex-col">
                         <p className="flex items-center gap-0.5 text-[10px] font-medium text-white/90 text-shadow-md">
@@ -239,8 +230,6 @@ export function RecommendationsScreen({
         {diagnosisComplete && visibleRecommendations.length > 0 && (
           <div className="grid grid-cols-2 gap-3 w-full">
             {displayedRecommendations.map((rec, index) => {
-              const cat = CAT[rec.category] || { l: rec.category, c: "bg-slate-600/90" };
-
               return (
                 <Fragment key={rec.id}>
                   <article className="relative aspect-square shrink-0 overflow-hidden rounded-xl border border-[#e2e8f0] bg-slate-100 shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition active:scale-[0.99] w-full">
@@ -259,9 +248,9 @@ export function RecommendationsScreen({
                       />
                       <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/20 to-transparent" />
                       <span
-                        className={`absolute top-1.5 left-1.5 inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold text-white ${cat.c}`}
+                        className={`absolute top-1.5 left-1.5 inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold text-white ${categoryOverlayBadgeClass(rec.category)}`}
                       >
-                        {cat.l}
+                        {rec.category}
                       </span>
                       <div className="absolute inset-x-0 bottom-0 p-2 gap-0.5 flex flex-col">
                         <p className="flex items-center gap-0.5 text-[10px] font-medium text-white/90 text-shadow-md">

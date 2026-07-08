@@ -1054,8 +1054,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     } catch (error) {
       req.log.error({ err: error }, "personalized/plan: agent への接続に失敗しました");
       return reply.code(503).send({
-        error:
-          "AIエージェントサービスに接続できません。services/agent (8080) が起動しているか確認してください。",
+        error: "おすすめ作成サービスに接続できませんでした。しばらく待ってから再度お試しください。",
       });
     }
     const data = (await res.json()) as {
@@ -1150,8 +1149,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     } catch (error) {
       req.log.error({ err: error, spotId }, "ask: agent への接続に失敗しました");
       return reply.code(503).send({
-        error:
-          "AIガイドサービスに接続できません。services/agent (8080) が起動しているか確認してください。",
+        error: "ガイドに接続できませんでした。しばらく待ってから再度お試しください。",
       });
     }
 

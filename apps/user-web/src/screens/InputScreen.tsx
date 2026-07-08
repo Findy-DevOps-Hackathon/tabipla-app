@@ -25,6 +25,8 @@ type InputScreenProps = {
   afterDiagnosis?: boolean;
   /** リロード復元用の選択済み旅先。 */
   initialSelected?: string[];
+  /** QR などの入口で優先表示したい都道府県。 */
+  preferredPrefecture?: string | null;
   /** 旅先選択の変更時（永続化用）。 */
   onSelectedChange?: (locations: string[]) => void;
   /** 「戻る」タップ時。 */
@@ -41,6 +43,7 @@ function formatSelectionLabel(selected: string[]): string {
 export function InputScreen({
   afterDiagnosis = false,
   initialSelected = [],
+  preferredPrefecture = null,
   onSelectedChange,
   onBack,
   onSearch,
@@ -65,12 +68,12 @@ export function InputScreen({
     onSelectedChange?.(selected);
   }, [onSelectedChange, selected]);
 
-  const destinationGroups = groupDestinationsByPrefecture(
-    afterDiagnosis ? AVAILABLE_DESTINATIONS : placeMatches,
-  );
-
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const selectedPrefecture = useMemo(() => getSelectedPrefecture(selected), [selected]);
+  const destinationGroups = groupDestinationsByPrefecture(
+    afterDiagnosis ? AVAILABLE_DESTINATIONS : placeMatches,
+    preferredPrefecture,
+  );
 
   const toggleDestination = (name: string) => {
     if (afterDiagnosis) {
@@ -335,7 +338,7 @@ export function InputScreen({
         </div>
       </div>
 
-      <div className="sticky bottom-0 flex flex-col gap-3 border-t  border-[#e2e8f0] bg-white px-4 pb-8 pt-4">
+      <div className="sticky bottom-0 z-20 flex flex-col gap-3 border-t  border-[#e2e8f0] bg-white px-4 pb-8 pt-4">
         <button
           type="button"
           disabled={!canSearch}

@@ -5,6 +5,7 @@ import {
   formatAiGuideAnswer,
   isAiGuideLoadingMessage,
 } from "../lib/aiGuide.ts";
+import { categoryOverlayBadgeClass } from "../lib/category.ts";
 import { copyToClipboard } from "../lib/clipboard.ts";
 import { buildSpotShareUrl } from "../lib/spotLink.ts";
 import { useAutoResizeTextarea } from "../lib/useAutoResizeTextarea.ts";
@@ -183,7 +184,9 @@ export function SpotDetailModal({
             </button>
 
             <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 p-4 pr-28">
-              <span className="w-fit rounded-md bg-slate-600/90 px-2 py-[3px] text-[12px] font-bold text-white">
+              <span
+                className={`w-fit rounded-md px-2 py-[3px] text-[12px] font-bold text-white ${categoryOverlayBadgeClass(rec.category)}`}
+              >
                 {rec.category}
               </span>
               <p className="text-[12px] font-medium text-white/85">

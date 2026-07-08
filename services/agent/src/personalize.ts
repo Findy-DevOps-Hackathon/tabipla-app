@@ -413,7 +413,7 @@ function formatBroadPreferenceHint(assessment: ProfileFocusAssessment): string {
 }
 
 const RECOMMENDATION_CLOSING =
-  "そんなあなた向けのおすすめを、ここに集めました。私の視点でのおすすめスポットも載せました。";
+  "そんなあなた向けのおすすめを、ここに集めました。\n私のおすすめスポットも載せました。";
 
 /** 好み診断結果の解釈と旅の要望から、ユーザー向けのおすすめ理由文を組み立てる。 */
 export function buildRecommendationReason(
