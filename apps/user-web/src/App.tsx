@@ -69,6 +69,7 @@ type PlanApiRecommendation = {
 
 type PersonalizedPlanResponse = {
   error?: string;
+  profileSummary?: string;
   recommendations?: PlanApiRecommendation[];
   result?: string;
   needsRefinement?: boolean;
@@ -88,6 +89,7 @@ type Step = FlowStep;
 /** リロードしてもおすすめ結果を保つための localStorage キー。 */
 const RECOMMENDATIONS_KEY = "tabipla-recommendations";
 const PLAN_MESSAGE_KEY = "tabipla-plan-message";
+const PLAN_PROFILE_SUMMARY_KEY = "tabipla-plan-profile-summary";
 const PLAN_TOTAL_KEY = "tabipla-plan-total";
 const QR_ENTRY_SESSION_KEY = "tabipla-qr-entry-url";
 
@@ -123,6 +125,15 @@ function readStoredRecommendations(): Recommendation[] {
 function readStoredPlanMessage(): string {
   try {
     return localStorage.getItem(PLAN_MESSAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** 保存済みの好み分析サマリーを読み出す。 */
+function readStoredPlanProfileSummary(): string {
+  try {
+    return localStorage.getItem(PLAN_PROFILE_SUMMARY_KEY) ?? "";
   } catch {
     return "";
   }
@@ -223,6 +234,7 @@ export default function App() {
   const [recommendations, setRecommendations] =
     useState<Recommendation[]>(readStoredRecommendations);
   const [planMessage, setPlanMessage] = useState(readStoredPlanMessage);
+  const [planProfileSummary, setPlanProfileSummary] = useState(readStoredPlanProfileSummary);
   const [planTotal, setPlanTotal] = useState(readStoredPlanTotal);
   const [planPage, setPlanPage] = useState(1);
   const [planKey, setPlanKey] = useState(initialFlow.planKey);
@@ -419,11 +431,12 @@ export default function App() {
     try {
       localStorage.setItem(RECOMMENDATIONS_KEY, JSON.stringify(recommendations));
       localStorage.setItem(PLAN_MESSAGE_KEY, planMessage);
+      localStorage.setItem(PLAN_PROFILE_SUMMARY_KEY, planProfileSummary);
       localStorage.setItem(PLAN_TOTAL_KEY, String(planTotal));
     } catch {
       // localStorage 不可環境では復元を諦める。
     }
-  }, [recommendations, planMessage, planTotal]);
+  }, [recommendations, planMessage, planProfileSummary, planTotal]);
 
   useEffect(() => {
     if (detailRec) {
@@ -444,6 +457,7 @@ export default function App() {
     setNopes([]);
     setRecommendations([]);
     setPlanMessage("");
+    setPlanProfileSummary("");
     setPlanTotal(0);
     setPlanPage(1);
     setPlanKey("");
@@ -554,6 +568,7 @@ export default function App() {
         setPlanMessage(data.result);
       }
       if (!append) {
+        setPlanProfileSummary(data.profileSummary ?? "");
         setPlanNeedsRefinement(Boolean(data.needsRefinement));
       }
     },
@@ -666,6 +681,7 @@ export default function App() {
             text: text || "写真を解析して解説してください",
             image: img ? { mimeType: img.mimeType, data: img.data } : undefined,
             audio: audio ? { mimeType: audio.mimeType, data: audio.data } : undefined,
+            userProfileSummary: planProfileSummary || undefined,
             spot: {
               name: rec.name,
               description: rec.description,
@@ -721,7 +737,7 @@ export default function App() {
         });
       }
     },
-    [],
+    [planProfileSummary],
   );
 
   const goBack = useCallback(
@@ -821,6 +837,7 @@ export default function App() {
           onGoHome={() => setStep("welcome")}
           onOpenSpot={openSpotDetail}
           aiIntroMessage={planMessage}
+          preferenceSummary={planProfileSummary}
           hasMoreRecommendations={diagnosisComplete && recommendations.length < planTotal}
           loadingMoreRecommendations={planLoadingMore}
           onLoadMoreRecommendations={loadMoreRecommendations}

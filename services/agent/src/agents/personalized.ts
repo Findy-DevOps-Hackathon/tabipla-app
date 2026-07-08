@@ -2,19 +2,25 @@ import {
   createElasticsearchClient,
   DEFAULT_INDEX_NAME,
   type SpotDocument,
+  searchCandidateSpots,
   VECTOR_DIMS,
 } from "@tabipla/search-core";
 import type { Spot } from "../contracts.js";
 import {
   assessProfileFocus,
+  buildDeepPreferenceInsight,
   buildEmbeddingRecordMap,
   buildLikedEmbeddings,
   buildProfile,
   buildRecommendationReason,
   buildWeightedPreferenceVector,
+  type DeepPreferenceInsight,
+  extractThemesFromText,
+  type PreferenceProfile,
   resolveLikeWeight,
   type SpotEmbeddingRecord,
   type Swipes,
+  scoreSpotByDeepPreference,
   summarizeProfile,
 } from "../personalize.js";
 import {
@@ -84,20 +90,6 @@ function l2Normalize(vec: number[]): number[] {
   return vec;
 }
 
-/** 正規化済み query と生ベクトルのコサイン類似度。 */
-function cosineSimilarity(normalizedQuery: number[], vec: number[]): number {
-  let dot = 0;
-  let normSq = 0;
-  for (let i = 0; i < normalizedQuery.length; i++) {
-    const q = normalizedQuery[i] ?? 0;
-    const v = vec[i] ?? 0;
-    dot += q * v;
-    normSq += v * v;
-  }
-  const norm = Math.sqrt(normSq);
-  return norm > 0 ? dot / norm : 0;
-}
-
 function similarityToScore(similarity: number): number {
   return Math.round(Math.max(0, Math.min(1, similarity)) * 100) / 100;
 }
@@ -131,61 +123,72 @@ async function fetchSpotsFromEsByIds(ids: string[]): Promise<Map<string, EsSpotR
   }
 }
 
-/** 目的地カタログ内のスポットを ES kNN でランキングする（_source.embedding 非依存）。 */
-async function rankCatalogByKnn(
+function buildPersonalizedSearchQuery(
+  profileSummary: string,
+  travelMemory: string,
+  deepInsight: DeepPreferenceInsight,
+): string {
+  return [
+    profileSummary,
+    deepInsight.confidence !== "low" ? deepInsight.primary.label : "",
+    deepInsight.confidence !== "low" ? deepInsight.primary.description : "",
+    ...deepInsight.cues,
+    travelMemory.trim(),
+  ]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function esScoreToRankSimilarity(index: number, total: number): number {
+  if (total <= 1) return 0.9;
+  return Math.max(0.05, 0.9 - (index / (total - 1)) * 0.45);
+}
+
+/** 自然文 + ベクトル + ID filter で、目的地カタログ内の候補を ES から広めに取得する。 */
+async function rankCatalogByEsCandidates(
   queryVector: number[],
   catalogSpots: Spot[],
   excludeIds: string[],
+  searchQuery: string,
 ): Promise<RankedCandidate[]> {
   const exclude = new Set(excludeIds);
   const targetSpots = catalogSpots.filter((spot) => !exclude.has(spot.id));
   if (targetSpots.length === 0) return [];
 
   const catalogIds = targetSpots.map((spot) => spot.id);
-  const k = catalogIds.length;
+  const size = catalogIds.length;
   const es = createElasticsearchClient();
 
   try {
-    const res = await es.search({
+    const results = await searchCandidateSpots(es, {
       index: DEFAULT_INDEX_NAME,
-      knn: {
-        field: "embedding",
-        query_vector: queryVector,
-        k,
-        num_candidates: Math.max(50, k * 2),
-        filter: {
-          bool: {
-            filter: [{ ids: { values: catalogIds } }],
-          },
-        },
-      },
-      size: k,
+      query: searchQuery,
+      embedding: queryVector,
+      ids: catalogIds,
+      excludeIds,
+      size,
+      k: size,
+      knnBoost: 1.2,
     });
 
-    const esById = new Map<string, EsSpotRecord>();
-    for (const h of res.hits.hits) {
-      const id = h._id;
-      if (!id) continue;
-      esById.set(id, { id, ...(h._source as Record<string, unknown>) });
-    }
-
     const catalogById = new Map(targetSpots.map((spot) => [spot.id, spot]));
-    const ranked: RankedCandidate[] = [];
-
-    for (const [index, h] of res.hits.hits.entries()) {
-      const id = h._id;
-      if (!id) continue;
-      const catalogSpot = catalogById.get(id);
-      if (!catalogSpot) continue;
-      ranked.push({
-        candidate: mergeCatalogSpot(catalogSpot, esById.get(id)),
-        similarity: typeof h._score === "number" ? h._score : Math.max(0, 1 - index * 0.05),
-      });
-    }
-
-    return ranked;
+    return results
+      .map((result, index) => {
+        const catalogSpot = catalogById.get(result.id);
+        if (!catalogSpot) return null;
+        const esRecord: EsSpotRecord = {
+          id: result.id,
+          ...(result.document as Record<string, unknown>),
+        };
+        return {
+          candidate: mergeCatalogSpot(catalogSpot, esRecord),
+          similarity: esScoreToRankSimilarity(index, results.length),
+        };
+      })
+      .filter((r): r is RankedCandidate => r !== null);
   } catch (e) {
-    console.error("[personalized] rankCatalogByKnnエラー:", e);
+    console.error("[personalized] rankCatalogByEsCandidatesエラー:", e);
     return [];
   }
 }
@@ -198,7 +201,6 @@ function mergeCatalogSpot(catalogSpot: Spot, es?: EsSpotRecord): EsSpotRecord {
     category: catalogSpot.category,
     description: catalogSpot.description ?? es?.description,
     highlights: catalogSpot.highlights ?? es?.highlights,
-    location: catalogSpot.location ?? es?.location,
   };
 }
 
@@ -267,7 +269,6 @@ function toIntroSpot(cand: EsSpotRecord): SpotDocument {
     address: typeof cand.address === "string" ? cand.address : undefined,
     highlights: Array.isArray(cand.highlights) ? (cand.highlights as string[]) : undefined,
     imageUrl: typeof cand.imageUrl === "string" ? cand.imageUrl : undefined,
-    location: cand.location as SpotDocument["location"],
   };
 }
 
@@ -304,6 +305,120 @@ function toEsEmbeddingRecords(esById: Map<string, EsSpotRecord>): Map<string, Sp
     });
   }
   return map;
+}
+
+function extractThemesAcrossCategories(text: string): Set<string> {
+  const themes = new Set<string>();
+  for (const category of ["自然", "歴史・文化", "食", "レジャー・スポーツ"]) {
+    for (const theme of extractThemesFromText(text, category, text)) {
+      themes.add(theme);
+    }
+  }
+  return themes;
+}
+
+function spotThemes(spot: Spot): Set<string> {
+  const themes = new Set<string>();
+  const highlights = spot.highlights ?? [];
+  for (const highlight of highlights) {
+    for (const theme of extractThemesFromText(highlight, spot.category, spot.description)) {
+      themes.add(theme);
+    }
+  }
+  if (themes.size === 0 && spot.description) {
+    for (const theme of extractThemesFromText("", spot.category, spot.description)) {
+      themes.add(theme);
+    }
+  }
+  return themes;
+}
+
+function scoreCatalogSpotByRules(
+  spot: Spot,
+  profile: PreferenceProfile,
+  memoryThemes: Set<string>,
+  deepInsight: DeepPreferenceInsight,
+): number {
+  let score = 0;
+
+  for (const highlight of spot.highlights ?? []) {
+    score += profile.highlightScore[highlight] ?? 0;
+  }
+
+  for (const theme of spotThemes(spot)) {
+    score += (profile.themeScore[theme] ?? 0) * 2;
+    if (memoryThemes.has(theme)) score += 2.5;
+  }
+
+  score += scoreSpotByDeepPreference(spot, deepInsight);
+  return score;
+}
+
+/** ES / embedding が不調でも、診断結果と旅の記憶からカタログ内で決定的に並べる。 */
+function rankCatalogByRules(
+  profile: PreferenceProfile,
+  travelMemory: string,
+  catalogSpots: Spot[],
+  excludeIds: string[],
+  deepInsight: DeepPreferenceInsight,
+): RankedCandidate[] {
+  const exclude = new Set(excludeIds);
+  const memoryThemes = extractThemesAcrossCategories(travelMemory);
+  const scored = catalogSpots
+    .filter((spot) => !exclude.has(spot.id))
+    .map((spot, index) => ({
+      spot,
+      index,
+      rawScore: scoreCatalogSpotByRules(spot, profile, memoryThemes, deepInsight),
+    }))
+    .sort((a, b) => {
+      const diff = b.rawScore - a.rawScore;
+      return diff !== 0 ? diff : a.index - b.index;
+    });
+
+  if (scored.length === 0) return [];
+
+  const minScore = Math.min(...scored.map((entry) => entry.rawScore));
+  const maxScore = Math.max(...scored.map((entry) => entry.rawScore));
+  const spread = maxScore - minScore;
+
+  return scored.map(({ spot, rawScore }, index) => {
+    const normalized =
+      spread > 0 ? (rawScore - minScore) / spread : Math.max(0, 1 - index / scored.length);
+    return {
+      candidate: mergeCatalogSpot(spot),
+      similarity: 0.35 + normalized * 0.55,
+    };
+  });
+}
+
+function rerankWithRuleSignal(
+  ranked: RankedCandidate[],
+  fallback: RankedCandidate[],
+): RankedCandidate[] {
+  if (ranked.length === 0) return fallback;
+
+  const fallbackById = new Map(fallback.map((entry) => [entry.candidate.id, entry]));
+  const seen = new Set(ranked.map((entry) => entry.candidate.id));
+  const blended = ranked.map((entry) => {
+    const ruleScore = fallbackById.get(entry.candidate.id)?.similarity ?? entry.similarity;
+    return {
+      ...entry,
+      similarity: entry.similarity * 0.68 + ruleScore * 0.32,
+    };
+  });
+
+  const missing = fallback.filter((entry) => !seen.has(entry.candidate.id));
+  if (missing.length === 0) {
+    return blended.sort((a, b) => b.similarity - a.similarity);
+  }
+
+  const lastSimilarity = Math.min(...blended.map((entry) => entry.similarity));
+  const appended = missing.map((entry, index) => ({
+    ...entry,
+    similarity: Math.max(0.01, Math.min(entry.similarity, lastSimilarity - 0.01 * (index + 1))),
+  }));
+  return [...blended, ...appended].sort((a, b) => b.similarity - a.similarity);
 }
 
 function logRankedScores(
@@ -369,7 +484,8 @@ async function computeAndCachePlan(
     embeddingsById,
     nopedIds: sw.nopes,
   });
-  const profileSummary = summarizeProfile(profile, focusAssessment);
+  const deepInsight = buildDeepPreferenceInsight(profile, travelMemory, focusAssessment);
+  const profileSummary = summarizeProfile(profile, focusAssessment, deepInsight);
   const vPref = vPrefFromLikes ?? new Array(VECTOR_DIMS).fill(0);
   const hasLikedEmbeddings = vPrefFromLikes !== null;
 
@@ -408,10 +524,34 @@ async function computeAndCachePlan(
     vQuery = l2Normalize(vQuery);
   }
 
-  const rankedAll =
+  const personalizedSearchQuery = buildPersonalizedSearchQuery(
+    profileSummary,
+    travelMemory,
+    deepInsight,
+  );
+
+  let rankedAll =
     catalogSpots.length > 0
-      ? await rankCatalogByKnn(vQuery, catalogSpots, sw.nopes)
+      ? await rankCatalogByEsCandidates(vQuery, catalogSpots, sw.nopes, personalizedSearchQuery)
       : await searchCandidatesGlobal(vQuery, sw.nopes);
+
+  if (catalogSpots.length > 0) {
+    const fallbackRanked = rankCatalogByRules(
+      profile,
+      travelMemory,
+      catalogSpots,
+      sw.nopes,
+      deepInsight,
+    );
+    if (rankedAll.length === 0 && fallbackRanked.length > 0) {
+      console.log(
+        "[personalizedPlan] ESランキングが空のため、ルールベース推薦にフォールバックします",
+      );
+      rankedAll = fallbackRanked;
+    } else {
+      rankedAll = rerankWithRuleSignal(rankedAll, fallbackRanked);
+    }
+  }
 
   console.log(
     `[personalizedPlan] ランキング ${rankedAll.length} 件` +
@@ -426,7 +566,12 @@ async function computeAndCachePlan(
   );
 
   let result = "";
-  const interpretedReason = buildRecommendationReason(profile, travelMemory, focusAssessment);
+  const interpretedReason = buildRecommendationReason(
+    profile,
+    travelMemory,
+    focusAssessment,
+    deepInsight,
+  );
   if (rankedAll.length > 0) {
     result = interpretedReason;
     const introPool = rankedAll

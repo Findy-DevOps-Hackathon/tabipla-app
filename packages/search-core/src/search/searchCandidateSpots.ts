@@ -21,7 +21,14 @@ export type SearchCandidateSpotsParams = CandidateSpotFilterParams & {
 };
 
 function hasStructuredFilters(params: CandidateSpotFilterParams): boolean {
-  return params.category !== undefined || params.near !== undefined;
+  return (
+    params.category !== undefined ||
+    params.prefecture !== undefined ||
+    params.area !== undefined ||
+    Boolean(params.ids?.length) ||
+    Boolean(params.excludeIds?.length) ||
+    params.near !== undefined
+  );
 }
 
 function assertValidEmbedding(embedding: number[]): void {

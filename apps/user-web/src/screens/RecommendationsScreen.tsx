@@ -5,6 +5,7 @@ import { CardsIcon, ChevronRightIcon, MapPinIcon } from "../components/icons.tsx
 import { SpotImage } from "../components/SpotImage.tsx";
 import { RECOMMENDATIONS_PAGE_SIZE, type Recommendation } from "../data/spots.ts";
 import { categoryOverlayBadgeClass } from "../lib/category.ts";
+import { parsePreferenceSummary } from "../lib/deepPreference.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 import { isVisited } from "../lib/visited.ts";
 
@@ -26,6 +27,8 @@ type RecommendationsScreenProps = {
   onOpenSpot: (recommendation: Recommendation) => void;
   /** AI が生成したおすすめ紹介文（API の result） */
   aiIntroMessage?: string;
+  /** 好み診断から読み解いた体験テーマ・深層ニーズ。 */
+  preferenceSummary?: string;
   /** 診断後: API に未読込のおすすめが残っているか。 */
   hasMoreRecommendations?: boolean;
   /** 診断後: 次ページ読み込み中。 */
@@ -45,6 +48,7 @@ export function RecommendationsScreen({
   onGoHome,
   onOpenSpot,
   aiIntroMessage = "",
+  preferenceSummary = "",
   hasMoreRecommendations = false,
   loadingMoreRecommendations = false,
   onLoadMoreRecommendations,
@@ -72,6 +76,7 @@ export function RecommendationsScreen({
   const hasMore = diagnosisComplete
     ? hasMoreRecommendations
     : visibleCount < visibleRecommendations.length;
+  const preferenceInsight = parsePreferenceSummary(preferenceSummary);
 
   useEffect(() => {
     const target = loadMoreRef.current;
@@ -116,6 +121,11 @@ export function RecommendationsScreen({
           <div className="flex items-end gap-1">
             <AiGuideAvatar size={40} className="shrink-0" />
             <AiGuideSpeechBubble>
+              {preferenceInsight?.deepNeedLabel && (
+                <span className="mt-0.5 w-full border-b border-[#ccfbf1] bg-white py-1 text-[11px] font-bold text-[#0f766e]">
+                  {preferenceInsight.deepNeedLabel}
+                </span>
+              )}
               <span className="text-[13px]">{aiIntroMessage}</span>
             </AiGuideSpeechBubble>
           </div>

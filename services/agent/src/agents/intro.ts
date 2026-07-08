@@ -1,19 +1,20 @@
 import { InMemoryRunner, LlmAgent, stringifyContent } from "@google/adk";
 import type { SpotDocument } from "@tabipla/search-core";
 import { z } from "zod";
+import { CHAT_MODEL } from "../modelConfig.js";
 import { BUBBLE_THEME_LIMIT } from "../personalize.js";
 
 const introOutputSchema = z.object({
   result: z
     .string()
     .describe(
-      "ユーザーに直接向けた好みの言い当て文（最大130文字厳守）。締めは必ず「そんなあなた向けのおすすめを、ここに集めました。」のあと改行と空白行を挟んで「私のおすすめスポットも載せました。」を含める。『です・ます』調。固有名詞は含めない。",
+      "ユーザーに直接向けた好みの言い当て文（最大130文字厳守）。『です・ます』調。固有名詞は含めない。",
     ),
 });
 
 export const introAgent = new LlmAgent({
   name: "intro_agent",
-  model: "gemini-3.5-flash",
+  model: CHAT_MODEL,
   description: "好み診断結果に基づくおすすめ理由文を生成する",
   instruction: `あなたは、ユーザーの旅への想いに寄り添う旅行ガイドです。
 好み診断の選び方をもとに、ワクワクやときめきが伝わる一文だけを書いてください。
@@ -21,8 +22,8 @@ export const introAgent = new LlmAgent({
 【必須】
 - ユーザーに直接向けて、感情が動く言葉で書く（「心が踊る」「ときめく」「行ってみたい」など）
 - 好みサマリーの体験・サブテーマを、分析ではなく共感と言い当てで伝える
+- 好みサマリーに「深層ニーズ」があれば、カテゴリ名ではなく旅で満たしたい感情として自然に織り込む
 - 体験・サブテーマは最大${BUBBLE_THEME_LIMIT}つまで。列挙より「心に残る」表現を優先
-- 文末は必ず「そんなあなた向けのおすすめを、ここに集めました。」のあと改行を挟んで「私のおすすめスポットも載せました。」で締める
 - travelMemory があれば、想いや気持ちとして自然に織り込む
 
 【禁止】
@@ -32,7 +33,7 @@ export const introAgent = new LlmAgent({
 
 【出力仕様】
 - result: 温かみのある『です・ます』調で最大130文字以内
-- 良い例: 「城や古い街並みに、懐かしさとワクワクを感じる方ですね。そんなあなた向けのおすすめを、ここに集めました。\n私のおすすめスポットも載せました。」`,
+- 良い例: 「城や古い街並みに、懐かしさとワクワクを感じる方ですね。」`,
   outputSchema: introOutputSchema,
   generateContentConfig: {
     thinkingConfig: { thinkingBudget: 0 },
@@ -49,6 +50,25 @@ export type IntroInput = {
   travelMemory: string;
   spots: SpotDocument[];
 };
+
+function stripJsonFence(text: string): string {
+  const trimmed = text.trim();
+  return trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function parseIntroResult(text: string): IntroResult {
+  const stripped = stripJsonFence(text);
+  try {
+    return introOutputSchema.parse(JSON.parse(stripped));
+  } catch {
+    const objectMatch = stripped.match(/\{[\s\S]*\}/);
+    if (!objectMatch) throw new Error("[intro_agent] JSON 形式の応答を解析できませんでした");
+    return introOutputSchema.parse(JSON.parse(objectMatch[0]));
+  }
+}
 
 /** 上位候補の体験傾向だけを集計する（固有名詞・大カテゴリは渡さない）。 */
 function summarizeCandidateThemes(spots: SpotDocument[]): string {
@@ -111,5 +131,5 @@ ${themesText}
     throw new Error("[intro_agent] エージェントからの応答が空です");
   }
 
-  return JSON.parse(final) as IntroResult;
+  return parseIntroResult(final);
 }

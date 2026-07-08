@@ -152,10 +152,11 @@ app.post("/v1/personalized/plan", async (c) => {
 // 紹介エージェントへのマルチモーダルな質問
 app.post("/v1/spots/:id/ask", async (c) => {
   const spotId = c.req.param("id");
-  const { text, image, audio, spot, facts } = await c.req.json<{
+  const { text, image, audio, spot, facts, userProfileSummary } = await c.req.json<{
     text?: string;
     image?: { mimeType: string; data: string };
     audio?: { mimeType: string; data: string };
+    userProfileSummary?: string;
     spot?: {
       name: string;
       description?: string;
@@ -175,7 +176,7 @@ app.post("/v1/spots/:id/ask", async (c) => {
         image,
         audio,
         introStyle: "",
-        userProfileSummary: "",
+        userProfileSummary: userProfileSummary ?? "",
         spot,
         facts,
       },
