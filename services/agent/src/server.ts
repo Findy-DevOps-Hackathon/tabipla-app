@@ -81,13 +81,18 @@ app.get("/v1/spots", (c) =>
   }),
 );
 
-// モデルエラーをUI向けの文言に整える
+const USER_BUSY_MESSAGE = "ただいま混み合っています。1分ほど待ってから再度お試しください。";
+const USER_GENERIC_ERROR_MESSAGE =
+  "うまく処理できませんでした。しばらく待ってから再度お試しください。";
+
+/** モデル/API 失敗をユーザー向け文言に整える（技術詳細はサーバーログのみ）。 */
 function friendly(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
+  console.error("[agent] request failed:", msg);
   if (/429|quota|rate/i.test(msg)) {
-    return "⚠️ レート制限（Geminiのリクエスト上限）に達しました。1分ほど待って再試行してください。";
+    return USER_BUSY_MESSAGE;
   }
-  return `⚠️ エラー: ${msg}`;
+  return USER_GENERIC_ERROR_MESSAGE;
 }
 
 // A5: 推薦
@@ -450,10 +455,14 @@ app.post("/v1/generate-spot-image", async (c) => {
     return c.json(result);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    console.error("[spot-image] generate failed:", msg);
     if (/429|quota|rate/i.test(msg)) {
-      return c.json({ error: "⚠️ レート制限に達しました。1分ほど待って再試行してください。" }, 429);
+      return c.json({ error: USER_BUSY_MESSAGE }, 429);
     }
-    return c.json({ error: msg || "画像の生成に失敗しました" }, 500);
+    return c.json(
+      { error: "画像の生成に失敗しました。しばらく待ってから再度お試しください。" },
+      500,
+    );
   }
 });
 

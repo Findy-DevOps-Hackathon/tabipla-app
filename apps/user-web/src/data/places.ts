@@ -115,6 +115,7 @@ function getRegionalMunicipalityNames(prefecture: string): readonly string[] {
 
 export function groupDestinationsByPrefecture(
   destinations: Place[] = AVAILABLE_DESTINATIONS,
+  preferredPrefecture?: string | null,
 ): DestinationPrefectureGroup[] {
   const groups = new Map<string, { regional: Place[]; direct: Place[] }>();
 
@@ -135,18 +136,25 @@ export function groupDestinationsByPrefecture(
     groups.set(prefecture, bucket);
   }
 
-  return [...groups.entries()].map(([prefecture, { regional, direct }]) => ({
-    prefecture,
-    cities: direct,
-    subregions: (PREFECTURE_SUBREGIONS[prefecture] ?? [])
-      .map((subregion) => ({
-        name: subregion.name,
-        cities: regional.filter((place) =>
-          (subregion.municipalities as readonly string[]).includes(place.name),
-        ),
-      }))
-      .filter((subregion) => subregion.cities.length > 0),
-  }));
+  return [...groups.entries()]
+    .map(([prefecture, { regional, direct }]) => ({
+      prefecture,
+      cities: direct,
+      subregions: (PREFECTURE_SUBREGIONS[prefecture] ?? [])
+        .map((subregion) => ({
+          name: subregion.name,
+          cities: regional.filter((place) =>
+            (subregion.municipalities as readonly string[]).includes(place.name),
+          ),
+        }))
+        .filter((subregion) => subregion.cities.length > 0),
+    }))
+    .sort((a, b) => {
+      if (!preferredPrefecture) return 0;
+      if (a.prefecture === preferredPrefecture) return -1;
+      if (b.prefecture === preferredPrefecture) return 1;
+      return 0;
+    });
 }
 
 /** 市区町村名から旅先（area + prefecture）を解決する。 */
@@ -197,6 +205,80 @@ export function resolveTripDestinations(areas: string[]): TripDestination[] {
   return areas
     .map((area) => resolveTripDestination(area))
     .filter((dest): dest is TripDestination => dest !== null);
+}
+
+function normalizeQrDestinationToken(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/\s+/g, "")
+    .replaceAll(/[ーｰ-]/g, "");
+}
+
+/** QR などのURLに含まれる地域ヒントから、初期チェックする旅先名を解決する。 */
+export function resolveDestinationNamesFromQrValue(value: string): string[] {
+  const normalized = normalizeQrDestinationToken(value);
+  if (!normalized) return [];
+
+  if (
+    normalized.includes("komoro") ||
+    normalized.includes("toshin") ||
+    normalized.includes("とうしん") ||
+    normalized.includes("東信") ||
+    normalized.includes("小諸")
+  ) {
+    return [...TOSHIN_MUNICIPALITY_NAMES];
+  }
+
+  if (
+    normalized.includes("noto") ||
+    normalized.includes("ishikawa") ||
+    normalized.includes("のと") ||
+    normalized.includes("能登") ||
+    normalized.includes("石川")
+  ) {
+    return [...NOTO_MUNICIPALITY_NAMES];
+  }
+
+  const exact = AVAILABLE_DESTINATIONS.find(
+    (place) =>
+      normalizeQrDestinationToken(place.name) === normalized ||
+      normalizeQrDestinationToken(place.reading) === normalized,
+  );
+
+  if (!exact) return [];
+  if ((TOSHIN_MUNICIPALITY_NAMES as readonly string[]).includes(exact.name)) {
+    return [...TOSHIN_MUNICIPALITY_NAMES];
+  }
+  if ((NOTO_MUNICIPALITY_NAMES as readonly string[]).includes(exact.name)) {
+    return [...NOTO_MUNICIPALITY_NAMES];
+  }
+  return [exact.name];
+}
+
+/** URL クエリから QR 由来の旅先初期選択を読み取る。 */
+export function readQrDestinationNamesFromLocation(): string[] {
+  if (typeof window === "undefined") return [];
+
+  const url = new URL(window.location.href);
+  const values = [
+    url.searchParams.get("qr"),
+    url.searchParams.get("destination"),
+    url.searchParams.get("destinations"),
+    url.searchParams.get("area"),
+    url.searchParams.get("municipality"),
+    url.searchParams.get("city"),
+    url.searchParams.get("region"),
+    url.searchParams.get("prefecture"),
+    url.pathname,
+  ].filter((value): value is string => Boolean(value));
+
+  for (const value of values) {
+    const destinations = resolveDestinationNamesFromQrValue(value);
+    if (destinations.length > 0) return destinations;
+  }
+
+  return [];
 }
 
 /** 中間エリア配下の市区町村がすべて選択されているか。 */

@@ -221,6 +221,23 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
   const currentBottom = challenger;
 
   useEffect(() => {
+    if (spots.length < 2 || (champion && challenger)) return;
+
+    const nextMatch = createInitialMatch(spots);
+    if (!nextMatch) return;
+
+    setRoundNumber(1);
+    setChampionId(nextMatch.championId);
+    setChallengerId(nextMatch.challengerId);
+    setSearchIndex(nextMatch.searchIndex);
+    setWins({});
+    setHistory([]);
+    setLocked(false);
+    setPick(null);
+    completedRef.current = false;
+  }, [spots, champion, challenger]);
+
+  useEffect(() => {
     // リロード直後など deck 未復元の空配列では input へ飛ばさない。
     if (spots.length === 1 && !completedRef.current) {
       const only = spots[0];

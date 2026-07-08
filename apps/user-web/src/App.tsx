@@ -3,7 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
 import { API_BASE } from "./config.ts";
-import { getAllSupportedDestinations, resolveTripDestinations } from "./data/places.ts";
+import {
+  getAllSupportedDestinations,
+  readQrDestinationNamesFromLocation,
+  resolveTripDestinations,
+} from "./data/places.ts";
 import {
   EXPLORE_SPOTS,
   RECOMMENDATIONS_PAGE_SIZE,
@@ -31,6 +35,7 @@ import {
   markDetailedDiagnosisComplete,
   markDiagnosisComplete,
 } from "./lib/diagnosis.ts";
+import { isSystemFacingError, sanitizeUserFacingError } from "./lib/planError.ts";
 import { preloadImages } from "./lib/preloadImage.ts";
 import { type FlowStep, readFlowSession, writeFlowSession } from "./lib/session.ts";
 import {
@@ -84,6 +89,22 @@ type Step = FlowStep;
 const RECOMMENDATIONS_KEY = "tabipla-recommendations";
 const PLAN_MESSAGE_KEY = "tabipla-plan-message";
 const PLAN_TOTAL_KEY = "tabipla-plan-total";
+const QR_ENTRY_SESSION_KEY = "tabipla-qr-entry-url";
+
+function readInitialQrDestinationNames(): string[] {
+  const names = readQrDestinationNamesFromLocation();
+  if (names.length === 0) return [];
+
+  try {
+    const currentUrl = window.location.href;
+    if (sessionStorage.getItem(QR_ENTRY_SESSION_KEY) === currentUrl) return [];
+    sessionStorage.setItem(QR_ENTRY_SESSION_KEY, currentUrl);
+  } catch {
+    // sessionStorage 不可環境では QR の初期化を通常通り適用する。
+  }
+
+  return names;
+}
 
 /** 保存済みのおすすめ結果を読み出す（未保存・不正値なら空配列）。 */
 function readStoredRecommendations(): Recommendation[] {
@@ -173,8 +194,17 @@ function resolveSwipeDeckFromIds(
  */
 export default function App() {
   const initialFlow = readFlowSession();
+  const [initialQrDestinationNames] = useState(readInitialQrDestinationNames);
+  const initialSelectedDestinationNames =
+    initialQrDestinationNames.length > 0
+      ? initialQrDestinationNames
+      : initialFlow.selectedDestinationNames;
+  const initialQrPreferredPrefecture =
+    resolveTripDestinations(initialQrDestinationNames)[0]?.prefecture ?? null;
   const initialSpotId = readInitialSpotIdFromUrl();
-  const [step, setStep] = useState<Step>(initialFlow.step);
+  const [step, setStep] = useState<Step>(
+    initialQrDestinationNames.length > 0 ? "welcome" : initialFlow.step,
+  );
   const [, setLocation] = useState("");
   const [swipedCount, setSwipedCount] = useState(initialFlow.swipedCount);
   const [runId, setRunId] = useState(initialFlow.runId);
@@ -208,7 +238,7 @@ export default function App() {
   >({});
   const [travelMemory, setTravelMemory] = useState(initialFlow.travelMemory);
   const [selectedDestinationNames, setSelectedDestinationNames] = useState(
-    initialFlow.selectedDestinationNames,
+    initialSelectedDestinationNames,
   );
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
   const detailReturnStepRef = useRef<Step>(initialSpotId ? initialFlow.step : "recommendations");
@@ -241,6 +271,14 @@ export default function App() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (initialQrDestinationNames.length === 0) return;
+    const destinations = resolveTripDestinations(initialQrDestinationNames);
+    if (destinations.length > 0) {
+      setCurrentDestinations(destinations);
+    }
+  }, [initialQrDestinationNames]);
 
   useEffect(() => {
     if (step !== "swipe" || swipeDeck.length > 0) return;
@@ -639,6 +677,12 @@ export default function App() {
           throw new Error(data.error || `HTTP ${res.status}`);
         }
 
+        const rawAnswer = data.answer || "回答が得られませんでした。";
+        const answerIsSystemError = isSystemFacingError(rawAnswer);
+        const answerText = answerIsSystemError
+          ? sanitizeUserFacingError(rawAnswer, "chat")
+          : formatAiGuideAnswer(rawAnswer);
+
         setChatThreads((prev) => {
           const thread = [...(prev[spotId] || [])];
           const nextThread = thread.filter((m) => !isAiGuideLoadingMessage(m.text));
@@ -648,7 +692,8 @@ export default function App() {
               ...nextThread,
               {
                 role: "ai" as const,
-                text: formatAiGuideAnswer(data.answer || "回答が得られませんでした。"),
+                text: answerText,
+                isError: answerIsSystemError,
               },
             ],
           };
@@ -663,7 +708,7 @@ export default function App() {
               ...nextThread,
               {
                 role: "ai" as const,
-                text: `エラーが発生しました: ${getErrorMessage(e, "通信に失敗しました")}`,
+                text: sanitizeUserFacingError(getErrorMessage(e, "通信に失敗しました"), "chat"),
                 isError: true,
               },
             ],
@@ -697,6 +742,7 @@ export default function App() {
         <InputScreen
           afterDiagnosis
           initialSelected={selectedDestinationNames}
+          preferredPrefecture={initialQrPreferredPrefecture}
           onSelectedChange={setSelectedDestinationNames}
           onBack={() => goBack("welcome")}
           onSearch={selectDestination}
