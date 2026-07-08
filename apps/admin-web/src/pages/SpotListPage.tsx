@@ -17,7 +17,7 @@ import { deleteSpot, listSpots } from "../api.ts";
 import { AdminShell } from "../components/layout/AdminShell.tsx";
 import { Button } from "../components/ui/Button.tsx";
 import { Modal, Toast } from "../components/ui/Modal.tsx";
-import { getCategoryStyle, normalizeCategories } from "../lib/categories.ts";
+import { getCategoryStyle, normalizeCategories, SPOT_CATEGORIES } from "../lib/categories.ts";
 import { CSV_HEADER, spotToCsvRow } from "../lib/format.ts";
 import { ADMIN_TABLE_PAGE_CLASS } from "../lib/layout.ts";
 import { resolveSpotImageSrc, SPOT_IMAGE_PLACEHOLDER } from "../lib/spotImage.ts";
@@ -37,6 +37,7 @@ export default function SpotListPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [q, setQ] = useState("");
+  const [category, setCategory] = useState<string | null>(null);
   const prefecture = getFixedPrefecture();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<Spot | null>(null);
@@ -49,6 +50,7 @@ export default function SpotListPage() {
     try {
       const res = await listSpots({
         q: q.trim() || undefined,
+        category: category ?? undefined,
         prefecture,
         offset: (page - 1) * PAGE_SIZE,
         limit: PAGE_SIZE,
@@ -61,7 +63,7 @@ export default function SpotListPage() {
       setTotal(0);
       setStatus("error");
     }
-  }, [q, page, prefecture]);
+  }, [q, category, page, prefecture]);
 
   useEffect(() => {
     void load();
@@ -133,48 +135,86 @@ export default function SpotListPage() {
   return (
     <AdminShell title="観光地一覧" wide>
       <div className={ADMIN_TABLE_PAGE_CLASS}>
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex w-full max-w-[220px] flex-wrap items-center gap-2">
-            <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-[#e2e8f0] bg-white px-3">
-              <Search className="size-4 text-[#94a3b8]" />
-              <input
-                type="search"
-                value={q}
-                disabled={deleting}
-                onChange={(e) => {
-                  setPage(1);
-                  setQ(e.target.value);
-                }}
-                placeholder="観光地名・住所で検索"
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-[#94a3b8]"
-              />
+        <div className="mb-6 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex w-full max-w-[220px] flex-wrap items-center gap-2">
+              <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-[#e2e8f0] bg-white px-3">
+                <Search className="size-4 text-[#94a3b8]" />
+                <input
+                  type="search"
+                  value={q}
+                  disabled={deleting}
+                  onChange={(e) => {
+                    setPage(1);
+                    setQ(e.target.value);
+                  }}
+                  placeholder="観光地名・住所で検索"
+                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-[#94a3b8]"
+                />
+              </div>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {selected.size > 0 && (
+            <div className="flex flex-wrap gap-3">
+              {selected.size > 0 && (
+                <Button
+                  variant="secondary"
+                  className="border-red-400 text-red-500 enabled:hover:bg-white"
+                  disabled={deleting}
+                  onClick={() => setBulkDeleteOpen(true)}
+                >
+                  <Trash2 className="mr-2 size-4" />
+                  削除（{selected.size}）
+                </Button>
+              )}
               <Button
                 variant="secondary"
-                className="border-red-400 text-red-500 enabled:hover:bg-white"
-                disabled={deleting}
-                onClick={() => setBulkDeleteOpen(true)}
+                disabled={selected.size === 0 || deleting}
+                onClick={() => void handleExport()}
+                className={
+                  selected.size === 0
+                    ? "border-gray-200 text-gray-400 disabled:opacity-100"
+                    : "border-green-500 text-green-500 enabled:hover:bg-white disabled:opacity-100"
+                }
               >
-                <Trash2 className="mr-2 size-4" />
-                削除（{selected.size}）
+                <Download className="mr-2 size-4" />
+                CSVダウンロード
               </Button>
-            )}
-            <Button
-              variant="secondary"
-              disabled={selected.size === 0 || deleting}
-              onClick={() => void handleExport()}
-              className={
-                selected.size === 0
-                  ? "border-gray-200 text-gray-400 disabled:opacity-100"
-                  : "border-green-500 text-green-500 enabled:hover:bg-white disabled:opacity-100"
-              }
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => {
+                setPage(1);
+                setCategory(null);
+              }}
+              className={`cursor-pointer rounded-full px-3 py-1 text-[13px] transition disabled:opacity-40 ${
+                category === null
+                  ? "bg-[#2563eb] font-medium text-white"
+                  : "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]"
+              }`}
             >
-              <Download className="mr-2 size-4" />
-              CSVダウンロード
-            </Button>
+              すべて
+            </button>
+            {SPOT_CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                disabled={deleting}
+                onClick={() => {
+                  setPage(1);
+                  setCategory(category === cat ? null : cat);
+                }}
+                className={`cursor-pointer rounded-full px-3 py-1 text-[13px] transition disabled:opacity-40 ${
+                  category === cat
+                    ? "bg-[#2563eb] font-medium text-white"
+                    : "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
           </div>
         </div>
 

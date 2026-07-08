@@ -122,7 +122,7 @@ export function RecommendationsScreen({
             <AiGuideAvatar size={40} className="shrink-0" />
             <AiGuideSpeechBubble>
               {preferenceInsight?.deepNeedLabel && (
-                <span className="mt-0.5 w-full border-b border-[#ccfbf1] bg-white py-1 text-[11px] font-bold text-[#0f766e]">
+                <span className="mt-0.5 w-full bg-white text-[13px] font-bold text-[#0f766e]">
                   {preferenceInsight.deepNeedLabel}
                 </span>
               )}
