@@ -186,7 +186,7 @@ export function WelcomeScreen({
           <button
             type="button"
             onClick={onStartDiagnosis}
-            className={`${PRIMARY_BUTTON} h-16 leading-none tracking-wider flex w-full items-center justify-center gap-1.5 px-5 my-5 text-[16px]`}
+            className={`${PRIMARY_BUTTON} h-16 max-w-[350px] mx-auto leading-none tracking-wider flex w-full items-center justify-center gap-1.5 px-5 my-5 text-[16px]`}
           >
             <div>好み診断から始める</div>
             <ChevronRightIcon className="size-5" />
