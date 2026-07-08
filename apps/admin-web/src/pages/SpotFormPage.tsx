@@ -112,7 +112,8 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const coordsManualRef = useRef(false);
   const nameLookupSkipRef = useRef(isEdit);
 
-  const formBusy = saving || deleting || generatingImage || generatingDescription || generatingHighlights;
+  const formBusy =
+    saving || deleting || generatingImage || generatingDescription || generatingHighlights;
 
   useEffect(() => {
     if (!embedded) return;

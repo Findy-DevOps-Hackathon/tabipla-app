@@ -1,8 +1,8 @@
-import Cropper, { type Area } from "react-easy-crop";
-import { useCallback, useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
-import { Button } from "./ui/Button.tsx";
+import { useCallback, useEffect, useState } from "react";
+import Cropper, { type Area } from "react-easy-crop";
 import { cropSpotImageFile, SPOT_IMAGE_ASPECT } from "../lib/spotImageCrop.ts";
+import { Button } from "./ui/Button.tsx";
 
 type SpotImageCropModalProps = {
   open: boolean;
@@ -12,12 +12,7 @@ type SpotImageCropModalProps = {
 };
 
 /** スポット画像のズーム・トリミング用モーダル（16:11 固定）。 */
-export function SpotImageCropModal({
-  open,
-  file,
-  onConfirm,
-  onCancel,
-}: SpotImageCropModalProps) {
+export function SpotImageCropModal({ open, file, onConfirm, onCancel }: SpotImageCropModalProps) {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -48,12 +43,7 @@ export function SpotImageCropModal({
     setProcessing(true);
     setError(null);
     try {
-      const cropped = await cropSpotImageFile(
-        imageSrc,
-        croppedAreaPixels,
-        file.type,
-        file.name,
-      );
+      const cropped = await cropSpotImageFile(imageSrc, croppedAreaPixels, file.type, file.name);
       onConfirm(cropped);
     } catch (e) {
       setError(e instanceof Error ? e.message : "画像の加工に失敗しました");
