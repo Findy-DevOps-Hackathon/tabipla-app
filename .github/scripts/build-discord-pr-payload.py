@@ -79,17 +79,14 @@ def load_pr_meta() -> dict:
 def build_embed() -> dict:
     title = truncate(os.environ.get("PR_TITLE", ""), 240)
     meta = load_pr_meta()
-    notify_kind = os.environ.get("NOTIFY_KIND", "opened")
+    notify_kind = os.environ.get("NOTIFY_KIND", "merged")
 
-    if notify_kind == "merged":
-        embed_title = f"main にマージ: {title}"
-        color = 5763719
-    elif notify_kind == "manual":
+    if notify_kind == "manual":
         embed_title = f"通知テスト: {title}"
         color = 9807270
     else:
-        embed_title = f"main 向け PR: {title}"
-        color = 5793266
+        embed_title = f"main にマージ: {title}"
+        color = 5763719
 
     fields = [
         {
@@ -120,7 +117,7 @@ def build_embed() -> dict:
     ]
 
     merged_by = os.environ.get("MERGED_BY", "").strip()
-    if notify_kind == "merged" and merged_by:
+    if notify_kind != "manual" and merged_by:
         fields.append(
             {
                 "name": "Merged by",

@@ -5,9 +5,6 @@ on:
     branches:
       - main
     types:
-      - opened
-      - reopened
-      - ready_for_review
       - closed
   workflow_dispatch:
 
@@ -15,10 +12,7 @@ jobs:
   notify:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.action == 'closed' && github.event.pull_request.merged == true) ||
-      github.event.action == 'ready_for_review' ||
-      (github.event.action == 'opened' && github.event.pull_request.draft == false) ||
-      github.event.action == 'reopened'
+      (github.event.action == 'closed' && github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +38,7 @@ jobs:
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
           REPO: ${{ github.repository }}
           PR_META_JSON: /tmp/pr-meta.json
-          NOTIFY_KIND: ${{ github.event.action == 'closed' && 'merged' || (github.event_name == 'workflow_dispatch' && 'manual' || 'opened') }}
+          NOTIFY_KIND: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'merged' }}
           MERGED_BY: ${{ github.event.pull_request.merged_by.login || '' }}
         run: |
           WEBHOOK="$(printf '%s' "$DISCORD_WEBHOOK_URL" | tr -d '[:space:]')"
