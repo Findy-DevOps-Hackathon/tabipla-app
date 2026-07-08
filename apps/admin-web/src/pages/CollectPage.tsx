@@ -336,6 +336,7 @@ export default function CollectPage() {
 
       const sourceByName = new Map(newSpots.map((s) => [nameKey(s.name), s]));
       let imageOk = 0;
+      let imageNg = 0;
       for (const imported of res.spots) {
         const source = sourceByName.get(nameKey(imported.name));
         if (!source?.pendingImage) continue;
@@ -347,8 +348,16 @@ export default function CollectPage() {
           );
           imageOk += 1;
         } catch {
-          // 登録は成功しているので画像だけ失敗
+          imageNg += 1;
         }
+      }
+
+      if (imageNg > 0) {
+        setToast(
+          imageOk > 0
+            ? `${imageOk} 件の画像を保存しましたが、${imageNg} 件は失敗しました`
+            : `観光地は登録されましたが、画像の保存に失敗しました（${imageNg} 件）`,
+        );
       }
 
       patchCollect({
@@ -761,7 +770,7 @@ export default function CollectPage() {
           </div>
         </div>
       )}
-      {toast && <Toast message={toast} variant="error" />}
+      {toast && <Toast message={toast} variant="error" onClose={() => setToast(null)} />}
 
       <Modal
         open={abortConfirmOpen}

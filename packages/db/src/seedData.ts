@@ -70,7 +70,7 @@ export function seedImageFilename(imageUrl: string | null | undefined): string |
   const pathname =
     imageUrl.startsWith("http://") || imageUrl.startsWith("https://")
       ? new URL(imageUrl).pathname
-      : imageUrl;
+      : imageUrl.split("?")[0].split("#")[0];
   const match = pathname.match(/\/(?:uploads\/)?spots\/([^/?#]+)$/);
   return match?.[1] ?? null;
 }

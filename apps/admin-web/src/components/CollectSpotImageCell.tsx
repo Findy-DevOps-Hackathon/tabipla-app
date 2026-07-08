@@ -1,7 +1,8 @@
 import { Loader2, Sparkles, Upload, X } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { SPOT_IMAGE_ACCEPT } from "../api.ts";
 import type { CollectedSpotDraft } from "../context/SpotAddDraftContext.tsx";
+import { useSpotImageCropPicker } from "../hooks/useSpotImageCropPicker.tsx";
 
 type CollectSpotImageCellProps = {
   spot: CollectedSpotDraft;
@@ -24,7 +25,16 @@ export function CollectSpotImageCell({
   onRemove,
 }: CollectSpotImageCellProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
   const zoneDisabled = disabled || busy !== null;
+
+  const { handleRawFile, cropModal } = useSpotImageCropPicker({
+    onValidationError: setError,
+    onFileReady: (file) => {
+      setError(null);
+      onUpload(file);
+    },
+  });
   const src = spot.pendingImage
     ? `data:${spot.pendingImage.mimeType};base64,${spot.pendingImage.data}`
     : null;
@@ -110,11 +120,14 @@ export function CollectSpotImageCell({
         className="hidden"
         disabled={zoneDisabled}
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onUpload(file);
+          const file = e.target.files?.[0] ?? null;
+          handleRawFile(file);
           e.target.value = "";
         }}
       />
+
+      {error && <p className="text-[10px] leading-tight text-[#dc2626]">{error}</p>}
+      {cropModal}
     </div>
   );
 }

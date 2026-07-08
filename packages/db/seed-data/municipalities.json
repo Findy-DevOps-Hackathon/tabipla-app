@@ -1,46 +1,50 @@
 [
   {
-    "id": "mun-komoro",
-    "name": "小諸市"
-  },
-  {
-    "id": "mun-noto-peninsula",
-    "name": "能登半島"
-  },
-  {
     "id": "mun-nanao",
     "name": "七尾市"
-  },
-  {
-    "id": "mun-wajima",
-    "name": "輪島市"
-  },
-  {
-    "id": "mun-suzu",
-    "name": "珠洲市"
-  },
-  {
-    "id": "mun-hakui",
-    "name": "羽咋市"
-  },
-  {
-    "id": "mun-shika",
-    "name": "志賀町"
-  },
-  {
-    "id": "mun-hodatsushimizu",
-    "name": "宝達志水町"
   },
   {
     "id": "mun-nakanoto",
     "name": "中能登町"
   },
   {
+    "id": "mun-hodatsushimizu",
+    "name": "宝達志水町"
+  },
+  {
+    "id": "mun-komoro",
+    "name": "小諸市"
+  },
+  {
+    "id": "mun-shika",
+    "name": "志賀町"
+  },
+  {
+    "id": "mun-tomi",
+    "name": "東御市"
+  },
+  {
+    "id": "mun-suzu",
+    "name": "珠洲市"
+  },
+  {
     "id": "mun-anamizu",
     "name": "穴水町"
   },
   {
+    "id": "mun-hakui",
+    "name": "羽咋市"
+  },
+  {
+    "id": "mun-noto-peninsula",
+    "name": "能登半島"
+  },
+  {
     "id": "mun-noto",
     "name": "能登町"
+  },
+  {
+    "id": "mun-wajima",
+    "name": "輪島市"
   }
 ]

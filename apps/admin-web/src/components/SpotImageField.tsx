@@ -1,10 +1,10 @@
 import { Loader2, Upload, X } from "lucide-react";
 import { type DragEvent, type MouseEvent, useEffect, useRef, useState } from "react";
-import { deleteSpotImage, uploadSpotImage } from "../api.ts";
+import { deleteSpotImage, SPOT_IMAGE_ACCEPT, uploadSpotImage } from "../api.ts";
+import { useSpotImageCropPicker } from "../hooks/useSpotImageCropPicker.tsx";
 import { resolveSpotImageSrc } from "../lib/spotImage.ts";
 
-const ACCEPT = "image/jpeg,image/png,image/webp";
-const MAX_BYTES = 5 * 1024 * 1024;
+const ACCEPT = SPOT_IMAGE_ACCEPT;
 /** user-web SpotDetailModal のヒーロー画像と同じ比率。 */
 const SPOT_IMAGE_ASPECT = "aspect-16/11";
 
@@ -34,10 +34,14 @@ export function SpotImageField({
 }: SpotImageFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { handleRawFile, cropModal } = useSpotImageCropPicker({
+    onValidationError: setError,
+    onFileReady: (file) => applyFile(file),
+  });
 
   useEffect(() => {
     if (pendingFile) {
@@ -48,32 +52,12 @@ export function SpotImageField({
     setPreviewUrl(imageUrl ? resolveSpotImageSrc({ id: spotId ?? "preview", imageUrl }) : null);
   }, [pendingFile, imageUrl, spotId]);
 
-  async function handleFileChange(file: File | null) {
+  function handleFileChange(file: File | null) {
     setError(null);
-    if (!file) return;
-    if (!ACCEPT.split(",").includes(file.type)) {
-      setError("JPEG / PNG / WebP のみアップロードできます。");
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      setError("画像サイズは 5MB 以下にしてください。");
-      return;
-    }
+    handleRawFile(file);
+  }
 
-    if (spotId) {
-      setUploading(true);
-      try {
-        const spot = await uploadSpotImage(spotId, file);
-        onImageUrlChange(spot.imageUrl);
-        onPendingFileChange(null);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "画像のアップロードに失敗しました");
-      } finally {
-        setUploading(false);
-      }
-      return;
-    }
-
+  function applyFile(file: File) {
     onPendingFileChange(file);
   }
 
@@ -81,7 +65,14 @@ export function SpotImageField({
     e.preventDefault();
     e.stopPropagation();
     setError(null);
-    onPendingFileChange(null);
+
+    // 未保存の選択画像だけ破棄し、サーバー上の既存画像は残す
+    if (pendingFile) {
+      onPendingFileChange(null);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
     if (inputRef.current) inputRef.current.value = "";
 
     if (spotId && imageUrl) {
@@ -102,7 +93,7 @@ export function SpotImageField({
 
   function handleDragOver(e: DragEvent<HTMLLabelElement>) {
     e.preventDefault();
-    if (disabled || uploading || deleting) return;
+    if (disabled || deleting) return;
     setDragging(true);
   }
 
@@ -114,13 +105,13 @@ export function SpotImageField({
   function handleDrop(e: DragEvent<HTMLLabelElement>) {
     e.preventDefault();
     setDragging(false);
-    if (disabled || uploading || deleting) return;
+    if (disabled || deleting) return;
     const file = e.dataTransfer.files?.[0] ?? null;
     void handleFileChange(file);
   }
 
   const hasImage = Boolean(previewUrl);
-  const zoneDisabled = disabled || uploading || deleting || generating;
+  const zoneDisabled = disabled || deleting || generating;
 
   return (
     <div className="flex flex-col gap-3 lg:col-span-2">
@@ -174,12 +165,7 @@ export function SpotImageField({
           }}
         />
 
-        {uploading ? (
-          <>
-            <Loader2 className="size-10 animate-spin text-[#2563eb]" aria-hidden />
-            <p className="mt-4 font-medium text-[#0f172a]">アップロード中…</p>
-          </>
-        ) : generating ? (
+        {generating ? (
           <>
             {previewUrl && (
               <img
@@ -244,13 +230,14 @@ export function SpotImageField({
             </p>
             <p className="mt-2 text-sm text-[#64748b]">JPEG / PNG / WebP・最大 5MB</p>
             <p className="mt-2 text-xs text-[#94a3b8]">
-              写真をアップロードすると「アップロード画像をイラスト化」が使えるようになります
+              選択後に位置・ズームを調整できます（16:11）。写真をアップロードすると「イラスト化」も使えます
             </p>
           </div>
         )}
       </label>
 
       {error && <p className="text-xs text-[#dc2626]">{error}</p>}
+      {cropModal}
     </div>
   );
 }

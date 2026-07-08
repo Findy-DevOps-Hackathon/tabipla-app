@@ -305,7 +305,7 @@ export function RecommendationsScreen({
             <button
               type="button"
               onClick={onGoHome}
-              className="flex w-full items-center justify-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white py-3 text-[14px] font-semibold text-[#475569] transition active:scale-[0.98] active:bg-[#f1f5f9]"
+              className="flex w-full h-14 mt-4 items-center justify-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white py-3 text-[14px] font-semibold text-[#475569] transition active:scale-[0.98] active:bg-[#f1f5f9]"
             >
               ホームに戻る
               <ChevronRightIcon className="size-4" />

@@ -243,7 +243,7 @@ export default function BulkImportPage() {
           </div>
         )}
       </div>
-      {toast && <Toast message={toast} variant="error" />}
+      {toast && <Toast message={toast} variant="error" onClose={() => setToast(null)} />}
     </>
   );
 }

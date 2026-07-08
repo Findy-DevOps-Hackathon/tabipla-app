@@ -1,12 +1,12 @@
 [
   {
-    "id": "admin-komoro",
-    "email": "admin@example.com",
-    "municipalityName": "小諸市"
-  },
-  {
     "id": "admin-noto",
     "email": "admin-noto@example.com",
     "municipalityName": "能登半島"
+  },
+  {
+    "id": "admin-komoro",
+    "email": "admin@example.com",
+    "municipalityName": "小諸市"
   }
 ]
