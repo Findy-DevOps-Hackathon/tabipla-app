@@ -67,7 +67,6 @@ export type MunicipalityProfile = {
 
 const MUNICIPALITY_PROFILES: Record<string, Omit<MunicipalityProfile, "name">> = {
   小諸市: { prefecture: "長野県", defaultArea: "小諸市" },
-  東御市: { prefecture: "長野県", defaultArea: "東御市" },
   能登半島: { prefecture: "石川県", defaultArea: "能登半島" },
 };
 

@@ -150,9 +150,9 @@ export function WelcomeScreen({
             tabipla
           </h1>
           <p className="text-2xl leading-relaxed text-[#64748b]">
-            あなたの好みに合った
+            旅先であなたに合う
             <br />
-            観光スポットを紹介
+            観光スポットが見つかる
           </p>
         </header>
 
