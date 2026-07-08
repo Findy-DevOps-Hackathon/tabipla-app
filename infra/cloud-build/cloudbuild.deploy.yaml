@@ -1,8 +1,22 @@
-# main 向け: agent → backend-api の順で Cloud Run へ自動デプロイ
+# main 向け: DB マイグレーション → agent → backend-api の順で Cloud Run へ自動デプロイ
 # トリガー例: branch=main, included-files=services/**,packages/**
 steps:
+  # Docker ビルドと並列で DB マイグレーションを実行する
+  - name: node:22
+    id: db-migrate
+    waitFor: ['-']
+    entrypoint: bash
+    args:
+      - infra/cloud-build/migrate.sh
+    env:
+      - PROJECT_ID=${PROJECT_ID}
+      - _CLOUD_SQL_INSTANCE=${_CLOUD_SQL_INSTANCE}
+    secretEnv:
+      - DATABASE_URL
+
   - name: gcr.io/cloud-builders/docker
     id: build-agent
+    waitFor: ['-']
     args:
       - build
       - -f
@@ -37,7 +51,7 @@ steps:
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-backend
-    waitFor: [build-backend]
+    waitFor: [build-backend, db-migrate]
     entrypoint: bash
     args:
       - infra/cloud-build/deploy-backend-api.sh
@@ -59,6 +73,7 @@ images:
 
 substitutions:
   _REGION: asia-northeast1
+  _CLOUD_SQL_INSTANCE: tabipla-user-web:asia-northeast1:tabipla-db-tokyo
   _CORS_ORIGINS: https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com
   _GCS_BUCKET: ${PROJECT_ID}-spot-images
   _GCS_PUBLIC_BASE_URL: https://storage.googleapis.com/${PROJECT_ID}-spot-images
@@ -67,6 +82,11 @@ substitutions:
   _ES_INDEX: ""
   _ES_VECTOR_DIMS: ""
   _EMBEDDING_PROVIDER: ""
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/tabipla-database-url/versions/latest
+      env: DATABASE_URL
 
 options:
   logging: CLOUD_LOGGING_ONLY
