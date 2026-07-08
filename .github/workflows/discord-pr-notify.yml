@@ -70,3 +70,5 @@ jobs:
             cat /tmp/discord-response.txt
           fi
           exit 1
+
+# Manual test PR for Discord notification
