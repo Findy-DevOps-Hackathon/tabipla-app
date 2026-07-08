@@ -308,6 +308,36 @@ export const searchCandidateSpotsSchema = {
           },
         ],
       },
+      prefecture: {
+        anyOf: [
+          { type: "string", minLength: 1 },
+          {
+            type: "array",
+            items: { type: "string", minLength: 1 },
+            minItems: 1,
+          },
+        ],
+      },
+      area: {
+        anyOf: [
+          { type: "string", minLength: 1 },
+          {
+            type: "array",
+            items: { type: "string", minLength: 1 },
+            minItems: 1,
+          },
+        ],
+      },
+      ids: {
+        type: "array",
+        items: { type: "string", minLength: 1 },
+        minItems: 1,
+      },
+      excludeIds: {
+        type: "array",
+        items: { type: "string", minLength: 1 },
+        minItems: 1,
+      },
       near: geoPointSchema,
       radiusKm: { type: "number", exclusiveMinimum: 0 },
       size: { type: "integer", minimum: 1, maximum: 1000 },

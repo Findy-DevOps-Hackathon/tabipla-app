@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function Modal({
@@ -17,16 +18,18 @@ export function Modal({
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-md rounded-xl border border-[#e2e8f0] bg-white p-6 shadow-xl"
+        className="relative w-full max-w-md rounded-xl border border-[#e2e8f0] bg-white p-6 shadow-xl"
       >
-        <h2 className="text-lg font-bold text-[#0f172a]">{title}</h2>
-        <div className="mt-4">{children}</div>
         <button
           type="button"
           aria-label="閉じる"
-          className="absolute right-4 top-4 hidden"
           onClick={onClose}
-        />
+          className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full text-[#64748b] transition hover:bg-[#f1f5f9] hover:text-[#0f172a]"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
+        <h2 className="pr-10 text-lg font-bold text-[#0f172a]">{title}</h2>
+        <div className="mt-4">{children}</div>
       </div>
     </div>
   );
@@ -35,9 +38,11 @@ export function Modal({
 export function Toast({
   message,
   variant = "success",
+  onClose,
 }: {
   message: string;
   variant?: "success" | "error" | "info";
+  onClose: () => void;
 }) {
   const colors =
     variant === "success"
@@ -47,9 +52,18 @@ export function Toast({
         : "border-[#2563eb]/30 bg-[#eff6ff] text-[#1d4ed8]";
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 rounded-lg border px-4 py-3 text-sm shadow-lg ${colors}`}
+      className={`fixed bottom-6 right-6 z-50 flex max-w-sm items-start gap-2 rounded-lg border px-4 py-3 text-sm shadow-lg ${colors}`}
+      role="status"
     >
-      {message}
+      <span className="min-w-0 flex-1 leading-relaxed">{message}</span>
+      <button
+        type="button"
+        aria-label="閉じる"
+        onClick={onClose}
+        className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full opacity-70 transition hover:bg-black/5 hover:opacity-100"
+      >
+        <X className="size-3.5" aria-hidden />
+      </button>
     </div>
   );
 }

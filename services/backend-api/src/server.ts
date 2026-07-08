@@ -145,6 +145,10 @@ type SearchCandidateSpotsBody = {
   query?: string;
   embedding?: number[];
   category?: string | string[];
+  prefecture?: string | string[];
+  area?: string | string[];
+  ids?: string[];
+  excludeIds?: string[];
   near?: { lat: number; lon: number };
   radiusKm?: number;
   size?: number;
@@ -1105,6 +1109,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       text?: string;
       image?: { mimeType: string; data: string };
       audio?: { mimeType: string; data: string };
+      userProfileSummary?: string;
       spot?: AskSpotPayload;
     };
 

@@ -5,6 +5,7 @@ import { CardsIcon, ChevronRightIcon, MapPinIcon } from "../components/icons.tsx
 import { SpotImage } from "../components/SpotImage.tsx";
 import { RECOMMENDATIONS_PAGE_SIZE, type Recommendation } from "../data/spots.ts";
 import { categoryOverlayBadgeClass } from "../lib/category.ts";
+import { parsePreferenceSummary } from "../lib/deepPreference.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
 import { isVisited } from "../lib/visited.ts";
 
@@ -26,6 +27,8 @@ type RecommendationsScreenProps = {
   onOpenSpot: (recommendation: Recommendation) => void;
   /** AI が生成したおすすめ紹介文（API の result） */
   aiIntroMessage?: string;
+  /** 好み診断から読み解いた体験テーマ・深層ニーズ。 */
+  preferenceSummary?: string;
   /** 診断後: API に未読込のおすすめが残っているか。 */
   hasMoreRecommendations?: boolean;
   /** 診断後: 次ページ読み込み中。 */
@@ -45,6 +48,7 @@ export function RecommendationsScreen({
   onGoHome,
   onOpenSpot,
   aiIntroMessage = "",
+  preferenceSummary = "",
   hasMoreRecommendations = false,
   loadingMoreRecommendations = false,
   onLoadMoreRecommendations,
@@ -60,6 +64,10 @@ export function RecommendationsScreen({
   );
   const [visibleCount, setVisibleCount] = useState(RECOMMENDATIONS_PAGE_SIZE);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  // コールバック ref にすることで、参照が変わるたびに Observer が再生成されるのを防ぐ。
+  // これにより「失敗 → planPage 据え置き → Observer 再生成 → 即発火 → 無限ループ」を回避する。
+  const onLoadMoreRef = useRef(onLoadMoreRecommendations);
+  onLoadMoreRef.current = onLoadMoreRecommendations;
 
   const visibleRecommendations = listSource.filter((rec) => !initiallyVisitedIds.has(rec.id));
   const displayedRecommendations = diagnosisComplete
@@ -68,6 +76,7 @@ export function RecommendationsScreen({
   const hasMore = diagnosisComplete
     ? hasMoreRecommendations
     : visibleCount < visibleRecommendations.length;
+  const preferenceInsight = parsePreferenceSummary(preferenceSummary);
 
   useEffect(() => {
     const target = loadMoreRef.current;
@@ -77,7 +86,7 @@ export function RecommendationsScreen({
       (entries) => {
         if (!entries.some((entry) => entry.isIntersecting)) return;
         if (diagnosisComplete) {
-          onLoadMoreRecommendations?.();
+          onLoadMoreRef.current?.();
           return;
         }
         setVisibleCount((count) =>
@@ -89,7 +98,9 @@ export function RecommendationsScreen({
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMore, diagnosisComplete, onLoadMoreRecommendations, visibleRecommendations.length]);
+    // onLoadMoreRecommendations は onLoadMoreRef 経由で参照するため deps に含めない。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, diagnosisComplete, visibleRecommendations.length]);
 
   return (
     <div className="flex flex-1 flex-col bg-(--page)">
@@ -110,6 +121,11 @@ export function RecommendationsScreen({
           <div className="flex items-end gap-1">
             <AiGuideAvatar size={40} className="shrink-0" />
             <AiGuideSpeechBubble>
+              {preferenceInsight?.deepNeedLabel && (
+                <span className="mt-0.5 w-full border-b border-[#ccfbf1] bg-white py-1 text-[11px] font-bold text-[#0f766e]">
+                  {preferenceInsight.deepNeedLabel}
+                </span>
+              )}
               <span className="text-[13px]">{aiIntroMessage}</span>
             </AiGuideSpeechBubble>
           </div>
@@ -305,7 +321,7 @@ export function RecommendationsScreen({
             <button
               type="button"
               onClick={onGoHome}
-              className="flex w-full items-center justify-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white py-3 text-[14px] font-semibold text-[#475569] transition active:scale-[0.98] active:bg-[#f1f5f9]"
+              className="flex w-full h-14 mt-4 items-center justify-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white py-3 text-[14px] font-semibold text-[#475569] transition active:scale-[0.98] active:bg-[#f1f5f9]"
             >
               ホームに戻る
               <ChevronRightIcon className="size-4" />

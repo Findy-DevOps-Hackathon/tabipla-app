@@ -20,6 +20,153 @@ const MAX_COMPARE_WINS = 3;
 /** 3回選ばれたスポットは線形加重(3)より強く好みへ反映する */
 const TRIPLE_WIN_LIKE_WEIGHT = 4;
 
+type DeepPreferenceMotivationId =
+  | "quietReset"
+  | "storyDiscovery"
+  | "sceneryAfterglow"
+  | "localTaste"
+  | "embodiedPlay"
+  | "hiddenGem"
+  | "openDiscovery";
+
+type DeepPreferenceRule = {
+  id: DeepPreferenceMotivationId;
+  label: string;
+  description: string;
+  themes: string[];
+  memoryPatterns: RegExp[];
+};
+
+function makeMemoryPatterns(...words: string[]): RegExp[] {
+  return words.map((word) => new RegExp(word));
+}
+
+const DEEP_PREFERENCE_RULES: DeepPreferenceRule[] = [
+  {
+    id: "quietReset",
+    label: "静けさで整う旅",
+    description: "にぎやかさよりも、余白のある場所で心身をほどく時間を求めている",
+    themes: ["温泉", "森林", "湖川", "自然公園", "ゆったり", "眺望"],
+    memoryPatterns: makeMemoryPatterns(
+      "静か",
+      "ゆっくり",
+      "のんびり",
+      "癒",
+      "疲",
+      "リラックス",
+      "落ち着",
+    ),
+  },
+  {
+    id: "storyDiscovery",
+    label: "土地の物語をたどる旅",
+    description: "景色の裏側にある歴史や文化、そこで暮らした人の気配に惹かれている",
+    themes: [
+      "城",
+      "神社・寺院",
+      "街道",
+      "町家",
+      "近代史",
+      "産業",
+      "参拝",
+      "文化財",
+      "文学",
+      "伝統工芸",
+    ],
+    memoryPatterns: makeMemoryPatterns(
+      "歴史",
+      "物語",
+      "昔",
+      "文化",
+      "学び",
+      "知りたい",
+      "由来",
+      "背景",
+    ),
+  },
+  {
+    id: "sceneryAfterglow",
+    label: "景色の余韻を持ち帰る旅",
+    description: "体験の派手さより、あとから思い出したくなる眺めや空気感を大事にしている",
+    themes: ["眺望", "海", "高原", "紅葉", "花", "景観", "写真映え"],
+    memoryPatterns: makeMemoryPatterns(
+      "景色",
+      "絶景",
+      "眺め",
+      "写真",
+      "夕日",
+      "朝日",
+      "映え",
+      "空気",
+    ),
+  },
+  {
+    id: "localTaste",
+    label: "土地の味と暮らしに触れる旅",
+    description: "名所を見るだけでなく、食や買い物を通して地域の日常に近づきたい",
+    themes: [
+      "ワイン",
+      "酒蔵",
+      "果物狩り",
+      "郷土料理",
+      "カフェ",
+      "市場",
+      "食事体験",
+      "地産地消",
+      "ショッピング",
+    ],
+    memoryPatterns: makeMemoryPatterns(
+      "食",
+      "ごはん",
+      "カフェ",
+      "ワイン",
+      "酒",
+      "市場",
+      "地元",
+      "土産",
+      "暮らし",
+    ),
+  },
+  {
+    id: "embodiedPlay",
+    label: "自分で体験して残る旅",
+    description: "眺めるだけでなく、歩く・作る・参加することで旅の記憶を身体に残したい",
+    themes: ["体験", "散策", "家族向け", "遊園", "動物園", "科学・学び", "アクセス"],
+    memoryPatterns: makeMemoryPatterns(
+      "体験",
+      "歩き",
+      "散策",
+      "子ども",
+      "家族",
+      "遊び",
+      "参加",
+      "アクティブ",
+    ),
+  },
+  {
+    id: "hiddenGem",
+    label: "人混みを避けて発見する旅",
+    description: "有名さよりも、自分だけの発見や静かな穴場感に価値を感じている",
+    themes: ["ゆったり", "散策", "町家", "文学", "森林"],
+    memoryPatterns: makeMemoryPatterns(
+      "穴場",
+      "混雑",
+      "人混み",
+      "静か",
+      "知らない",
+      "マイナー",
+      "隠れ",
+    ),
+  },
+];
+
+const DEFAULT_DEEP_PREFERENCE = {
+  id: "openDiscovery" as const,
+  label: "偶然の発見を楽しむ旅",
+  description: "まだ好みを絞り込みすぎず、直感で気になる場所との出会いを楽しめそう",
+  score: 0,
+};
+
 /** 比較選択の勝ち数を、好みベクトル・テーマ集計用の重みに変換する。 */
 export function resolveLikeWeight(rawWins?: number): number {
   const wins = Math.max(1, Math.floor(rawWins ?? 1));
@@ -97,6 +244,20 @@ export type ProfileFocusAssessment = {
   topThemes: string[];
   vectorCohesion: number | null;
   usedVectorSummary: boolean;
+};
+
+export type DeepPreferenceMotivation = {
+  id: DeepPreferenceMotivationId;
+  label: string;
+  description: string;
+  score: number;
+};
+
+export type DeepPreferenceInsight = {
+  primary: DeepPreferenceMotivation;
+  secondary: DeepPreferenceMotivation[];
+  confidence: "low" | "medium" | "high";
+  cues: string[];
 };
 
 /** Like 重み付きで好みベクトルを構築する。 */
@@ -278,6 +439,97 @@ function topThemesWithScores(profile: PreferenceProfile): ScoredLabel[] {
   return toScoredLabels(profile.themeScore);
 }
 
+function scoreDeepPreferenceRule(
+  rule: DeepPreferenceRule,
+  profile: PreferenceProfile,
+  travelMemory: string,
+): number {
+  let score = 0;
+  for (const theme of rule.themes) {
+    score += Math.max(0, profile.themeScore[theme] ?? 0);
+  }
+  for (const pattern of rule.memoryPatterns) {
+    if (pattern.test(travelMemory)) score += 2;
+  }
+  return score;
+}
+
+function confidenceForDeepPreference(
+  topScore: number,
+  profile: PreferenceProfile,
+  assessment: ProfileFocusAssessment,
+): DeepPreferenceInsight["confidence"] {
+  if (topScore <= 0) return "low";
+  if (profile.likedIds.length >= MIN_LIKES_FOR_FOCUS && assessment.focused && topScore >= 4) {
+    return "high";
+  }
+  if (profile.likedIds.length >= 2 || topScore >= 3) return "medium";
+  return "low";
+}
+
+export function buildDeepPreferenceInsight(
+  profile: PreferenceProfile,
+  travelMemory = "",
+  assessment?: ProfileFocusAssessment,
+): DeepPreferenceInsight {
+  const resolved = assessment ?? assessProfileFocus(profile);
+  const scored = DEEP_PREFERENCE_RULES.map((rule) => ({
+    id: rule.id,
+    label: rule.label,
+    description: rule.description,
+    score: scoreDeepPreferenceRule(rule, profile, travelMemory.trim()),
+  }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const primary = scored[0] ?? DEFAULT_DEEP_PREFERENCE;
+  const confidence = confidenceForDeepPreference(primary.score, profile, resolved);
+  const cues = [
+    ...resolved.topThemes,
+    ...scored
+      .slice(0, 2)
+      .flatMap((item) => DEEP_PREFERENCE_RULES.find((rule) => rule.id === item.id)?.themes ?? []),
+  ];
+
+  return {
+    primary,
+    secondary: scored.slice(1, 3),
+    confidence,
+    cues: [...new Set(cues)].slice(0, 4),
+  };
+}
+
+function themesForSpot(spot: Spot): Set<string> {
+  const themes = new Set<string>();
+  for (const highlight of highlightsOf(spot)) {
+    for (const theme of extractThemesFromText(highlight, spot.category, spot.description)) {
+      themes.add(theme);
+    }
+  }
+  if (themes.size === 0 && spot.description) {
+    for (const theme of extractThemesFromText("", spot.category, spot.description)) {
+      themes.add(theme);
+    }
+  }
+  return themes;
+}
+
+export function scoreSpotByDeepPreference(spot: Spot, insight: DeepPreferenceInsight): number {
+  if (insight.confidence === "low") return 0;
+  const themes = themesForSpot(spot);
+  let score = 0;
+  const motivations = [insight.primary, ...insight.secondary];
+  for (const motivation of motivations) {
+    const rule = DEEP_PREFERENCE_RULES.find((item) => item.id === motivation.id);
+    if (!rule) continue;
+    const weight = motivation.id === insight.primary.id ? 1.8 : 0.9;
+    for (const theme of rule.themes) {
+      if (themes.has(theme)) score += weight;
+    }
+  }
+  return score;
+}
+
 function assessProfileFocusRules(profile: PreferenceProfile): {
   needsRefinement: boolean;
   topThemes: string[];
@@ -368,18 +620,27 @@ export function assessProfileFocus(
 export function summarizeProfile(
   profile: PreferenceProfile,
   assessment?: ProfileFocusAssessment,
+  deepInsight?: DeepPreferenceInsight,
 ): string {
   const resolved = assessment ?? assessProfileFocus(profile);
   const themes = limitThemesForDisplay(resolved.topThemes);
+  const deepSummary =
+    deepInsight && deepInsight.confidence !== "low"
+      ? ` / 深層ニーズ: ${deepInsight.primary.label}`
+      : "";
   if (themes.length) {
-    return `心が動く体験: ${themes.join("・")}`;
+    return `心が動く体験: ${themes.join("・")}${deepSummary}`;
+  }
+  if (deepSummary) {
+    return `心が動く体験: 探索中${deepSummary}`;
   }
   return EMPTY_PROFILE_HINT;
 }
 
 function formatThemesLabel(themes: string[]): string {
   if (themes.length === 0) return "";
-  if (themes.length === 1) return themes[0]!;
+  const firstTheme = themes[0];
+  if (themes.length === 1) return firstTheme ?? "";
   if (themes.length === 2) return `${themes[0]}と${themes[1]}`;
   return themes.join("・");
 }
@@ -412,37 +673,48 @@ function formatBroadPreferenceHint(assessment: ProfileFocusAssessment): string {
   return `${label}にも心が動きそうですが、`;
 }
 
-const RECOMMENDATION_CLOSING =
-  "そんなあなた向けのおすすめを、ここに集めました。\n私のおすすめスポットも載せました。";
+function formatDeepPreferenceLead(insight: DeepPreferenceInsight): string | null {
+  if (insight.confidence === "low") return null;
+  const secondaryLabels = insight.secondary.map((item) => item.label).slice(0, 1);
+  if (secondaryLabels.length > 0) {
+    return `深く見ると、${insight.primary.label}を軸に、${secondaryLabels.join("・")}も大事にしているようです`;
+  }
+  return `深く見ると、${insight.primary.label}に惹かれているようです`;
+}
 
 /** 好み診断結果の解釈と旅の要望から、ユーザー向けのおすすめ理由文を組み立てる。 */
 export function buildRecommendationReason(
   profile: PreferenceProfile,
   travelMemory = "",
   assessment?: ProfileFocusAssessment,
+  deepInsight?: DeepPreferenceInsight,
 ): string {
   const memory = travelMemory.trim();
   const resolved = assessment ?? assessProfileFocus(profile);
   const hasProfile =
-    profile.likedIds.length > 0 && summarizeProfile(profile, resolved) !== EMPTY_PROFILE_HINT;
+    profile.likedIds.length > 0 &&
+    summarizeProfile(profile, resolved, deepInsight) !== EMPTY_PROFILE_HINT;
+  const insight = deepInsight ?? buildDeepPreferenceInsight(profile, memory, resolved);
+  const deepLead = formatDeepPreferenceLead(insight);
 
   if (resolved.needsRefinement && hasProfile) {
     const hint = formatBroadPreferenceHint(resolved);
-    return `${hint}もう少し選んでいただければ、胸が高鳴るようなおすすめだけに絞れます。`;
+    return `${deepLead ? `${deepLead}。` : ""}${hint}もう少し選んでいただければ、胸が高鳴るようなおすすめだけに絞れます。`;
   }
 
   const interpretation = formatThemePreference(resolved.topThemes, resolved.usedVectorSummary);
+  const baseLead = deepLead ? `${deepLead}。` : "";
 
   if (hasProfile && memory) {
     const base = interpretation || "選び方から、あなたの旅への想いが伝わってきました";
-    return `${base}。「${memory}」という気持ちも込めて、${RECOMMENDATION_CLOSING}`;
+    return `${baseLead}${base}。「${memory}」という気持ちも込めて`;
   }
   if (hasProfile) {
     const base = interpretation || "選び方から、あなたの旅への想いが伝わってきました";
-    return `${base}。${RECOMMENDATION_CLOSING}`;
+    return `${baseLead}${base}。`;
   }
   if (memory) {
-    return `「${memory}」という想いに応えたいと思い、あなた向けのスポットを選びました。`;
+    return `${baseLead}「${memory}」という想いに応えたいと思い、あなた向けのスポットを選びました。`;
   }
   return "まずは楽しめそうな場所を、わくわくする気持ちのまま集めてみました。";
 }

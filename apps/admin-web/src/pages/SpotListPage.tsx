@@ -385,7 +385,13 @@ export default function SpotListPage() {
         </div>
       </Modal>
 
-      {toast && <Toast message={toast} variant={toast.includes("失敗") ? "error" : "success"} />}
+      {toast && (
+        <Toast
+          message={toast}
+          variant={toast.includes("失敗") ? "error" : "success"}
+          onClose={() => setToast(null)}
+        />
+      )}
     </AdminShell>
   );
 }
@@ -402,6 +408,7 @@ function SpotListThumbnail({ spot }: { spot: Spot }) {
   return (
     <div className="relative aspect-16/11 w-20 shrink-0 overflow-hidden rounded-md border border-[#e2e8f0] bg-[#f1f5f9]">
       <img
+        key={`${id}-${imageUrl ?? ""}`}
         src={src}
         alt=""
         className="absolute inset-0 size-full object-cover"

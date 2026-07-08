@@ -1,6 +1,6 @@
 import { FunctionTool } from "@google/adk";
 import { z } from "zod";
-import { getUnchikuSource, search, travelTimes } from "./dataSources.js";
+import { getUnchikuSource, search } from "./dataSources.js";
 import { checkToolLoop } from "./tracker.js";
 
 // FunctionTool は Zod スキーマでツールを宣言。
@@ -21,26 +21,6 @@ export const searchSpotsTool = new FunctionTool({
     const loopError = checkToolLoop("search_spots", args);
     if (loopError) return loopError;
     return { status: "success", spots: await search(args) };
-  },
-});
-
-export const travelTimesTool = new FunctionTool({
-  name: "travel_times",
-  description: "出発地から各スポットへの所要時間(秒)を返す",
-  parameters: z.object({
-    origin: z.object({ lat: z.number(), lon: z.number() }),
-    destinations: z.array(
-      z.object({
-        id: z.string(),
-        at: z.object({ lat: z.number(), lon: z.number() }),
-      }),
-    ),
-    mode: z.enum(["walk", "drive", "transit"]),
-  }),
-  execute: async (args) => {
-    const loopError = checkToolLoop("travel_times", args);
-    if (loopError) return loopError;
-    return { status: "success", times: await travelTimes(args) };
   },
 });
 

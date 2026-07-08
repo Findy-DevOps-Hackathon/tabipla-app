@@ -51,6 +51,12 @@ export function spotImagePublicPath(spotId: string, ext: string): string {
   return `/uploads/spots/${spotId}.${ext}`;
 }
 
+/** 上書き保存後もクライアントが最新画像を取得できるようバージョンクエリを付与する。 */
+export function withImageVersion(publicUrl: string): string {
+  const base = publicUrl.split("?")[0]?.split("#")[0] ?? publicUrl;
+  return `${base}?v=${Date.now()}`;
+}
+
 function spotImageObjectName(spotId: string, ext: string): string {
   return `${GCS_OBJECT_PREFIX}/${spotId}.${ext}`;
 }
@@ -119,7 +125,7 @@ async function saveSpotImageLocal(spotId: string, ext: string, buffer: Buffer): 
 
   const filename = `${spotId}.${ext}`;
   await writeFile(join(uploadDir, filename), buffer);
-  return spotImagePublicPath(spotId, ext);
+  return withImageVersion(spotImagePublicPath(spotId, ext));
 }
 
 async function saveSpotImageGcs(
@@ -145,7 +151,7 @@ async function saveSpotImageGcs(
     resumable: false,
   });
 
-  return spotImagePublicUrl(spotId, ext);
+  return withImageVersion(spotImagePublicUrl(spotId, ext));
 }
 
 /** Base64 画像を保存し、公開 URL（GCS）または公開パス（ローカル）を返す。 */

@@ -67,10 +67,12 @@ export async function loadSeedBundle(): Promise<SeedBundle> {
 /** `/uploads/spots/foo.webp` や GCS/CDN の `/spots/foo.webp` から seed-data 内のファイル名を得る。 */
 export function seedImageFilename(imageUrl: string | null | undefined): string | null {
   if (!imageUrl) return null;
+  const [withoutQuery = imageUrl] = imageUrl.split("?");
+  const [relativePath = withoutQuery] = withoutQuery.split("#");
   const pathname =
     imageUrl.startsWith("http://") || imageUrl.startsWith("https://")
       ? new URL(imageUrl).pathname
-      : imageUrl;
+      : relativePath;
   const match = pathname.match(/\/(?:uploads\/)?spots\/([^/?#]+)$/);
   return match?.[1] ?? null;
 }

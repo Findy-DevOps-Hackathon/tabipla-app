@@ -15,7 +15,7 @@ const FEATURED_CARD_IMAGE_H = "h-[230px]";
 const FEATURED_ROTATE_MS = 3000;
 
 /** カードの入れ替えアニメーションの長さ（ミリ秒、CSS と一致させる）。 */
-const FEATURED_SWAP_MS = 1100;
+const FEATURED_SWAP_MS = 1600;
 
 /**
  * ホーム中央のおすすめスポットカードの「見た目」1枚分。

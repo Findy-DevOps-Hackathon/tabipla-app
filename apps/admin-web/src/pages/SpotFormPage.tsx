@@ -12,7 +12,6 @@ import {
   resolveReferenceImageForGenerate,
   spotImageResultToFile,
   updateSpot,
-  uploadSpotImage,
 } from "../api.ts";
 import { AdminShell } from "../components/layout/AdminShell.tsx";
 import { SpotImageField, uploadPendingSpotImage } from "../components/SpotImageField.tsx";
@@ -82,11 +81,6 @@ function formSnapshotsEqual(a: FormSnapshot, b: FormSnapshot): boolean {
 
 const emptyFormSnapshot = toFormSnapshot(emptyManualFormDraft(), null);
 
-function appendImageCacheBuster(imageUrl: string): string {
-  const sep = imageUrl.includes("?") ? "&" : "?";
-  return `${imageUrl}${sep}v=${Date.now()}`;
-}
-
 export default function SpotFormPage({ embedded = false }: { embedded?: boolean } = {}) {
   const municipality = getMunicipality();
   const { id } = useParams();
@@ -118,7 +112,8 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const coordsManualRef = useRef(false);
   const nameLookupSkipRef = useRef(isEdit);
 
-  const formBusy = saving || deleting;
+  const formBusy =
+    saving || deleting || generatingImage || generatingDescription || generatingHighlights;
 
   useEffect(() => {
     if (!embedded) return;
@@ -348,16 +343,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
         referenceImage,
       });
       const file = spotImageResultToFile(image, spotName);
-
-      if (isEdit && id) {
-        const spot = await uploadSpotImage(id, file);
-        if (spot.imageUrl) {
-          setField("imageUrl", appendImageCacheBuster(spot.imageUrl));
-        }
-        setPendingImageFile(file);
-      } else {
-        setPendingImageFile(file);
-      }
+      setPendingImageFile(file);
     } catch (e) {
       setImageGenerateMiss(true);
       if (e instanceof Error && e.message) {
@@ -418,6 +404,12 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     setSaving(true);
     try {
       if (isEdit && id) {
+        if (pendingImageFile) {
+          const imageUrl = await uploadPendingSpotImage(id, pendingImageFile);
+          if (imageUrl) {
+            setField("imageUrl", imageUrl);
+          }
+        }
         const { id: _id, ...patch } = buildSpot();
         await updateSpot(id, patch);
       } else {
@@ -426,8 +418,8 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
           await uploadPendingSpotImage(created.id, pendingImageFile);
         }
         if (embedded) resetManualDraft();
-        setPendingImageFile(null);
       }
+      setPendingImageFile(null);
       setToast("観光地を保存しました。検索インデックスへ反映中…");
       setTimeout(() => navigate("/spots"), 1200);
     } catch {
@@ -723,7 +715,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
         </div>
       </Modal>
 
-      {toast && <Toast message={toast} />}
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </>,
   );
 }

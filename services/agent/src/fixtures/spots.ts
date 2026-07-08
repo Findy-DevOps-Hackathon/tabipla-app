@@ -10,13 +10,8 @@ type SeedSpotRow = {
   description: string;
   category?: string | string[];
   highlights?: string[];
-  lat?: number | null;
-  lon?: number | null;
   imageUrl?: string | null;
 };
-
-const KOMORO_CENTER = { lat: 36.3263, lon: 138.4228 };
-const DEFAULT_HOURS = { open: "09:00", close: "17:00", stayMin: 60 };
 
 const AGENT_CATEGORY_BY_JP: Record<string, Spot["category"]> = {
   自然: "nature",
@@ -58,7 +53,6 @@ function toAgentSpot(row: SeedSpotRow): Spot {
     id: row.id,
     name: row.name,
     category: toAgentCategory(categories),
-    location: row.lat != null && row.lon != null ? { lat: row.lat, lon: row.lon } : KOMORO_CENTER,
     description: row.description,
     highlights: row.highlights?.slice(0, 3) ?? [],
   };
@@ -71,7 +65,6 @@ export function mapSpotDocumentToAgentSpot(doc: SpotDocument): Spot {
     id: doc.id,
     name: doc.name,
     category: toAgentCategory(categories),
-    location: doc.location ?? KOMORO_CENTER,
     description: doc.description,
     highlights: doc.highlights?.slice(0, 3) ?? [],
   };
@@ -85,6 +78,3 @@ export const KOMORO_SPOTS: Spot[] = seedRows.map(toAgentSpot);
 export const SPOT_IMAGES: Record<string, string> = Object.fromEntries(
   seedRows.filter((row) => row.imageUrl).map((row) => [row.id, row.imageUrl as string]),
 );
-
-export const SPOT_HOURS: Record<string, { open: string; close: string; stayMin: number }> =
-  Object.fromEntries(KOMORO_SPOTS.map((spot) => [spot.id, DEFAULT_HOURS]));
