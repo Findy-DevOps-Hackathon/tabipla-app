@@ -8,24 +8,28 @@ on:
       - opened
       - reopened
       - ready_for_review
+  workflow_dispatch:
 
 jobs:
   notify:
     if: >-
+      github.event_name == 'workflow_dispatch' ||
       github.event.action == 'ready_for_review' ||
       (github.event.action == 'opened' && github.event.pull_request.draft == false) ||
       github.event.action == 'reopened'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Post to Discord
         continue-on-error: true
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title || 'Manual Discord notification test' }}
+          PR_URL: ${{ github.event.pull_request.html_url || format('{0}/{1}/actions', github.server_url, github.repository) }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login || github.actor }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref || 'main' }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
           WEBHOOK="$(printf '%s' "$DISCORD_WEBHOOK_URL" | tr -d '[:space:]')"
@@ -41,19 +45,7 @@ jobs:
 
           echo "Webhook URL length: ${#WEBHOOK}"
 
-          PAYLOAD=$(python3 -c '
-          import json, os
-          title = os.environ["PR_TITLE"]
-          if len(title) > 200:
-              title = title[:197] + "..."
-          message = (
-              f"**PR to {os.environ[\"BASE_BRANCH\"]}:** [{title}]({os.environ[\"PR_URL\"]})\n"
-              f"Author: {os.environ[\"PR_AUTHOR\"]}\n"
-              f"Branch: `{os.environ[\"HEAD_BRANCH\"]}` -> `{os.environ[\"BASE_BRANCH\"]}`\n"
-              f"Repository: {os.environ[\"REPO\"]}"
-          )
-          print(json.dumps({"content": message}, ensure_ascii=False))
-          ')
+          PAYLOAD=$(python3 .github/scripts/build-discord-pr-payload.py)
 
           HTTP_CODE=$(curl -sS -o /tmp/discord-response.txt -w "%{http_code}" \
             -X POST "$WEBHOOK" \
@@ -70,5 +62,3 @@ jobs:
             cat /tmp/discord-response.txt
           fi
           exit 1
-
-# Manual test PR for Discord notification
