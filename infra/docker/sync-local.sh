@@ -23,7 +23,6 @@ sync_db() {
   DATABASE_URL="$url" pnpm -C "$ROOT/packages/db" exec tsx scratch/prune-non-seed-spots.ts
 }
 
-sync_db 5432 "Homebrew PostgreSQL"
 sync_db 5433 "Docker PostgreSQL"
 
 echo ""

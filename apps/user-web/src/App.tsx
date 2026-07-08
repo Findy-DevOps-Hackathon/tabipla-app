@@ -178,7 +178,7 @@ function resolveSwipeDeckFromIds(
   catalog: SwipeSpot[],
   refineCatalog: SwipeSpot[],
 ): SwipeSpot[] {
-  const fallback = isRefining ? [...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE] : SWIPE_SPOTS;
+  const fallback = isRefining ? SWIPE_SPOTS_REFINE : SWIPE_SPOTS;
   const pool =
     (isRefining ? refineCatalog : catalog).length > 0
       ? isRefining
@@ -269,10 +269,10 @@ export default function App() {
 
         if (swipeSpots.length > 0) {
           setCatalog(swipeSpots);
-          setRefineCatalog(swipeSpots);
+          setRefineCatalog(swipeSpots.slice(SWIPE_LIMIT));
         } else {
           setCatalog(SWIPE_SPOTS);
-          setRefineCatalog([...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE]);
+          setRefineCatalog(SWIPE_SPOTS_REFINE);
         }
 
         setRecommendations((prev) => refreshRecommendationImages(prev, docs));
@@ -478,7 +478,7 @@ export default function App() {
   }, []);
 
   const refinePreferences = useCallback(() => {
-    const pool = refineCatalog.length > 0 ? refineCatalog : [...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE];
+    const pool = refineCatalog.length > 0 ? refineCatalog : SWIPE_SPOTS_REFINE;
     pendingSwipeDeckIdsRef.current = [];
     setPlanNeedsRefinement(false);
     setSwipeDeck(pool.slice(0, SWIPE_LIMIT_REFINE));

@@ -221,7 +221,9 @@ export function SpotDetailModal({
           <div className="flex flex-col gap-4 p-4">
             <section className="flex flex-col gap-1.5">
               <p className="text-[13px] font-bold text-[#0f172a]">スポット紹介</p>
-              <p className="text-[14px] leading-[1.6] text-[#475569]">{rec.description}</p>
+              <p className="text-[14px] leading-[1.6] text-[#475569] tracking-wide">
+                {rec.description}
+              </p>
             </section>
 
             {highlights.length > 0 && (
@@ -231,7 +233,7 @@ export function SpotDetailModal({
                   {highlights.map((point) => (
                     <li
                       key={point}
-                      className="flex items-start gap-2 text-[13px] leading-normal text-[#475569]"
+                      className="flex items-start gap-2 text-[13px] leading-normal text-[#475569] tracking-wide"
                     >
                       <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-(--brand)" />
                       {point}

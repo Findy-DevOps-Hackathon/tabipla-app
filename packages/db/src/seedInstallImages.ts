@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readdir, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { Storage } from "@google-cloud/storage";
+import { type Bucket, Storage } from "@google-cloud/storage";
 import type { SeedSpot } from "./seedData.js";
 import { resolveSpotUploadDir, SEED_IMAGES_DIR, seedImageFilename } from "./seedData.js";
 
@@ -44,6 +44,18 @@ function gcsPublicImageUrl(bucket: string, filename: string): string {
   return `${base}/${getGcsObjectPrefix()}/${filename}`;
 }
 
+/** 同一 URL 再アップロード時もブラウザが最新画像を取るようバージョンクエリを付与する。 */
+function withImageVersion(publicUrl: string, version: number): string {
+  const base = publicUrl.split("?")[0]?.split("#")[0] ?? publicUrl;
+  return `${base}?v=${version}`;
+}
+
+async function removeExistingSpotImagesGcs(bucket: Bucket, spotId: string): Promise<void> {
+  const prefix = `${getGcsObjectPrefix()}/${spotId}.`;
+  const [files] = await bucket.getFiles({ prefix });
+  await Promise.all(files.map((file) => file.delete().catch(() => undefined)));
+}
+
 async function installSeedImagesToGcs(
   spots: SeedSpot[],
   available: Set<string>,
@@ -54,6 +66,7 @@ async function installSeedImagesToGcs(
   }
 
   const bucket = getStorageClient().bucket(bucketName);
+  const imageVersion = Date.now();
   let installed = 0;
   const nextSpots: SeedSpot[] = [];
 
@@ -67,6 +80,8 @@ async function installSeedImagesToGcs(
     const source = join(SEED_IMAGES_DIR, filename);
     const objectName = `${getGcsObjectPrefix()}/${filename}`;
     const contentType = EXT_TO_MIME[extname(filename).toLowerCase()] ?? "application/octet-stream";
+    const spotId = spot.id ?? filename.replace(/\.[^.]+$/, "");
+    await removeExistingSpotImagesGcs(bucket, spotId);
     await bucket.file(objectName).save(await readFile(source), {
       contentType,
       metadata: {
@@ -76,7 +91,10 @@ async function installSeedImagesToGcs(
     });
 
     installed += 1;
-    nextSpots.push({ ...spot, imageUrl: gcsPublicImageUrl(bucketName, filename) });
+    nextSpots.push({
+      ...spot,
+      imageUrl: withImageVersion(gcsPublicImageUrl(bucketName, filename), imageVersion),
+    });
   }
 
   return { installed, spots: nextSpots, target: "gcs" };

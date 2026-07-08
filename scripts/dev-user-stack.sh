@@ -7,6 +7,9 @@ cd "$ROOT"
 echo "==> PostgreSQL を起動します（Docker）"
 pnpm docker:up
 
+# ローカル開発は Docker PostgreSQL（5433）に統一する。
+export DATABASE_URL="postgresql://tabipla:tabipla@localhost:5433/tabipla"
+
 echo "==> backend-api (3001) / agent (8080) / user-web (5173) を起動します"
 echo "    AIガイド: http://localhost:5173 （スポット詳細 → チャット）"
 echo "    停止: Ctrl+C"

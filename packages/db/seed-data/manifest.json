@@ -1,6 +1,6 @@
 {
-  "exportedAt": "2026-07-08T10:56:51.066Z",
-  "sourceDatabaseUrl": "postgresql://tabipla:***@localhost:5432/tabipla",
+  "exportedAt": "2026-07-08T15:24:11.765Z",
+  "sourceDatabaseUrl": "seed-data + local dev image overlay (:5432)",
   "counts": {
     "municipalities": 12,
     "adminUsers": 2,

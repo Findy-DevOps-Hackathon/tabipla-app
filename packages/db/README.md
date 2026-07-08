@@ -27,7 +27,7 @@ PostgreSQL (正本)  ──reindex──▶  Elasticsearch (検索用の写し)
 
 | 変数名 | 必須 | 既定値 | 説明 |
 |---|---|---|---|
-| `DATABASE_URL` | yes | （なし） | PostgreSQL 接続文字列。例: `postgresql://tabipla:tabipla@localhost:5432/tabipla` |
+| `DATABASE_URL` | yes | （なし） | PostgreSQL 接続文字列。例: `postgresql://tabipla:tabipla@localhost:5433/tabipla` |
 
 > 認証情報は **コードにハードコードせず**、必ず環境変数から渡してください（`.env` はコミットしない）。
 > ローカル用の既定値は `.env.example` を参照してください。
@@ -65,8 +65,8 @@ pnpm install
 # PostgreSQL を起動（infra/docker）
 cd infra/docker && docker compose up -d postgres && cd -
 
-# 接続情報を設定（ローカル既定値）
-export DATABASE_URL=postgresql://tabipla:tabipla@localhost:5432/tabipla
+# 接続情報を設定（Docker PostgreSQL: ホスト 5433）
+export DATABASE_URL=postgresql://tabipla:tabipla@localhost:5433/tabipla
 ```
 
 ---
@@ -105,8 +105,8 @@ pnpm -C packages/db seed
 管理画面などでデータを追加・更新したあと、次で `seed-data/` を再生成できます。
 
 ```bash
-# 接続先は DATABASE_URL（ローカル PostgreSQL の実ポートに合わせる）
-DATABASE_URL=postgresql://tabipla:tabipla@localhost:5432/tabipla pnpm -C packages/db seed:export
+# 接続先は DATABASE_URL（Docker PostgreSQL: localhost:5433）
+DATABASE_URL=postgresql://tabipla:tabipla@localhost:5433/tabipla pnpm -C packages/db seed:export
 pnpm -C packages/db seed
 ```
 

@@ -6,7 +6,7 @@ import * as schema from "./schema.js";
  * DB 接続に使う環境変数。新規環境変数を説明なしに増やさないため、ここで一覧化する。
  *
  * - DATABASE_URL: PostgreSQL 接続文字列
- *   （例: postgresql://tabipla:tabipla@localhost:5432/tabipla）
+ *   （例: postgresql://tabipla:tabipla@localhost:5433/tabipla）
  *
  * 認証情報はコードにハードコードせず、必ず環境変数から渡すこと。
  */
@@ -30,7 +30,7 @@ export function createDatabase(options: CreateDatabaseOptions = {}): Database {
 
   if (!connectionString) {
     throw new Error(
-      "[db] DATABASE_URL が未設定です。例: postgresql://tabipla:tabipla@localhost:5432/tabipla",
+      "[db] DATABASE_URL が未設定です。例: postgresql://tabipla:tabipla@localhost:5433/tabipla",
     );
   }
 
