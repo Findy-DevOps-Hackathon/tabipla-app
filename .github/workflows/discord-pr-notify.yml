@@ -1,0 +1,87 @@
+name: Discord PR notification
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+
+jobs:
+  notify:
+    if: >-
+      github.event.action == 'ready_for_review' ||
+      (github.event.action == 'opened' && github.event.pull_request.draft == false) ||
+      github.event.action == 'reopened'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          webhook = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+          if not webhook:
+              print("DISCORD_WEBHOOK_URL is not set. Skipping Discord notification.")
+              raise SystemExit(0)
+
+          body = (os.environ.get("PR_BODY") or "").strip()
+          if len(body) > 500:
+              body = body[:497] + "..."
+
+          payload = {
+              "embeds": [
+                  {
+                      "title": f"PR to {os.environ['BASE_BRANCH']}: {os.environ['PR_TITLE']}",
+                      "url": os.environ["PR_URL"],
+                      "description": body or "(説明なし)",
+                      "color": 5793266,
+                      "fields": [
+                          {
+                              "name": "Author",
+                              "value": os.environ["PR_AUTHOR"],
+                              "inline": True,
+                          },
+                          {
+                              "name": "Branch",
+                              "value": f"`{os.environ['HEAD_BRANCH']}` -> `{os.environ['BASE_BRANCH']}`",
+                              "inline": True,
+                          },
+                          {
+                              "name": "Repository",
+                              "value": os.environ["REPO"],
+                              "inline": False,
+                          },
+                      ],
+                  }
+              ]
+          }
+
+          request = urllib.request.Request(
+              webhook,
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+
+          try:
+              with urllib.request.urlopen(request) as response:
+                  print(f"Discord notification sent (HTTP {response.status}).")
+          except urllib.error.HTTPError as error:
+              print(f"Discord webhook failed (HTTP {error.code}).")
+              raise SystemExit(1) from error
+          PY
