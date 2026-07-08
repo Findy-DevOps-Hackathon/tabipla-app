@@ -592,18 +592,23 @@ export default function App() {
     };
   }, [step, planFetchKey]);
 
-  const loadMoreRecommendations = useCallback(async () => {
-    if (planLoadingMore || recommendations.length >= planTotal) return;
+  // ステート更新前に同一クロージャから複数回呼ばれるのを防ぐための同期ガード。
+  const planLoadingMoreRef = useRef(false);
 
+  const loadMoreRecommendations = useCallback(async () => {
+    if (planLoadingMoreRef.current || recommendations.length >= planTotal) return;
+
+    planLoadingMoreRef.current = true;
     setPlanLoadingMore(true);
     try {
       await fetchPlanPage(planPage + 1, true);
     } catch {
       // 追加読み込み失敗時はサイレント（一覧は維持）
     } finally {
+      planLoadingMoreRef.current = false;
       setPlanLoadingMore(false);
     }
-  }, [fetchPlanPage, planLoadingMore, planPage, planTotal, recommendations.length]);
+  }, [fetchPlanPage, planPage, planTotal, recommendations.length]);
 
   const retryPlanFetch = useCallback(() => {
     setApiError(null);

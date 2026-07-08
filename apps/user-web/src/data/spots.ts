@@ -7,8 +7,8 @@
 
 export type SpotCategory = "観光" | "グルメ" | "宿泊" | "自然" | "歴史";
 
-export const SWIPE_LIMIT = 8; // 初回は8件スワイプ
-export const SWIPE_LIMIT_REFINE = 6; // 追加ラウンドは6件
+export const SWIPE_LIMIT = 9; // 初回は8件スワイプ
+export const SWIPE_LIMIT_REFINE = 6; // 追加ラウンドは5件
 
 export type SwipeSpot = {
   id: string;

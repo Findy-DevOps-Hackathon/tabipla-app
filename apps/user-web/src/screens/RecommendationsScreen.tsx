@@ -60,6 +60,10 @@ export function RecommendationsScreen({
   );
   const [visibleCount, setVisibleCount] = useState(RECOMMENDATIONS_PAGE_SIZE);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  // コールバック ref にすることで、参照が変わるたびに Observer が再生成されるのを防ぐ。
+  // これにより「失敗 → planPage 据え置き → Observer 再生成 → 即発火 → 無限ループ」を回避する。
+  const onLoadMoreRef = useRef(onLoadMoreRecommendations);
+  onLoadMoreRef.current = onLoadMoreRecommendations;
 
   const visibleRecommendations = listSource.filter((rec) => !initiallyVisitedIds.has(rec.id));
   const displayedRecommendations = diagnosisComplete
@@ -77,7 +81,7 @@ export function RecommendationsScreen({
       (entries) => {
         if (!entries.some((entry) => entry.isIntersecting)) return;
         if (diagnosisComplete) {
-          onLoadMoreRecommendations?.();
+          onLoadMoreRef.current?.();
           return;
         }
         setVisibleCount((count) =>
@@ -89,7 +93,9 @@ export function RecommendationsScreen({
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMore, diagnosisComplete, onLoadMoreRecommendations, visibleRecommendations.length]);
+    // onLoadMoreRecommendations は onLoadMoreRef 経由で参照するため deps に含めない。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, diagnosisComplete, visibleRecommendations.length]);
 
   return (
     <div className="flex flex-1 flex-col bg-(--page)">
