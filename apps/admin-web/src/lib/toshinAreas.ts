@@ -1,5 +1,5 @@
 /** 東信エリアの市区町村（長野県）。 */
-export const TOSHIN_MUNICIPALITY_NAMES = ["小諸市", "東御市"] as const;
+export const TOSHIN_MUNICIPALITY_NAMES = ["小諸市"] as const;
 
 export const TOSHIN_AREA = "東信";
 
