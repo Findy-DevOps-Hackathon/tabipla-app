@@ -536,13 +536,8 @@ function assessProfileFocusRules(profile: PreferenceProfile): {
 } {
   const positiveThemes = topThemesWithScores(profile);
 
-  let needsRefinement = profile.likedIds.length < MIN_LIKES_FOR_FOCUS;
-  if (positiveThemes.length >= MIN_THEME_COUNT_FOR_REFINE) {
-    needsRefinement = true;
-  }
-
   return {
-    needsRefinement,
+    needsRefinement: positiveThemes.length >= MIN_THEME_COUNT_FOR_REFINE,
     topThemes: [],
   };
 }
@@ -587,18 +582,18 @@ export function assessProfileFocus(
     vectorCohesion = computeLikedEmbeddingsCohesion(vector.likedEmbeddings);
   }
 
-  let needsRefinement = profile.likedIds.length < MIN_LIKES_FOR_FOCUS;
+  let needsRefinement = false;
 
   if (vectorCohesion !== null) {
     if (vectorCohesion >= VECTOR_FOCUS_COHESION) {
-      needsRefinement = profile.likedIds.length < MIN_LIKES_FOR_FOCUS;
+      needsRefinement = false;
     } else if (vectorCohesion < VECTOR_SCATTER_COHESION) {
       needsRefinement = true;
     } else {
-      needsRefinement = needsRefinement || ruleFallback.needsRefinement;
+      needsRefinement = ruleFallback.needsRefinement;
     }
   } else {
-    needsRefinement = needsRefinement || ruleFallback.needsRefinement;
+    needsRefinement = ruleFallback.needsRefinement;
   }
 
   if (!usedVectorSummary) {
