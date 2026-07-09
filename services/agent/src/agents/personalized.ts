@@ -142,7 +142,8 @@ function buildPersonalizedSearchQuery(
 
 function esScoreToRankSimilarity(index: number, total: number): number {
   if (total <= 1) return 0.9;
-  return Math.max(0.05, 0.9 - (index / (total - 1)) * 0.45);
+  // 順位を [0.05, 0.90] に線形写像（以前は下限 0.45 で下位が中央に寄っていた）
+  return Math.max(0.05, 0.9 - (index / (total - 1)) * 0.85);
 }
 
 /** 自然文 + ベクトル + ID filter で、目的地カタログ内の候補を ES から広めに取得する。 */

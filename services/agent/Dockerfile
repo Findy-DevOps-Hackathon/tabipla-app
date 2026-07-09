@@ -24,7 +24,9 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/db/package.json ./packages/db/
 COPY packages/search-core/package.json ./packages/search-core/
 COPY services/agent/package.json ./services/agent/
-RUN pnpm install --frozen-lockfile --filter @tabipla/agent... --prod
+# 本番イメージに husky は入らないため、ルート prepare だけ外してから install する
+RUN node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); delete p.scripts?.prepare; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');" \
+  && pnpm install --frozen-lockfile --filter @tabipla/agent... --prod
 
 COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=build /app/packages/search-core/dist ./packages/search-core/dist
