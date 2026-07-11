@@ -50,10 +50,12 @@ echo "Granting Secret Manager access..."
 SECRETS=(
   tabipla-database-url
   tabipla-admin-jwt-secret
+  tabipla-agent-internal-secret
   tabipla-gemini-api-key
   tabipla-google-maps-api-key
   tabipla-es-api-key
   tabipla-es-password
+  tabipla-es-username
 )
 
 for secret in "${SECRETS[@]}"; do
