@@ -34,7 +34,7 @@ if ! curl -sf http://localhost:9200 >/dev/null; then
 fi
 
 curl -s -X DELETE "http://localhost:9200/spots" >/dev/null 2>&1 || true
-pnpm -C "$ROOT/packages/db" build
+pnpm --filter @tabipla/db... build
 pnpm -C "$ROOT/services/backend-api" reindex
 pnpm -C "$ROOT/services/backend-api" embed-spots
 
