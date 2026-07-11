@@ -121,6 +121,14 @@ body {
   animation: compare-card-wiggle-bottom-strong 1.15s ease-in-out 0.12s;
 }
 
+/** iOS Safari: transform 付き祖先内の img が描画されないのを防ぐ */
+.animate-compare-hint-top img,
+.animate-compare-hint-top-strong img,
+.animate-compare-hint-bottom img,
+.animate-compare-hint-bottom-strong img {
+  transform: translateZ(0);
+}
+
 /** ホーム背景の格子（グリッド）を下方向へ無限スクロールさせる。
     背景サイズ 28px と同じ量だけ動かすことで継ぎ目なくループする。 */
 @keyframes grid-drift {
@@ -210,7 +218,11 @@ body {
   .animate-float-soft,
   .animate-card-enter,
   .animate-card-leave,
-  .animate-ai-guide-speak {
+  .animate-ai-guide-speak,
+  .animate-compare-hint-top,
+  .animate-compare-hint-top-strong,
+  .animate-compare-hint-bottom,
+  .animate-compare-hint-bottom-strong {
     animation: none;
   }
 }
