@@ -1,5 +1,5 @@
 import { Loader2, Pencil } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   bulkImportSpots,
@@ -7,6 +7,7 @@ import {
   collectSpots,
   generateSpotImage,
   geocodeAddress,
+  isAbortError,
   listSpots,
   lookupPlaceByName,
   readSpotImageFile,
@@ -151,6 +152,7 @@ export default function CollectPage() {
     index: number;
     kind: "generate" | "upload";
   } | null>(null);
+  const imageGenerateAbortRef = useRef<AbortController | null>(null);
 
   const selectedCount = spots.filter((s) => s.selected).length;
   const selectedImageReadyCount = spots.filter((s) => s.selected && s.pendingImage).length;
@@ -278,6 +280,9 @@ export default function CollectPage() {
     const spot = spots[index];
     if (!spot) return;
 
+    imageGenerateAbortRef.current?.abort();
+    const controller = new AbortController();
+    imageGenerateAbortRef.current = controller;
     setImageBusy({ index, kind: "generate" });
     try {
       const image = await generateSpotImage({
@@ -285,15 +290,24 @@ export default function CollectPage() {
         prefecture: spot.prefecture || prefecture,
         municipality,
         referenceImage: spot.pendingImage,
+        signal: controller.signal,
       });
       updateSpot(index, {
         pendingImage: { mimeType: image.mimeType, data: image.data },
       });
     } catch (e) {
+      if (isAbortError(e)) return;
       setToast(e instanceof Error ? e.message : "画像の作成に失敗しました");
     } finally {
+      if (imageGenerateAbortRef.current === controller) {
+        imageGenerateAbortRef.current = null;
+      }
       setImageBusy(null);
     }
+  };
+
+  const handleCancelGenerateSpotImage = () => {
+    imageGenerateAbortRef.current?.abort();
   };
 
   const handleUploadSpotImage = async (index: number, file: File) => {
@@ -580,6 +594,7 @@ export default function CollectPage() {
                             busy={imageBusy?.index === index ? imageBusy.kind : null}
                             disabled={step === "registering" || isImageBusy || isRegistering}
                             onGenerate={() => void handleGenerateSpotImage(index)}
+                            onCancelGenerate={handleCancelGenerateSpotImage}
                             onUpload={(file) => void handleUploadSpotImage(index, file)}
                             onRemove={() => handleRemoveSpotImage(index)}
                           />
@@ -697,6 +712,7 @@ export default function CollectPage() {
                         busy={imageBusy?.index === index ? imageBusy.kind : null}
                         disabled={step === "registering" || isImageBusy || isRegistering}
                         onGenerate={() => void handleGenerateSpotImage(index)}
+                        onCancelGenerate={handleCancelGenerateSpotImage}
                         onUpload={(file) => void handleUploadSpotImage(index, file)}
                         onRemove={() => handleRemoveSpotImage(index)}
                       />

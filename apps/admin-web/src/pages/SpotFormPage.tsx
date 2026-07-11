@@ -8,6 +8,7 @@ import {
   generateSpotImage,
   geocodeAddress,
   getSpot,
+  isAbortError,
   lookupPlaceByName,
   resolveReferenceImageForGenerate,
   spotImageResultToFile,
@@ -104,6 +105,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const [generatingDescription, setGeneratingDescription] = useState(false);
   const [generatingHighlights, setGeneratingHighlights] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
+  const imageGenerateAbortRef = useRef<AbortController | null>(null);
   const [descriptionGenerateMiss, setDescriptionGenerateMiss] = useState(false);
   const [highlightsGenerateMiss, setHighlightsGenerateMiss] = useState(false);
   const [imageGenerateMiss, setImageGenerateMiss] = useState(false);
@@ -112,8 +114,9 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const coordsManualRef = useRef(false);
   const nameLookupSkipRef = useRef(isEdit);
 
-  const formBusy =
-    saving || deleting || generatingImage || generatingDescription || generatingHighlights;
+  const formSaving = saving || deleting;
+  const formGenerating = generatingImage || generatingDescription || generatingHighlights;
+  const formBusy = formSaving || formGenerating;
 
   useEffect(() => {
     if (!embedded) return;
@@ -320,6 +323,9 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   };
 
   const handleGenerateImage = async () => {
+    imageGenerateAbortRef.current?.abort();
+    const controller = new AbortController();
+    imageGenerateAbortRef.current = controller;
     setGeneratingImage(true);
     setImageGenerateMiss(false);
 
@@ -341,17 +347,26 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
         municipality: params.municipality,
         address: params.address,
         referenceImage,
+        signal: controller.signal,
       });
       const file = spotImageResultToFile(image, spotName);
       setPendingImageFile(file);
     } catch (e) {
+      if (isAbortError(e)) return;
       setImageGenerateMiss(true);
       if (e instanceof Error && e.message) {
         setToast(e.message);
       }
     } finally {
+      if (imageGenerateAbortRef.current === controller) {
+        imageGenerateAbortRef.current = null;
+      }
       setGeneratingImage(false);
     }
+  };
+
+  const handleCancelGenerateImage = () => {
+    imageGenerateAbortRef.current?.abort();
   };
 
   const setAddress = (value: string) => {
@@ -495,7 +510,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
         )}
 
         <div className="mx-auto w-full pb-8">
-          <fieldset disabled={formBusy} className="min-w-0 border-0 p-0">
+          <fieldset disabled={formSaving} className="min-w-0 border-0 p-0">
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div className="lg:col-span-2 flex flex-col gap-2">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -540,9 +555,10 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 pendingFile={pendingImageFile}
                 onImageUrlChange={(imageUrl) => setField("imageUrl", imageUrl)}
                 onPendingFileChange={setPendingImageFile}
-                disabled={formBusy}
+                disabled={formSaving}
                 generating={generatingImage}
                 onGenerate={() => void handleGenerateImage()}
+                onCancelGenerate={handleCancelGenerateImage}
                 generateMiss={imageGenerateMiss}
               />
               <div className="lg:col-span-2">
@@ -560,7 +576,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                   <button
                     type="button"
                     className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={formBusy || generatingDescription || form.name.trim().length < 2}
+                    disabled={formSaving || generatingDescription || form.name.trim().length < 2}
                     onClick={() => void handleGenerateDescription()}
                   >
                     {generatingDescription ? "作成中…" : "AIで作成"}
@@ -598,7 +614,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                   <button
                     type="button"
                     className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={formBusy || generatingHighlights || form.name.trim().length < 2}
+                    disabled={formSaving || generatingHighlights || form.name.trim().length < 2}
                     onClick={() => void handleGenerateHighlights()}
                   >
                     {generatingHighlights ? "作成中…" : "AIで作成"}
