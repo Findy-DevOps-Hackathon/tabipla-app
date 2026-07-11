@@ -52,6 +52,7 @@ import { ProcessingScreen } from "./screens/ProcessingScreen.tsx";
 import { RecommendationsScreen } from "./screens/RecommendationsScreen.tsx";
 import { SwipeScreen } from "./screens/SwipeScreen.tsx";
 import { WelcomeScreen } from "./screens/WelcomeScreen.tsx";
+import type { SpotDocument } from "./types.ts";
 
 /** `/api/v1/personalized/plan` のレスポンス（利用フィールドのみ）。 */
 type PlanApiRecommendation = {
@@ -172,15 +173,19 @@ function viewKey(s: ViewSnapshot): string {
 /** history.state 内に画面スナップショットを格納するためのキー。 */
 const HISTORY_STATE_KEY = "tabiplaNav";
 
-function resolveSwipeDeckFromIds(ids: string[], isRefining: boolean): SwipeSpot[] {
+function resolveSwipeDeckFromIds(
+  ids: string[],
+  isRefining: boolean,
+  catalogDocs: readonly SpotDocument[],
+): SwipeSpot[] {
   const limit = isRefining ? SWIPE_LIMIT_REFINE : SWIPE_LIMIT;
 
   if (ids.length > 0) {
-    const restored = resolveComparisonDeckFromIds(ids);
+    const restored = resolveComparisonDeckFromIds(ids, catalogDocs);
     if (restored.length >= 2) return restored;
   }
 
-  return pickRandomComparisonDeck(limit);
+  return pickRandomComparisonDeck(limit, [], catalogDocs);
 }
 
 /**
@@ -240,16 +245,21 @@ export default function App() {
     initialSelectedDestinationNames,
   );
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
+  const [spotCatalogDocs, setSpotCatalogDocs] = useState<SpotDocument[]>([]);
   const detailReturnStepRef = useRef<Step>(initialSpotId ? initialStep : "recommendations");
   const pendingSwipeDeckIdsRef = useRef(initialFlow.swipeDeckIds);
   const lastInitialDeckIdsRef = useRef<string[]>([]);
+  const spotCatalogDocsRef = useRef<SpotDocument[]>([]);
   const shellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
-    void loadSpotCatalogBundle(30, getAllSupportedDestinations()).then(
+    void loadSpotCatalogBundle(100, getAllSupportedDestinations()).then(
       ({ docs, exploreSpots: loadedExploreSpots }) => {
         if (!active) return;
+
+        spotCatalogDocsRef.current = docs;
+        setSpotCatalogDocs(docs);
 
         const featured =
           loadedExploreSpots.length > 0 ? loadedExploreSpots : COMPARISON_EXPLORE_SPOTS;
@@ -276,7 +286,11 @@ export default function App() {
   useEffect(() => {
     if (step !== "swipe" || swipeDeck.length > 0) return;
 
-    const restored = resolveSwipeDeckFromIds(pendingSwipeDeckIdsRef.current, refining);
+    const restored = resolveSwipeDeckFromIds(
+      pendingSwipeDeckIdsRef.current,
+      refining,
+      spotCatalogDocsRef.current,
+    );
     pendingSwipeDeckIdsRef.current = [];
 
     if (restored.length >= 2) {
@@ -286,6 +300,23 @@ export default function App() {
 
     setStep(refining && isDiagnosisComplete() ? "recommendations" : "welcome");
   }, [step, swipeDeck.length, refining]);
+
+  useEffect(() => {
+    if (spotCatalogDocs.length === 0 || step !== "swipe") return;
+    setSwipeDeck((prev) => {
+      if (prev.length < 2) return prev;
+      const refreshed = resolveComparisonDeckFromIds(
+        prev.map((spot) => spot.id),
+        spotCatalogDocs,
+      );
+      if (refreshed.length < 2) return prev;
+      const changed = refreshed.some((spot, index) => spot.image !== prev[index]?.image);
+      if (changed) {
+        preloadImages(refreshed.slice(0, 4).map((spot) => spot.image));
+      }
+      return changed ? refreshed : prev;
+    });
+  }, [spotCatalogDocs, step]);
 
   useEffect(() => {
     if (!initialSpotId) return;
@@ -423,9 +454,16 @@ export default function App() {
     }
   }, [detailRec]);
 
-  const beginSwipe = useCallback(() => {
+  const beginSwipe = useCallback(async () => {
     pendingSwipeDeckIdsRef.current = [];
-    const deck = pickRandomComparisonDeck(SWIPE_LIMIT);
+    let catalog = spotCatalogDocsRef.current;
+    if (catalog.length === 0) {
+      const { docs } = await loadSpotCatalogBundle(100, getAllSupportedDestinations());
+      catalog = docs;
+      spotCatalogDocsRef.current = docs;
+      setSpotCatalogDocs(docs);
+    }
+    const deck = pickRandomComparisonDeck(SWIPE_LIMIT, [], catalog);
     lastInitialDeckIdsRef.current = deck.map((spot) => spot.id);
     preloadImages(deck.slice(0, 4).map((spot) => spot.image));
     setSwipeDeck(deck);
@@ -454,10 +492,21 @@ export default function App() {
     setStep("memory");
   }, []);
 
-  const refinePreferences = useCallback(() => {
+  const refinePreferences = useCallback(async () => {
     pendingSwipeDeckIdsRef.current = [];
     setPlanNeedsRefinement(false);
-    const deck = pickRandomComparisonDeck(SWIPE_LIMIT_REFINE, lastInitialDeckIdsRef.current);
+    let catalog = spotCatalogDocsRef.current;
+    if (catalog.length === 0) {
+      const { docs } = await loadSpotCatalogBundle(100, getAllSupportedDestinations());
+      catalog = docs;
+      spotCatalogDocsRef.current = docs;
+      setSpotCatalogDocs(docs);
+    }
+    const deck = pickRandomComparisonDeck(
+      SWIPE_LIMIT_REFINE,
+      lastInitialDeckIdsRef.current,
+      catalog,
+    );
     preloadImages(deck.slice(0, 4).map((spot) => spot.image));
     setSwipeDeck(deck);
     setRefining(true);

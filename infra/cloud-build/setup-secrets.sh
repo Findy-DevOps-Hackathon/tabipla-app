@@ -75,6 +75,7 @@ gcloud services enable secretmanager.googleapis.com --project="$PROJECT" --quiet
 
 upsert_secret tabipla-database-url "${DATABASE_URL:-}"
 upsert_secret tabipla-admin-jwt-secret "${ADMIN_JWT_SECRET:-}"
+upsert_secret tabipla-agent-internal-secret "${AGENT_INTERNAL_SECRET:-}"
 upsert_secret tabipla-gemini-api-key "${GEMINI_API_KEY:-}"
 upsert_secret tabipla-google-maps-api-key "${GOOGLE_MAPS_API_KEY:-}"
 upsert_secret tabipla-es-api-key "${ES_API_KEY:-}"

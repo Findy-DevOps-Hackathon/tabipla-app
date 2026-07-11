@@ -80,6 +80,8 @@ trap 'rm -f "$ENV_VARS_FILE"' EXIT
 
 {
   echo "DATABASE_URL: \"${DATABASE_URL}\""
+  echo "GOOGLE_CLOUD_PROJECT: \"${PROJECT}\""
+  echo "VERTEX_EMBEDDING_LOCATION: \"${VERTEX_EMBEDDING_LOCATION:-us-central1}\""
   [[ -n "${AGENT_API_URL:-}" ]] && echo "AGENT_API_URL: \"${AGENT_API_URL}\""
   [[ -n "${ES_NODE:-}" ]] && echo "ES_NODE: \"${ES_NODE}\""
   [[ -n "${ES_API_KEY:-}" ]] && echo "ES_API_KEY: \"${ES_API_KEY}\""
@@ -87,7 +89,6 @@ trap 'rm -f "$ENV_VARS_FILE"' EXIT
   [[ -n "${ES_PASSWORD:-}" ]] && echo "ES_PASSWORD: \"${ES_PASSWORD}\""
   [[ -n "${ES_INDEX:-}" ]] && echo "ES_INDEX: \"${ES_INDEX}\""
   [[ -n "${ES_VECTOR_DIMS:-}" ]] && echo "ES_VECTOR_DIMS: \"${ES_VECTOR_DIMS}\""
-  [[ -n "${GEMINI_API_KEY:-}" ]] && echo "GEMINI_API_KEY: \"${GEMINI_API_KEY}\""
   [[ -n "${EMBEDDING_PROVIDER:-}" ]] && echo "EMBEDDING_PROVIDER: \"${EMBEDDING_PROVIDER}\""
   [[ -n "${GOOGLE_MAPS_API_KEY:-}" ]] && echo "GOOGLE_MAPS_API_KEY: \"${GOOGLE_MAPS_API_KEY}\""
   [[ -n "${ADMIN_JWT_SECRET:-}" ]] && echo "ADMIN_JWT_SECRET: \"${ADMIN_JWT_SECRET}\""
@@ -136,7 +137,8 @@ else
   gcloud run deploy "$SERVICE" \
     --project="$PROJECT" \
     --region="$REGION" \
-    --image="${IMAGE}"
+    --image="${IMAGE}" \
+    --update-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT},VERTEX_EMBEDDING_LOCATION=${VERTEX_EMBEDDING_LOCATION:-us-central1}"
 fi
 
 URL="$(gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format='value(status.url)')"

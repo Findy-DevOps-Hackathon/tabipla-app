@@ -35,24 +35,17 @@ fetch_cloud_run_url() {
 }
 
 VITE_API_BASE="${VITE_API_BASE:-$(fetch_cloud_run_url "$BACKEND_PROJECT" tabipla-backend-api "$REGION")}"
-VITE_AGENT_BASE="${VITE_AGENT_BASE:-$(fetch_cloud_run_url "$BACKEND_PROJECT" tabipla-agent "$REGION")}"
 
 if [[ -z "$VITE_API_BASE" ]]; then
   echo "ERROR: VITE_API_BASE が取得できません（${BACKEND_PROJECT} / tabipla-backend-api）。" >&2
   exit 1
 fi
 
-if [[ -z "$VITE_AGENT_BASE" ]]; then
-  echo "ERROR: VITE_AGENT_BASE が取得できません（${BACKEND_PROJECT} / tabipla-agent）。" >&2
-  exit 1
-fi
-
 echo "=== Deploy admin-web → ${ADMIN_FIREBASE_PROJECT} ==="
 echo "  VITE_API_BASE=${VITE_API_BASE}"
-echo "  VITE_AGENT_BASE=${VITE_AGENT_BASE}"
 
 cd "$ROOT"
-VITE_API_BASE="${VITE_API_BASE}" VITE_AGENT_BASE="${VITE_AGENT_BASE}" pnpm --filter @tabipla/admin-web... build
+VITE_API_BASE="${VITE_API_BASE}" pnpm --filter @tabipla/admin-web... build
 cd "$ROOT/apps/admin-web"
 pnpm exec firebase deploy --only hosting --project "${ADMIN_FIREBASE_PROJECT}" --non-interactive
 

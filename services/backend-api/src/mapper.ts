@@ -26,17 +26,10 @@ export function normalizeCategories(value: string | string[] | null | undefined)
  * DB の行（SpotRow）を検索ドキュメント（SpotDocument）へ変換する。
  *
  * - null は省略（undefined）へ正規化する。
- * - lat / lon が両方そろう場合のみ location を組み立てる。
  * - 日時は ISO 8601 文字列へ変換する。
  * - embedding はここでは付与しない（生成は別タスク。ES 側で管理）。
  */
 export function toSpotDocument(row: SpotRow): SpotDocument {
-  let location = row.lat !== null && row.lon !== null ? { lat: row.lat, lon: row.lon } : undefined;
-
-  if (!location && row.area === "小諸市") {
-    location = { lat: 36.3268, lon: 138.4211 };
-  }
-
   return {
     id: row.id,
     name: row.name,
@@ -47,7 +40,6 @@ export function toSpotDocument(row: SpotRow): SpotDocument {
     ...(row.address !== null ? { address: row.address } : {}),
     ...(row.highlights !== null ? { highlights: row.highlights } : {}),
     ...(row.imageUrl !== null ? { imageUrl: row.imageUrl } : {}),
-    ...(location ? { location } : {}),
     ...(row.clusterId !== null ? { clusterId: row.clusterId } : {}),
     ...(row.sensoryScores !== null
       ? { sensoryScores: row.sensoryScores as SpotDocument["sensoryScores"] }
@@ -60,7 +52,6 @@ export function toSpotDocument(row: SpotRow): SpotDocument {
 /**
  * 登録（POST /spots）の本文（SpotDocument）を DB 入力行（NewSpotRow）へ変換する。
  *
- * - location は lat / lon の2カラムへ分解する。
  * - embedding は DB では保持しない（ES 側の責務）ため捨てる。
  * - createdAt / updatedAt は DB 既定（now()）に委ねるため引き継がない。
  */
@@ -76,8 +67,6 @@ export function toNewSpotRow(doc: SpotDocument): NewSpotRow {
     prefecture,
     address: doc.address ?? null,
     highlights: doc.highlights ?? null,
-    lat: doc.location?.lat ?? null,
-    lon: doc.location?.lon ?? null,
     imageUrl: doc.imageUrl ?? null,
     clusterId: doc.clusterId ?? null,
     sensoryScores: doc.sensoryScores ?? null,
@@ -88,7 +77,6 @@ export function toNewSpotRow(doc: SpotDocument): NewSpotRow {
  * 既存行に部分更新（patch）を適用し、upsert 用の NewSpotRow を組み立てる。
  *
  * - patch に含まれないフィールドは既存値を維持する。
- * - location が指定された場合のみ lat / lon を更新する。
  * - id / createdAt は既存値を保持する（id は不変、createdAt は作成日時を維持）。
  */
 export function mergeSpotRow(existing: SpotRow, patch: SpotPatch): NewSpotRow {
@@ -109,8 +97,6 @@ export function mergeSpotRow(existing: SpotRow, patch: SpotPatch): NewSpotRow {
     prefecture,
     address,
     highlights: patch.highlights ?? existing.highlights,
-    lat: patch.location ? patch.location.lat : existing.lat,
-    lon: patch.location ? patch.location.lon : existing.lon,
     imageUrl: patch.imageUrl !== undefined ? patch.imageUrl : existing.imageUrl,
     clusterId: patch.clusterId !== undefined ? patch.clusterId : existing.clusterId,
     sensoryScores: patch.sensoryScores !== undefined ? patch.sensoryScores : existing.sensoryScores,

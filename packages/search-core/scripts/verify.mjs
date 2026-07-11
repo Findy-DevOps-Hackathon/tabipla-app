@@ -44,8 +44,6 @@ async function main() {
       category: "観光",
       area: "京都市",
       prefecture: "京都府",
-      tags: ["寺", "世界遺産"],
-      location: { lat: 34.9948, lon: 135.785 },
       createdAt: new Date().toISOString(),
     },
     { index: INDEX, refresh: true },

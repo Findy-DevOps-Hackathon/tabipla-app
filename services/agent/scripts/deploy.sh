@@ -54,6 +54,7 @@ trap 'rm -f "$ENV_VARS_FILE"' EXIT
 SECRETS=()
 for pair in \
   "ADMIN_JWT_SECRET=tabipla-admin-jwt-secret" \
+  "AGENT_INTERNAL_SECRET=tabipla-agent-internal-secret" \
   "GEMINI_API_KEY=tabipla-gemini-api-key" \
   "ES_API_KEY=tabipla-es-api-key" \
   "ES_PASSWORD=tabipla-es-password" \

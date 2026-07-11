@@ -45,9 +45,9 @@ require_secret() {
 
 require_secret DATABASE_URL tabipla-database-url
 require_secret ADMIN_JWT_SECRET tabipla-admin-jwt-secret
+require_secret AGENT_INTERNAL_SECRET tabipla-agent-internal-secret
 
 for pair in \
-  "GEMINI_API_KEY=tabipla-gemini-api-key" \
   "GOOGLE_MAPS_API_KEY=tabipla-google-maps-api-key" \
   "ES_API_KEY=tabipla-es-api-key" \
   "ES_PASSWORD=tabipla-es-password" \
@@ -64,6 +64,8 @@ IFS=','; SECRETS_CSV="${SECRETS[*]}"; unset IFS
 ENV_VARS_FILE="$(mktemp)"
 trap 'rm -f "$ENV_VARS_FILE"' EXIT
 {
+  echo "GOOGLE_CLOUD_PROJECT: \"${PROJECT_ID}\""
+  echo "VERTEX_EMBEDDING_LOCATION: \"${_VERTEX_EMBEDDING_LOCATION:-us-central1}\""
   echo "CORS_ORIGINS: \"${CORS_ORIGINS}\""
   [[ -n "$AGENT_URL" ]] && echo "AGENT_API_URL: \"${AGENT_URL}\""
   [[ -n "${_GCS_BUCKET:-}" ]] && echo "GCS_BUCKET: \"${_GCS_BUCKET}\""

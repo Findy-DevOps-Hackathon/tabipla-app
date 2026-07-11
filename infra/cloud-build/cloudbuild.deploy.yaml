@@ -85,6 +85,7 @@ steps:
       - _ES_INDEX=${_ES_INDEX}
       - _ES_VECTOR_DIMS=${_ES_VECTOR_DIMS}
       - _EMBEDDING_PROVIDER=${_EMBEDDING_PROVIDER}
+      - _VERTEX_EMBEDDING_LOCATION=${_VERTEX_EMBEDDING_LOCATION}
 
 images:
   - gcr.io/${PROJECT_ID}/tabipla-agent
@@ -101,6 +102,7 @@ substitutions:
   _ES_INDEX: ""
   _ES_VECTOR_DIMS: ""
   _EMBEDDING_PROVIDER: ""
+  _VERTEX_EMBEDDING_LOCATION: us-central1
 
 availableSecrets:
   secretManager:

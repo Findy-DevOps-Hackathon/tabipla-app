@@ -193,44 +193,49 @@ function ComparisonCard({
     : "";
 
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onSelect}
-      aria-label={`${spot.name}を選ぶ`}
+    <div
+      className={`relative w-full ${position === "top" ? "origin-top" : "origin-bottom"} ${wiggleClass}`}
       style={{
         transition: showWiggle
-          ? "opacity 0.28s ease-out, box-shadow 0.28s ease-out"
-          : "transform 0.28s ease-out, opacity 0.28s ease-out, box-shadow 0.28s ease-out",
+          ? "opacity 0.28s ease-out"
+          : "transform 0.28s ease-out, opacity 0.28s ease-out",
         transform: selected ? "scale(1.02)" : rejected ? "scale(0.98)" : undefined,
         opacity: rejected ? 0.45 : 1,
-        boxShadow: selected
-          ? "0 0 48px rgba(16,185,129,0.45), 0 8px 28px rgba(16,185,129,0.35)"
-          : "0 12px 32px rgba(15,23,42,0.1)",
       }}
-      className={`relative flex w-full touch-manipulation flex-col overflow-hidden rounded-2xl bg-white text-left disabled:cursor-not-allowed ${
-        position === "top" ? "origin-top" : "origin-bottom"
-      } ${wiggleClass}`}
     >
-      <div className="relative h-[230px] w-full overflow-hidden bg-slate-200">
-        <SpotImage
-          src={spot.image}
-          alt=""
-          draggable={false}
-          className="pointer-events-none absolute inset-0 size-full object-cover object-center"
-          priority
-        />
-        <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/10 from-30% to-black/80" />
-        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 px-4 pb-4">
-          <p className="text-[15px] font-bold leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
-            {spot.name}
-          </p>
-          <p className="text-[13px] leading-relaxed font-medium text-white/90 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
-            {comparisonPreview(spot)}
-          </p>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onSelect}
+        aria-label={`${spot.name}を選ぶ`}
+        style={{
+          transition: "box-shadow 0.28s ease-out",
+          boxShadow: selected
+            ? "0 0 48px rgba(16,185,129,0.45), 0 8px 28px rgba(16,185,129,0.35)"
+            : "0 12px 32px rgba(15,23,42,0.1)",
+        }}
+        className="relative flex w-full touch-manipulation flex-col overflow-hidden rounded-2xl bg-white text-left disabled:cursor-not-allowed"
+      >
+        <div className="relative h-[230px] w-full overflow-hidden bg-slate-200">
+          <SpotImage
+            key={spot.id}
+            src={spot.image}
+            alt=""
+            draggable={false}
+            className="block h-full w-full object-cover object-center"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/10 from-30% to-black/80" />
+          <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 px-4 pb-4">
+            <p className="text-[15px] font-bold leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
+              {spot.name}
+            </p>
+            <p className="text-[13px] leading-relaxed font-medium text-white/90 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
+              {comparisonPreview(spot)}
+            </p>
+          </div>
         </div>
-      </div>
-    </button>
+      </button>
+    </div>
   );
 }
 

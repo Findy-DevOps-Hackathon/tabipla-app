@@ -4,15 +4,14 @@ import {
   NOTO_UMBRELLA_AREA,
 } from "@tabipla/db";
 import { fetchWithTimeout } from "./fetchWithTimeout.js";
-import {
-  geocodeViaGoogle,
-  getGoogleMapsApiKey,
-  type NominatimHit,
-  searchNominatim,
-} from "./geoProviders.js";
 
 type MunicipalityContext = { prefecture: string; municipality: string };
 const GOOGLE_PLACES_TIMEOUT_MS = 12_000;
+
+function getGoogleMapsApiKey(): string | null {
+  const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
+  return key || null;
+}
 
 function isNotoRegionContext(context: MunicipalityContext): boolean {
   return (
@@ -42,8 +41,6 @@ function isAddressInMunicipality(
 export type PlaceLookupResult = {
   name?: string;
   address?: string;
-  lat: number;
-  lon: number;
   category?: string;
   description?: string;
 };
@@ -92,7 +89,7 @@ async function lookupViaPlacesApiNew(
         "Content-Type": "application/json",
         "X-Goog-Api-Key": key,
         "X-Goog-FieldMask":
-          "places.displayName,places.formattedAddress,places.location,places.types,places.editorialSummary",
+          "places.displayName,places.formattedAddress,places.types,places.editorialSummary",
       },
       body: JSON.stringify({
         textQuery: query,
@@ -110,7 +107,6 @@ async function lookupViaPlacesApiNew(
     places?: Array<{
       displayName?: { text?: string };
       formattedAddress?: string;
-      location?: { latitude?: number; longitude?: number };
       types?: string[];
       editorialSummary?: { text?: string };
     }>;
@@ -119,17 +115,9 @@ async function lookupViaPlacesApiNew(
   const place = data.places?.find((p) => isAddressInMunicipality(p.formattedAddress, context));
   if (!place) return null;
 
-  const lat = place.location?.latitude;
-  const lon = place.location?.longitude;
-  if (lat == null || lon == null || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return null;
-  }
-
   return {
     name: place.displayName?.text,
     address: place.formattedAddress,
-    lat,
-    lon,
     category: mapGoogleTypesToCategory(place.types),
     description: place.editorialSummary?.text?.trim(),
   };
@@ -143,7 +131,7 @@ async function lookupViaFindPlace(
   const url = new URL("https://maps.googleapis.com/maps/api/place/findplacefromtext/json");
   url.searchParams.set("input", query);
   url.searchParams.set("inputtype", "textquery");
-  url.searchParams.set("fields", "formatted_address,name,geometry,types");
+  url.searchParams.set("fields", "formatted_address,name,types");
   url.searchParams.set("language", "ja");
   url.searchParams.set("key", key);
 
@@ -154,7 +142,6 @@ async function lookupViaFindPlace(
     candidates?: Array<{
       formatted_address?: string;
       name?: string;
-      geometry?: { location?: { lat?: number; lng?: number } };
       types?: string[];
     }>;
   };
@@ -164,181 +151,15 @@ async function lookupViaFindPlace(
   );
   if (!candidate) return null;
 
-  const lat = candidate.geometry?.location?.lat;
-  const lon = candidate.geometry?.location?.lng;
-  if (lat == null || lon == null || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return null;
-  }
-
   return {
     name: candidate.name,
     address: candidate.formatted_address,
-    lat,
-    lon,
     category: mapGoogleTypesToCategory(candidate.types),
   };
 }
 
-async function lookupViaGeocoding(
-  query: string,
-  key: string,
-  context: MunicipalityContext,
-): Promise<PlaceLookupResult | null> {
-  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-  url.searchParams.set("address", query);
-  url.searchParams.set("language", "ja");
-  url.searchParams.set("region", "jp");
-  url.searchParams.set("key", key);
-
-  const res = await fetchWithTimeout(url, {}, GOOGLE_PLACES_TIMEOUT_MS);
-  if (!res.ok) return null;
-
-  const data = (await res.json()) as {
-    results?: Array<{
-      formatted_address?: string;
-      geometry?: { location?: { lat?: number; lng?: number } };
-      types?: string[];
-    }>;
-  };
-
-  const result = data.results?.find((r) => isAddressInMunicipality(r.formatted_address, context));
-  if (!result) return null;
-
-  const lat = result.geometry?.location?.lat;
-  const lon = result.geometry?.location?.lng;
-  if (lat == null || lon == null || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return null;
-  }
-
-  return {
-    address: result.formatted_address,
-    lat,
-    lon,
-    category: mapGoogleTypesToCategory(result.types),
-  };
-}
-
-async function lookupViaNominatim(
-  name: string,
-  context: { prefecture: string; municipality: string },
-): Promise<PlaceLookupResult | null> {
-  const queries = [
-    `${name} ${context.municipality} ${context.prefecture}`,
-    `${context.municipality} ${name}`,
-    `${context.prefecture}${context.municipality}${name}`,
-  ];
-
-  for (const query of queries) {
-    const hit = pickNominatimHit(await searchNominatim(query, { limit: 8 }), name, context);
-    if (hit) return toPlaceLookupResult(hit, context);
-  }
-
-  const centerHits = await searchNominatim(`${context.prefecture}${context.municipality}`, {
-    limit: 1,
-  });
-  const center = centerHits[0];
-  if (center) {
-    const delta = 0.12;
-    const viewbox = [
-      center.lon - delta,
-      center.lat + delta,
-      center.lon + delta,
-      center.lat - delta,
-    ].join(",");
-    const hit = pickNominatimHit(
-      await searchNominatim(name, { viewbox, bounded: true, limit: 8 }),
-      name,
-      context,
-    );
-    if (hit) return toPlaceLookupResult(hit, context);
-  }
-
-  const key = getGoogleMapsApiKey();
-  if (key) {
-    for (const query of queries) {
-      const location = await geocodeViaGoogle(query, key);
-      if (!location) continue;
-      return {
-        address: `${context.prefecture}${context.municipality}${name}`,
-        lat: location.lat,
-        lon: location.lon,
-      };
-    }
-  }
-
-  return null;
-}
-
-function pickNominatimHit(
-  hits: NominatimHit[],
-  name: string,
-  context: { prefecture: string; municipality: string },
-): NominatimHit | null {
-  const normalizedName = name.trim();
-  const inArea = hits.filter((hit) => {
-    const display = hit.display_name ?? "";
-    if (!display.includes(context.prefecture)) return false;
-    if (isNotoRegionContext(context)) {
-      return extractNotoAreaFromAddress(display) !== "";
-    }
-    return display.includes(context.municipality);
-  });
-  const candidates = inArea.length > 0 ? inArea : hits;
-
-  return (
-    candidates.find((hit) => hit.name === normalizedName) ??
-    candidates.find((hit) => hit.name?.includes(normalizedName)) ??
-    candidates.find((hit) => hit.display_name?.includes(normalizedName)) ??
-    candidates[0] ??
-    null
-  );
-}
-
-function toPlaceLookupResult(
-  hit: NominatimHit,
-  context: { prefecture: string; municipality: string },
-): PlaceLookupResult {
-  return {
-    name: hit.name,
-    address: formatNominatimAddress(hit.display_name ?? "", context),
-    lat: hit.lat,
-    lon: hit.lon,
-    category: mapOsmTypeToCategory(hit.class, hit.type),
-  };
-}
-
-function formatNominatimAddress(
-  displayName: string,
-  context: { prefecture: string; municipality: string },
-): string {
-  const parts = displayName
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  const prefIdx = parts.indexOf(context.prefecture);
-  if (prefIdx < 0) return `${context.prefecture}${context.municipality}`;
-
-  const detail = parts
-    .slice(1, prefIdx)
-    .filter((p) => p !== context.municipality && !/^\d{3}-?\d{4}$/.test(p))
-    .join("");
-
-  return `${context.prefecture}${context.municipality}${detail}`;
-}
-
-function mapOsmTypeToCategory(osmClass?: string, osmType?: string): string | undefined {
-  if (osmClass === "amenity" && (osmType === "restaurant" || osmType === "cafe")) return "食";
-  if (osmClass === "amenity" && osmType === "place_of_worship") return "歴史・文化";
-  if (osmClass === "tourism" && osmType === "museum") return "芸術";
-  if (osmClass === "tourism") return "都市";
-  if (osmClass === "leisure" || osmClass === "natural") return "自然";
-  if (osmClass === "historic") return "歴史・文化";
-  if (osmClass === "shop") return "ショッピング";
-  return undefined;
-}
-
 /**
- * スポット名 + 自治体コンテキストで Places / Geocoding / Nominatim を検索する。
+ * スポット名 + 自治体コンテキストで Google Places を検索する。
  */
 export async function lookupPlaceByName(
   name: string,
@@ -349,14 +170,10 @@ export async function lookupPlaceByName(
 
   const query = `${trimmed} ${context.municipality} ${context.prefecture}`;
   const key = getGoogleMapsApiKey();
+  if (!key) return null;
 
-  if (key) {
-    const googleResult =
-      (await lookupViaPlacesApiNew(query, key, context)) ??
-      (await lookupViaFindPlace(query, key, context)) ??
-      (await lookupViaGeocoding(query, key, context));
-    if (googleResult) return googleResult;
-  }
-
-  return lookupViaNominatim(trimmed, context);
+  return (
+    (await lookupViaPlacesApiNew(query, key, context)) ??
+    (await lookupViaFindPlace(query, key, context))
+  );
 }

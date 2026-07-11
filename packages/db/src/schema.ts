@@ -1,14 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  date,
-  doublePrecision,
-  index,
-  integer,
-  jsonb,
-  pgTable,
-  text,
-  timestamp,
-} from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 /**
  * municipalities テーブル（自治体データ）。
@@ -34,7 +25,6 @@ export type NewMunicipalityRow = typeof municipalities.$inferInsert;
  * Elasticsearch には検索用の写しを reindex で投入し、本テーブルが信頼できる正本とする。
  *
  * 設計メモ:
- *   - 緯度経度は `lat` / `lon` の2カラムで保持し、reindex 時に `{ lat, lon }` へ組み立てる。
  *   - `highlights` は PostgreSQL の text[] で保持する。
  *   - `embedding` は本テーブルでは保持しない（ベクトルは Elasticsearch 側で管理する方針）。
  *     Embedding 生成・投入は RAG パイプライン側（別タスク）で行う。
@@ -62,10 +52,6 @@ export const spots = pgTable(
     address: text("address"),
     /** おすすめポイント（例: ["紅葉の名所", "城址散策"]）。 */
     highlights: text("highlights").array(),
-    /** 緯度。 */
-    lat: doublePrecision("lat"),
-    /** 経度。 */
-    lon: doublePrecision("lon"),
     /** スポット画像 URL（相対パス `/uploads/spots/...` または外部 URL）。 */
     imageUrl: text("image_url"),
     /** クラスタリングID（事前クラスタリングによる分類）。 */
@@ -86,26 +72,6 @@ export const spots = pgTable(
 export type SpotRow = typeof spots.$inferSelect;
 /** INSERT 時の入力型。 */
 export type NewSpotRow = typeof spots.$inferInsert;
-
-/**
- * coupons テーブル（クーポン・特典）。
- */
-export const coupons = pgTable("coupons", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => randomUUID()),
-  spotId: text("spot_id").references(() => spots.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  description: text("description"),
-  discount: text("discount").notNull(),
-  conditions: text("conditions"),
-  validUntil: date("valid_until"),
-});
-
-/** SELECT 時の行型。 */
-export type CouponRow = typeof coupons.$inferSelect;
-/** INSERT 時の入力型。 */
-export type NewCouponRow = typeof coupons.$inferInsert;
 
 /**
  * 管理画面ログインユーザー。
@@ -135,7 +101,7 @@ export type NewAdminUserRow = typeof adminUsers.$inferInsert;
 /**
  * 旅行者（user-web）の会員アカウント。
  *
- * クーポン利用や「行った履歴」の保存に使う。パスワードは scrypt でハッシュ化して保持する。
+ * 「行った履歴」などの保存に使う。パスワードは scrypt でハッシュ化して保持する。
  */
 export const users = pgTable(
   "users",
@@ -211,6 +177,42 @@ export const spotFeedbacks = pgTable(
 
 export type SpotFeedbackRow = typeof spotFeedbacks.$inferSelect;
 export type NewSpotFeedbackRow = typeof spotFeedbacks.$inferInsert;
+
+/**
+ * es_sync_outbox テーブル（Elasticsearch 同期の再試行キュー）。
+ *
+ * PG への書き込み成功後に ES 反映が失敗した場合、ここに積んでバックグラウンドで再試行する。
+ * 同一 spot_id の pending が既にある場合は最新の操作で上書きする（古い pending は破棄）。
+ */
+export const esSyncOutbox = pgTable(
+  "es_sync_outbox",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    spotId: text("spot_id")
+      .notNull()
+      .references(() => spots.id, { onDelete: "cascade" }),
+    /** upsert | patch | delete */
+    operation: text("operation").notNull(),
+    /** upsert 時の embedding（PG では保持しないため outbox にのみ保存）。 */
+    payload: jsonb("payload"),
+    /** pending | completed */
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }).defaultNow().notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => ({
+    pendingRetryIdx: index("es_sync_outbox_pending_retry_idx").on(table.status, table.nextRetryAt),
+    spotIdIdx: index("es_sync_outbox_spot_id_idx").on(table.spotId),
+  }),
+);
+
+export type EsSyncOutboxRow = typeof esSyncOutbox.$inferSelect;
+export type NewEsSyncOutboxRow = typeof esSyncOutbox.$inferInsert;
 
 /**
  * trip_feedbacks テーブル（旅行全体のフィードバック）。

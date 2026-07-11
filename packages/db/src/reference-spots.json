@@ -7,8 +7,6 @@
     "prefecture": "京都府",
     "area": "京都市",
     "address": "京都府京都市東山区清水1丁目294",
-    "lat": 34.9948,
-    "lon": 135.785,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.9,
@@ -29,8 +27,6 @@
     "prefecture": "京都府",
     "area": "京都市",
     "address": "京都府京都市北区金閣寺町1",
-    "lat": 35.0394,
-    "lon": 135.7292,
     "sensoryScores": {
       "nature": 0.1,
       "history": 1,
@@ -51,8 +47,6 @@
     "prefecture": "京都府",
     "area": "京都市",
     "address": "京都府京都市伏見区深草藪之内町68",
-    "lat": 34.9671,
-    "lon": 135.7727,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.9,
@@ -73,8 +67,6 @@
     "prefecture": "兵庫県",
     "area": "姫路市",
     "address": "兵庫県姫路市本町68",
-    "lat": 34.8394,
-    "lon": 134.6939,
     "sensoryScores": {
       "nature": 0.1,
       "history": 1,
@@ -95,8 +87,6 @@
     "prefecture": "広島県",
     "area": "廿日市市",
     "address": "広島県廿日市市宮島町1-1",
-    "lat": 34.296,
-    "lon": 132.3197,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.9,
@@ -117,8 +107,6 @@
     "prefecture": "東京都",
     "area": "台東区",
     "address": "東京都台東区浅草2丁目3-1",
-    "lat": 35.7148,
-    "lon": 139.7967,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.9,
@@ -139,8 +127,6 @@
     "prefecture": "栃木県",
     "area": "日光市",
     "address": "栃木県日光市山内2301",
-    "lat": 36.7581,
-    "lon": 139.5989,
     "sensoryScores": {
       "nature": 0.9,
       "history": 1,
@@ -161,8 +147,6 @@
     "prefecture": "三重県",
     "area": "伊勢市",
     "address": "三重県伊勢市宇治館町1",
-    "lat": 34.4553,
-    "lon": 136.7258,
     "sensoryScores": {
       "nature": 0.9,
       "history": 1,
@@ -183,8 +167,6 @@
     "prefecture": "島根県",
     "area": "出雲市",
     "address": "島根県出雲市大社町杵築東195",
-    "lat": 35.402,
-    "lon": 132.6855,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.9,
@@ -205,8 +187,6 @@
     "prefecture": "山梨県",
     "area": "富士吉田市",
     "address": "山梨県富士吉田市上吉田",
-    "lat": 35.3908,
-    "lon": 138.7303,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -227,8 +207,6 @@
     "prefecture": "長野県",
     "area": "松本市",
     "address": "長野県松本市安曇上高地",
-    "lat": 36.2486,
-    "lon": 137.6375,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -249,8 +227,6 @@
     "prefecture": "北海道",
     "area": "東川町",
     "address": "北海道上川郡東川町旭岳温泉",
-    "lat": 43.6631,
-    "lon": 142.8547,
     "sensoryScores": {
       "nature": 1,
       "history": 0.1,
@@ -271,8 +247,6 @@
     "prefecture": "熊本県",
     "area": "阿蘇市",
     "address": "熊本県阿蘇市草千里",
-    "lat": 32.8833,
-    "lon": 131.0503,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -293,8 +267,6 @@
     "prefecture": "鳥取県",
     "area": "鳥取市",
     "address": "鳥取県鳥取市福部町湯山",
-    "lat": 35.5414,
-    "lon": 134.2306,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -315,8 +287,6 @@
     "prefecture": "鹿児島県",
     "area": "屋久島町",
     "address": "鹿児島県熊毛郡屋屋久島町",
-    "lat": 30.3806,
-    "lon": 130.575,
     "sensoryScores": {
       "nature": 1,
       "history": 0.1,
@@ -337,8 +307,6 @@
     "prefecture": "青森県",
     "area": "十和田市",
     "address": "青森県十和田市大字奥瀬",
-    "lat": 40.5306,
-    "lon": 140.9706,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -359,8 +327,6 @@
     "prefecture": "宮崎県",
     "area": "高千穂町",
     "address": "宮崎県西臼杵郡高千穂町三田井",
-    "lat": 32.7072,
-    "lon": 131.3006,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -381,8 +347,6 @@
     "prefecture": "沖縄県",
     "area": "本部町",
     "address": "沖縄県国頭郡本部町石川424",
-    "lat": 26.6942,
-    "lon": 127.8778,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -403,8 +367,6 @@
     "prefecture": "大阪府",
     "area": "大阪市",
     "address": "大阪府大阪市此花区桜島2丁目1-33",
-    "lat": 34.6654,
-    "lon": 135.4323,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.1,
@@ -425,8 +387,6 @@
     "prefecture": "東京都",
     "area": "墨田区",
     "address": "東京都墨田区押上1丁目1-2",
-    "lat": 35.7101,
-    "lon": 139.8107,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.1,
@@ -447,8 +407,6 @@
     "prefecture": "石川県",
     "area": "金沢市",
     "address": "石川県金沢市広坂1丁目2-1",
-    "lat": 36.5609,
-    "lon": 136.6582,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.1,
@@ -469,8 +427,6 @@
     "prefecture": "徳島県",
     "area": "鳴門市",
     "address": "徳島県鳴門市鳴門町土佐泊浦福池65-1",
-    "lat": 34.2325,
-    "lon": 134.6378,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.1,
@@ -491,8 +447,6 @@
     "prefecture": "東京都",
     "area": "三鷹市",
     "address": "東京都三鷹市下連雀1丁目1-83",
-    "lat": 35.6962,
-    "lon": 139.5704,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -513,8 +467,6 @@
     "prefecture": "東京都",
     "area": "江東区",
     "address": "東京都江東区青海2丁目3-6",
-    "lat": 35.6194,
-    "lon": 139.7764,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.1,
@@ -535,8 +487,6 @@
     "prefecture": "神奈川県",
     "area": "箱根町",
     "address": "神奈川県足柄下郡箱根町二ノ平1121",
-    "lat": 35.2443,
-    "lon": 139.0511,
     "sensoryScores": {
       "nature": 1,
       "history": 0.1,
@@ -557,8 +507,6 @@
     "prefecture": "神奈川県",
     "area": "横浜市",
     "address": "神奈川県横浜市中区山下町",
-    "lat": 35.4429,
-    "lon": 139.6456,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.1,
@@ -579,8 +527,6 @@
     "prefecture": "東京都",
     "area": "中央区",
     "address": "東京都中央区築地4丁目16-2",
-    "lat": 35.6653,
-    "lon": 139.7706,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -601,8 +547,6 @@
     "prefecture": "大阪府",
     "area": "大阪市",
     "address": "大阪府大阪市中央区道頓堀1丁目",
-    "lat": 34.6687,
-    "lon": 135.5013,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.1,
@@ -623,8 +567,6 @@
     "prefecture": "石川県",
     "area": "金沢市",
     "address": "石川県金沢市東山1丁目",
-    "lat": 36.5725,
-    "lon": 136.6667,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.9,
@@ -645,8 +587,6 @@
     "prefecture": "群馬県",
     "area": "草津町",
     "address": "群馬県吾妻郡草津町草津",
-    "lat": 36.6231,
-    "lon": 138.5967,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.1,
@@ -667,8 +607,6 @@
     "prefecture": "兵庫県",
     "area": "神戸市",
     "address": "兵庫県神戸市北区有馬町",
-    "lat": 34.7978,
-    "lon": 135.2472,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.1,
@@ -689,8 +627,6 @@
     "prefecture": "大分県",
     "area": "別府市",
     "address": "大分県別府市大字鉄輪559-1",
-    "lat": 33.3153,
-    "lon": 131.4706,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -711,8 +647,6 @@
     "prefecture": "兵庫県",
     "area": "豊岡市",
     "address": "兵庫県豊岡市城崎町湯島",
-    "lat": 35.6269,
-    "lon": 134.8153,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.9,
@@ -733,8 +667,6 @@
     "prefecture": "北海道",
     "area": "倶知安町",
     "address": "北海道虻田郡倶知安町ニセコひらふ",
-    "lat": 42.8603,
-    "lon": 140.7011,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -755,8 +687,6 @@
     "prefecture": "滋賀県",
     "area": "高島市",
     "address": "滋賀県高島市鵜川215",
-    "lat": 35.2631,
-    "lon": 136.0089,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.9,
@@ -777,8 +707,6 @@
     "prefecture": "愛媛県",
     "area": "今治市",
     "address": "愛媛県今治市砂場町2丁目",
-    "lat": 34.1167,
-    "lon": 133.0039,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -799,8 +727,6 @@
     "prefecture": "群馬県",
     "area": "みなかみ町",
     "address": "群馬県利根郡みなかみ町綱子",
-    "lat": 36.7844,
-    "lon": 138.9953,
     "sensoryScores": {
       "nature": 1,
       "history": 0.1,
@@ -821,8 +747,6 @@
     "prefecture": "北海道",
     "area": "小樽市",
     "address": "北海道小樽市港町",
-    "lat": 43.1978,
-    "lon": 141.0064,
     "sensoryScores": {
       "nature": 0.9,
       "history": 1,
@@ -843,8 +767,6 @@
     "prefecture": "埼玉県",
     "area": "川越市",
     "address": "埼玉県川越市幸町",
-    "lat": 35.9228,
-    "lon": 139.4831,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.9,
@@ -865,8 +787,6 @@
     "prefecture": "岐阜県",
     "area": "白川村",
     "address": "岐阜県大野郡白川村荻町",
-    "lat": 36.2567,
-    "lon": 136.9064,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.9,
@@ -887,8 +807,6 @@
     "prefecture": "山口県",
     "area": "下関市",
     "address": "山口県下関市豊北町神田",
-    "lat": 34.3517,
-    "lon": 130.8872,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -909,8 +827,6 @@
     "prefecture": "北海道",
     "area": "美瑛町",
     "address": "北海道上川郡美瑛町白金",
-    "lat": 43.4908,
-    "lon": 142.6139,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -931,8 +847,6 @@
     "prefecture": "石川県",
     "area": "金沢市",
     "address": "石川県金沢市兼六町1",
-    "lat": 36.5622,
-    "lon": 136.6628,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.9,
@@ -953,8 +867,6 @@
     "prefecture": "和歌山県",
     "area": "那智勝浦町",
     "address": "和歌山県東牟婁郡那智勝浦町那智山",
-    "lat": 33.6756,
-    "lon": 135.8889,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.9,
@@ -975,8 +887,6 @@
     "prefecture": "京都府",
     "area": "宇治市",
     "address": "京都府宇治市宇治壱番10",
-    "lat": 34.8894,
-    "lon": 135.8006,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.9,
@@ -997,8 +907,6 @@
     "prefecture": "和歌山県",
     "area": "高野町",
     "address": "和歌山県伊都郡高野町高野山550",
-    "lat": 34.2239,
-    "lon": 135.6061,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.9,
@@ -1019,8 +927,6 @@
     "prefecture": "茨城県",
     "area": "ひたちなか市",
     "address": "茨城県ひたちなか市馬渡大沼605-4",
-    "lat": 36.4069,
-    "lon": 140.6019,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -1041,8 +947,6 @@
     "prefecture": "兵庫県",
     "area": "神戸市",
     "address": "兵庫県神戸市北区北野町",
-    "lat": 34.7022,
-    "lon": 135.1903,
     "sensoryScores": {
       "nature": 0.1,
       "history": 0.9,
@@ -1063,8 +967,6 @@
     "prefecture": "長野県",
     "area": "軽井沢町",
     "address": "長野県北佐久郡軽井沢町長倉2148",
-    "lat": 36.3572,
-    "lon": 138.5911,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.1,
@@ -1085,8 +987,6 @@
     "prefecture": "兵庫県",
     "area": "朝来市",
     "address": "兵庫県朝来市和田山町竹田",
-    "lat": 35.3014,
-    "lon": 134.8292,
     "sensoryScores": {
       "nature": 0.9,
       "history": 0.9,

@@ -6,7 +6,6 @@ import {
   type CollectedSpotPayload,
   collectSpots,
   generateSpotImage,
-  geocodeAddress,
   isAbortError,
   listSpots,
   lookupPlaceByName,
@@ -62,7 +61,7 @@ async function fetchExistingNames(): Promise<string[]> {
   return res.spots.map((s) => s.name);
 }
 
-/** 収集直後に Places lookup で住所・座標を補完する（個別登録と同じ API）。 */
+/** 収集直後に Places lookup で住所を補完する（個別登録と同じ API）。 */
 async function enrichCollectedSpot(
   spot: CollectedSpotPayload,
   prefecture: Prefecture,
@@ -96,13 +95,8 @@ async function enrichCollectedSpot(
       address,
       area,
       selected: true,
-      location: { lat: lookup.lat, lon: lookup.lon },
     };
   }
-
-  const location =
-    (await geocodeAddress(`${spot.name} ${prefecture}${spot.area || municipality}`)) ??
-    (spot.address ? await geocodeAddress(spot.address) : null);
 
   return {
     ...rest,
@@ -111,7 +105,6 @@ async function enrichCollectedSpot(
     categories: baseCategories,
     area: resolveSpotArea(spot.area, spot.address, prefecture, spot.name),
     selected: true,
-    location: location ?? undefined,
   };
 }
 
@@ -262,7 +255,7 @@ export default function CollectPage() {
         patchCollect({ step: "input" });
         return;
       }
-      // 収集直後に Places lookup で住所・座標を補完する（登録時にそのまま使う）。
+      // 収集直後に Places lookup で住所を補完する（登録時にそのまま使う）。
       const withLocation = await Promise.all(
         collected.map((s) => enrichCollectedSpot(s, prefecture, municipality)),
       );
@@ -356,7 +349,6 @@ export default function CollectPage() {
         patchCollect({ step: "preview" });
         return;
       }
-      // 座標は収集時に付与済み（プレビューで確認・編集された値）をそのまま使う。
       const spotsToImport = newSpots.map((s) => ({
         id: crypto.randomUUID(),
         name: s.name,
@@ -368,7 +360,6 @@ export default function CollectPage() {
         area: resolveSpotArea(s.area, s.address, prefecture, s.name),
         prefecture: s.prefecture || prefecture,
         address: s.address,
-        ...(s.location ? { location: s.location } : {}),
       }));
       const res = await bulkImportSpots(spotsToImport);
 

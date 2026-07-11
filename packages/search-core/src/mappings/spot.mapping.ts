@@ -29,7 +29,6 @@ export const VECTOR_DIMS: number = (() => {
  * - name / description: 全文検索用の text（name は keyword サブフィールドも保持）。
  * - category / prefecture: 完全一致・集計向けの keyword。
  * - area: text + keyword（部分一致と完全一致の両対応）。
- * - location: geo_point（距離検索・地図表示）。
  * - embedding: dense_vector（ベクトル検索）。
  * - createdAt / updatedAt: date。
  */
@@ -54,7 +53,6 @@ export const spotMapping: estypes.MappingTypeMapping = {
     address: { type: "text" },
     highlights: { type: "text" },
     imageUrl: { type: "keyword", index: false },
-    location: { type: "geo_point" },
     embedding: {
       type: "dense_vector",
       dims: VECTOR_DIMS,

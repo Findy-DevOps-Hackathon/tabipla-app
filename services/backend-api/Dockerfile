@@ -10,13 +10,11 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/domain ./packages/domain
 COPY packages/db ./packages/db
 COPY packages/search-core ./packages/search-core
-COPY packages/maps-core ./packages/maps-core
 COPY services/backend-api ./services/backend-api
 RUN pnpm install --frozen-lockfile --filter @tabipla/backend-api...
 RUN pnpm --filter @tabipla/domain build
 RUN pnpm --filter @tabipla/search-core build
 RUN pnpm --filter @tabipla/db build
-RUN pnpm --filter @tabipla/maps-core build
 RUN pnpm --filter @tabipla/backend-api build
 
 FROM base AS runner
@@ -28,7 +26,6 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/domain/package.json ./packages/domain/
 COPY packages/db/package.json ./packages/db/
 COPY packages/search-core/package.json ./packages/search-core/
-COPY packages/maps-core/package.json ./packages/maps-core/
 COPY services/backend-api/package.json ./services/backend-api/
 # 本番イメージに husky は入らないため、ルート prepare だけ外してから install する
 RUN node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); delete p.scripts?.prepare; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');" \
@@ -37,7 +34,6 @@ RUN node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package
 COPY --from=build /app/packages/domain/dist ./packages/domain/dist
 COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=build /app/packages/search-core/dist ./packages/search-core/dist
-COPY --from=build /app/packages/maps-core/dist ./packages/maps-core/dist
 COPY --from=build /app/services/backend-api/dist ./services/backend-api/dist
 
 WORKDIR /app/services/backend-api

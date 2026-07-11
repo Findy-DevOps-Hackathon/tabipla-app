@@ -92,6 +92,27 @@
       "when": 1783600000000,
       "tag": "0012_drop_unchiku_facts",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1783700000000,
+      "tag": "0013_drop_coupons",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783800000000,
+      "tag": "0014_es_sync_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1783900000000,
+      "tag": "0015_drop_spot_lat_lon",
+      "breakpoints": true
     }
   ]
 }

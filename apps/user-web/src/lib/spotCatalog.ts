@@ -1,21 +1,15 @@
 import { fetchPublicSpots, fetchSpotById } from "../api.ts";
-import type { Recommendation, SwipeSpot } from "../data/spots.ts";
+import type { Recommendation } from "../data/spots.ts";
 import type { SpotDocument } from "../types.ts";
 import { getCurrentDestinations, type TripDestination } from "./destination.ts";
-import {
-  documentToRecommendation,
-  documentToSwipeSpot,
-  planItemToRecommendation,
-  spotImageUrl,
-} from "./spotMapper.ts";
+import { documentToRecommendation, planItemToRecommendation, spotImageUrl } from "./spotMapper.ts";
 
 export type SpotCatalogBundle = {
   docs: SpotDocument[];
-  swipeSpots: SwipeSpot[];
   exploreSpots: Recommendation[];
 };
 
-/** GET /v1/spots を1回だけ呼び、スワイプ・探索・画像更新用データをまとめて返す。 */
+/** GET /v1/spots を1回だけ呼び、探索・画像更新用データをまとめて返す。 */
 export async function loadSpotCatalogBundle(
   limit = 30,
   destinations: TripDestination[] = getCurrentDestinations(),
@@ -25,11 +19,10 @@ export async function loadSpotCatalogBundle(
     const primary = destinations[0];
     return {
       docs,
-      swipeSpots: docs.map((doc) => documentToSwipeSpot(doc, primary)),
       exploreSpots: docs.map((doc) => documentToRecommendation(doc, primary)),
     };
   } catch {
-    return { docs: [], swipeSpots: [], exploreSpots: [] };
+    return { docs: [], exploreSpots: [] };
   }
 }
 

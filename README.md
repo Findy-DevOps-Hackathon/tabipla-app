@@ -1,6 +1,6 @@
 # tabipla-app
 
-tabipla は自治体向けの観光コンテンツ管理と、ユーザー向けのスワイプ型おすすめ体験を提供するモノレポです。
+tabipla は自治体向けの観光コンテンツ管理と、ユーザー向けの比較タップ型おすすめ体験を提供するモノレポです。
 Elasticsearch 連携は `packages/search-core` に集約し、**`backend-api` と `agent` が利用**します。`apps/*` は API 層のみ呼び出し、Elasticsearch には直接アクセスしません。
 
 ```text
@@ -23,7 +23,7 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
 | パス | 説明 |
 |---|---|
 | `apps/admin-web` | 自治体向け管理画面（観光地 CRUD・CSV一括・AI収集） |
-| `apps/user-web` | ユーザー向け Web フロント（スワイプ型おすすめ） |
+| `apps/user-web` | ユーザー向け Web フロント（比較タップ型おすすめ） |
 | `services/backend-api` | HTTP API（認証・DB・検索連携・agent プロキシ） |
 | `services/agent` | AI エージェント（収集・おすすめ・ガイド） |
 | `packages/search-core` | Elasticsearch 共通モジュール |
@@ -62,12 +62,12 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
 - ログイン（JWT / `backend-api` の `/auth/login`）
 - 観光地一覧・検索・編集・削除（CSV エクスポート対応）
 - 観光地追加（個別登録 / CSV 一括 / AI 収集）
-- Places / Geocoding による住所・座標の自動補完（埋め込み地図 UI はなし）
+- Places lookup による住所の自動補完（埋め込み地図 UI はなし）
 
 **接続の注意**
 
 - admin-web は Firebase プロジェクト `tabipla-admin-web` のため、`/api` rewrite は使えません。
-- `apps/admin-web/scripts/deploy.sh` が `VITE_API_BASE` / `VITE_AGENT_BASE` に Cloud Run URL を埋め込みます。
+- `apps/admin-web/scripts/deploy.sh` が `VITE_API_BASE` に Cloud Run URL を埋め込みます（AI 機能も backend-api 経由）。
 
 **デプロイ**
 
@@ -87,7 +87,7 @@ pnpm -C apps/admin-web run deploy
 
 **主な機能**
 
-- スワイプ型の好み診断
+- 比較タップ型の好み診断
 - 目的地・旅の記憶に基づく AI おすすめ生成
 - スポット詳細と AI ガイド（質問応答）
 - 会員登録・ログインなし（訪問履歴は localStorage のみ）

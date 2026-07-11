@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "reindex": "tsx --env-file-if-exists=.env src/reindex.ts",
+    "sync-es-outbox": "tsx --env-file-if-exists=.env src/sync-es-outbox.ts",
     "embed-spots": "tsx --env-file-if-exists=.env src/embed-spots.ts",
     "cluster-reference-spots": "tsx --env-file-if-exists=.env src/cluster-reference-spots.ts",
     "clean": "rm -rf dist",
@@ -21,9 +22,9 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^7.21.0",
+    "@google/genai": "^1.52.0",
     "@tabipla/db": "workspace:*",
     "@tabipla/domain": "workspace:*",
-    "@tabipla/maps-core": "workspace:*",
     "@tabipla/search-core": "workspace:*",
     "fastify": "^5.0.0",
     "ml-kmeans": "^7.0.1"

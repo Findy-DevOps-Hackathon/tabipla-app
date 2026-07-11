@@ -1,7 +1,6 @@
 import { createDatabase } from "./client.js";
 import { hashPassword } from "./password.js";
 import { upsertAdminUser } from "./repository/adminUsers.js";
-import { upsertCoupon } from "./repository/coupons.js";
 import { upsertSpots } from "./repository/spots.js";
 import { municipalities } from "./schema.js";
 import { loadSeedBundle, type SeedAdminUser, seedSpotToRow } from "./seedData.js";
@@ -72,14 +71,10 @@ async function main(): Promise<void> {
     const imageInstall = await installSeedImages(bundle.spots);
     const rows = await upsertSpots(db, imageInstall.spots.map(seedSpotToRow));
 
-    for (const coupon of bundle.coupons) {
-      await upsertCoupon(db, coupon);
-    }
-
     const { counts } = bundle.manifest;
     console.log(
       `[db] seed 完了: 自治体 ${counts.municipalities} 件、管理ユーザー ${counts.adminUsers} 件、` +
-        `スポット ${rows.length} 件（画像 ${imageInstall.installed} 件/${imageInstall.target}）、クーポン ${counts.coupons} 件を upsert しました。`,
+        `スポット ${rows.length} 件（画像 ${imageInstall.installed} 件/${imageInstall.target}）を upsert しました。`,
     );
     for (const adminUser of bundle.adminUsers) {
       console.log(`[db] 管理ユーザー upsert: ${adminUser.id} (${resolveAdminEmail(adminUser)})`);

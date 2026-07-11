@@ -25,6 +25,7 @@ APIS=(
   secretmanager.googleapis.com
   artifactregistry.googleapis.com
   containerregistry.googleapis.com
+  aiplatform.googleapis.com
 )
 
 for api in "${APIS[@]}"; do
@@ -69,7 +70,7 @@ for secret in "${SECRETS[@]}"; do
 done
 
 echo ""
-echo "Granting Vertex AI User to Cloud Run SA (agent 用)..."
+echo "Granting Vertex AI User to Cloud Run SA (agent / backend-api 用)..."
 gcloud projects add-iam-policy-binding "$PROJECT" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/aiplatform.user" \

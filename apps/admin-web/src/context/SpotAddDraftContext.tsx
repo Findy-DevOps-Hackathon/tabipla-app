@@ -15,7 +15,6 @@ export type CollectedSpotDraft = {
   area: string;
   prefecture: string;
   address: string;
-  location?: { lat: number; lon: number };
   selected: boolean;
   /** プレビュー段階で生成した画像（登録時にアップロード）。 */
   pendingImage?: { mimeType: string; data: string };
@@ -29,8 +28,6 @@ export type ManualFormDraft = {
   categories: string[];
   address: string;
   area: string;
-  lat: string;
-  lon: string;
   imageUrl?: string;
 };
 
@@ -60,8 +57,6 @@ export function emptyManualFormDraft(): ManualFormDraft {
     categories: [],
     address: "",
     area: getMunicipality().defaultArea,
-    lat: "",
-    lon: "",
   };
 }
 

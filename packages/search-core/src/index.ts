@@ -49,4 +49,4 @@ export { searchCandidateSpots } from "./search/searchCandidateSpots.js";
 export type { VectorSearchParams } from "./search/vectorSearch.js";
 export { vectorSearch } from "./search/vectorSearch.js";
 // 型
-export type { GeoPoint, SearchResult, SpotDocument } from "./types/spot.js";
+export type { SearchResult, SpotDocument } from "./types/spot.js";

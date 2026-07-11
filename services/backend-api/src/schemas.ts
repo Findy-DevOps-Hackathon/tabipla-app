@@ -9,17 +9,6 @@
  * 新規依存は追加していない（Fastify に同梱の ajv を利用）。
  */
 
-/** 緯度経度。範囲も検証する。 */
-const geoPointSchema = {
-  type: "object",
-  required: ["lat", "lon"],
-  additionalProperties: false,
-  properties: {
-    lat: { type: "number", minimum: -90, maximum: 90 },
-    lon: { type: "number", minimum: -180, maximum: 180 },
-  },
-} as const;
-
 /** SpotDocument の任意フィールド（id を除く）。登録・更新で共有する。 */
 const spotOptionalProps = {
   name: { type: "string", minLength: 1, maxLength: 512 },
@@ -42,7 +31,6 @@ const spotOptionalProps = {
     items: { type: "string", minLength: 1, maxLength: 30 },
     maxItems: 5,
   },
-  location: geoPointSchema,
   imageUrl: { type: "string", maxLength: 2048 },
   clusterId: { type: "integer" },
   sensoryScores: {
@@ -127,19 +115,7 @@ export const getSpotSchema = {
   params: idParams,
 } as const;
 
-/** GET /geocode（住所 → 緯度経度） */
-export const geocodeSchema = {
-  querystring: {
-    type: "object",
-    required: ["q"],
-    additionalProperties: false,
-    properties: {
-      q: { type: "string", minLength: 1, maxLength: 512 },
-    },
-  },
-} as const;
-
-/** GET /places/lookup（スポット名 → 住所・座標など） */
+/** GET /places/lookup（スポット名 → 住所など） */
 export const placeLookupSchema = {
   querystring: {
     type: "object",
@@ -263,33 +239,7 @@ export const semanticSearchSchema = {
   },
 } as const;
 
-/** POST /travel-times（A4: 手段別移動時間マトリクス） */
-export const travelTimesSchema = {
-  body: {
-    type: "object",
-    required: ["origin", "destinations"],
-    additionalProperties: false,
-    properties: {
-      origin: geoPointSchema,
-      destinations: {
-        type: "array",
-        items: geoPointSchema,
-        minItems: 1,
-        maxItems: 25,
-      },
-      modes: {
-        type: "array",
-        items: { type: "string", enum: ["DRIVE", "WALK", "TRANSIT", "BICYCLE"] },
-        minItems: 1,
-        maxItems: 4,
-      },
-      departureTime: { type: "string" },
-      maxDestinations: { type: "integer", minimum: 1, maximum: 25 },
-    },
-  },
-} as const;
-
-/** POST /search/candidates（A3: kNN × geo × category） */
+/** POST /search/candidates（A3: kNN × category） */
 export const searchCandidateSpotsSchema = {
   body: {
     type: "object",
@@ -338,8 +288,6 @@ export const searchCandidateSpotsSchema = {
         items: { type: "string", minLength: 1 },
         minItems: 1,
       },
-      near: geoPointSchema,
-      radiusKm: { type: "number", exclusiveMinimum: 0 },
       size: { type: "integer", minimum: 1, maximum: 1000 },
       k: { type: "integer", minimum: 1, maximum: 1000 },
       knnBoost: { type: "number", minimum: 0 },
@@ -382,11 +330,6 @@ export const listPublicSpotsSchema = {
 
 /** GET /v1/spots/:id */
 export const getSpotByIdSchema = {
-  params: idParams,
-} as const;
-
-/** GET /v1/spots/:id/coupons */
-export const getSpotCouponsSchema = {
   params: idParams,
 } as const;
 

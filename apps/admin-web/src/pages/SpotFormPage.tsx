@@ -6,7 +6,6 @@ import {
   deleteSpot,
   generateSpotContent,
   generateSpotImage,
-  geocodeAddress,
   getSpot,
   isAbortError,
   lookupPlaceByName,
@@ -55,8 +54,6 @@ type FormSnapshot = {
   categories: string[];
   address: string;
   area: string;
-  lat: string;
-  lon: string;
   imageUrl?: string;
   hasPendingImage: boolean;
 };
@@ -69,8 +66,6 @@ function toFormSnapshot(form: FormState, pendingImageFile: File | null): FormSna
     categories: [...form.categories].sort(),
     address: form.address.trim(),
     area: form.area.trim(),
-    lat: form.lat.trim(),
-    lon: form.lon.trim(),
     imageUrl: form.imageUrl?.split("?")[0],
     hasPendingImage: pendingImageFile !== null,
   };
@@ -111,7 +106,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const [imageGenerateMiss, setImageGenerateMiss] = useState(false);
   const [placeLookupMiss, setPlaceLookupMiss] = useState(false);
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
-  const coordsManualRef = useRef(false);
   const nameLookupSkipRef = useRef(isEdit);
 
   const formSaving = saving || deleting;
@@ -130,7 +124,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
     nameLookupSkipRef.current = true;
     getSpot(id)
       .then((spot) => {
-        coordsManualRef.current = true;
         const loadedForm: FormState = {
           id: spot.id,
           name: spot.name,
@@ -142,8 +135,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
             spot.area ??
             (extractAreaFromAddress(spot.address ?? "", getFixedPrefecture()) ||
               municipality.defaultArea),
-          lat: spot.location?.lat != null ? String(spot.location.lat) : "",
-          lon: spot.location?.lon != null ? String(spot.location.lon) : "",
           imageUrl: spot.imageUrl,
         };
         setEditForm(loadedForm);
@@ -153,27 +144,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
       .catch(() => setLoadError("観光地の読み込みに失敗しました"))
       .finally(() => setLoading(false));
   }, [id, municipality.defaultArea]);
-
-  useEffect(() => {
-    const address = form.address.trim();
-    if (!address || coordsManualRef.current) return;
-
-    const timer = window.setTimeout(() => {
-      void geocodeAddress(address).then((location) => {
-        if (!location || coordsManualRef.current) return;
-        setForm((prev) => {
-          if (prev.address.trim() !== address) return prev;
-          return {
-            ...prev,
-            lat: String(location.lat),
-            lon: String(location.lon),
-          };
-        });
-      });
-    }, 600);
-
-    return () => window.clearTimeout(timer);
-  }, [form.address, setForm]);
 
   useEffect(() => {
     const name = form.name.trim();
@@ -201,8 +171,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
               ? extractAreaFromAddress(address, getFixedPrefecture()) || municipality.defaultArea
               : prev.area;
 
-            coordsManualRef.current = true;
-
             return {
               ...prev,
               ...(address ? { address } : {}),
@@ -215,8 +183,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                     ]),
                   }
                 : {}),
-              lat: String(result.lat),
-              lon: String(result.lon),
             };
           });
         })
@@ -370,7 +336,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   };
 
   const setAddress = (value: string) => {
-    coordsManualRef.current = false;
     const derivedArea = extractAreaFromAddress(value, getFixedPrefecture());
     setForm((prev) => ({
       ...prev,
@@ -412,9 +377,6 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
       ...(address ? { address } : {}),
       ...(area ? { area } : {}),
       ...(highlights.length ? { highlights } : {}),
-      ...(form.lat && form.lon
-        ? { location: { lat: Number(form.lat), lon: Number(form.lon) } }
-        : {}),
     };
   };
 

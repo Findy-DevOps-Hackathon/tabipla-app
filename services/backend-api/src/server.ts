@@ -4,7 +4,6 @@ import {
   type Database,
   deleteSpot,
   getAdminUserByEmail,
-  getCouponsBySpotId,
   getSpotById,
   hashPassword,
   listSpots,
@@ -14,10 +13,8 @@ import {
   upsertSpots,
   verifyPassword,
 } from "@tabipla/db";
-import { getTravelTimes, type TravelTimesParams } from "@tabipla/maps-core";
 import {
   createElasticsearchClient,
-  deleteSpot as deleteSpotInElasticsearch,
   type ElasticsearchClient,
   ensureIndex,
   hybridSearch,
@@ -28,13 +25,17 @@ import {
   vectorSearch,
 } from "@tabipla/search-core";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import { fetchAgent } from "./agentClient.js";
 import { normalizeApiPath, registerApiMirrorRoutes } from "./apiPrefix.js";
 import { extractBearerToken, isAdminApiPath, issueAdminToken, verifyAdminToken } from "./auth.js";
 import { registerCors } from "./cors.js";
 import { embedText, formatEmbeddingError, requireSpotEmbedding } from "./embedding.js";
-import { patchSpotInElasticsearch, upsertSpotInElasticsearch } from "./esSync.js";
+import {
+  startEsSyncWorker,
+  withEsSyncStatus,
+  writeThroughSpotToElasticsearch,
+} from "./esOutbox.js";
 import { fetchWithTimeout } from "./fetchWithTimeout.js";
-import { geocodeAddressQuery } from "./geocode.js";
 import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./mapper.js";
 import { lookupPlaceByName } from "./places.js";
 import { type AskSpotPayload, buildAskFacts, buildAskFactsFromClient } from "./spotAskFacts.js";
@@ -74,9 +75,7 @@ import {
   createSpotSchema,
   deleteSpotSchema,
   ensureIndexSchema,
-  geocodeSchema,
   getSpotByIdSchema,
-  getSpotCouponsSchema,
   getSpotSchema,
   hybridSearchSchema,
   keywordSearchSchema,
@@ -87,7 +86,6 @@ import {
   postSpotImageSchema,
   searchCandidateSpotsSchema,
   semanticSearchSchema,
-  travelTimesSchema,
   updateSpotSchema,
   vectorSearchSchema,
 } from "./schemas.js";
@@ -137,8 +135,6 @@ type SearchCandidateSpotsBody = {
   area?: string | string[];
   ids?: string[];
   excludeIds?: string[];
-  near?: { lat: number; lon: number };
-  radiusKm?: number;
   size?: number;
   k?: number;
   knnBoost?: number;
@@ -151,6 +147,8 @@ export type BuildServerOptions = {
   client?: ElasticsearchClient;
   /** 既存の DB 接続を注入する場合に指定（テスト用途など）。 */
   db?: Database;
+  /** ES outbox のバックグラウンド再試行を無効化する（テスト用途など）。 */
+  disableEsSyncWorker?: boolean;
 };
 
 /**
@@ -372,19 +370,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     return ensureIndex(client, req.body?.index);
   });
 
-  // ---- ジオコーディング（管理画面） ----------------------------------------
-  app.get<{ Querystring: { q: string } }>(
-    "/geocode",
-    { schema: geocodeSchema },
-    async (req, reply) => {
-      const location = await geocodeAddressQuery(req.query.q);
-      if (!location) {
-        return reply.code(404).send({ error: "住所から座標を取得できませんでした" });
-      }
-      return location;
-    },
-  );
-
   // ---- スポット名検索（管理画面フォーム自動入力） --------------------------
   app.get<{
     Querystring: { name: string; prefecture?: string; municipality?: string };
@@ -399,12 +384,10 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     // 外部 API で見つからない場合のみ、登録済みスポット（同一都道府県・名称一致）を参照
     const { rows } = await listSpots(db, { q: name, prefecture, limit: 20 });
     const dbMatch = rows.find((row) => row.name === name);
-    if (dbMatch && dbMatch.lat != null && dbMatch.lon != null) {
+    if (dbMatch) {
       return {
         name: dbMatch.name,
         address: dbMatch.address ?? undefined,
-        lat: dbMatch.lat,
-        lon: dbMatch.lon,
         category: dbMatch.category ?? undefined,
         description: dbMatch.description,
       };
@@ -473,28 +456,17 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       const row = await upsertSpot(db, rowInput);
       const document = toSpotDocument(row);
 
-      try {
-        await upsertSpotInElasticsearch(
-          client,
-          { ...document, embedding: embeddedDocument.embedding },
-          {
-            refresh,
-          },
-        );
-      } catch (error) {
-        app.log.error(
-          { err: error, spotId: document.id },
-          "POST /spots: Elasticsearch への反映に失敗",
-        );
-        return reply.code(502).send({
-          error:
-            error instanceof Error
-              ? error.message
-              : `スポット ${document.id} の Elasticsearch 反映に失敗しました。`,
-        });
-      }
+      const syncResult = await writeThroughSpotToElasticsearch({
+        client,
+        db,
+        log: app.log,
+        spotId: document.id,
+        operation: "upsert",
+        payload: { embedding: embeddedDocument.embedding },
+        refresh,
+      });
 
-      return document;
+      return withEsSyncStatus(document, syncResult);
     },
   );
 
@@ -513,9 +485,15 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     }
     const row = await upsertSpot(db, mergeSpotRow(existing, req.body));
     const document = toSpotDocument(row);
-    const { id, ...partial } = document;
-    await patchSpotInElasticsearch(client, id, partial, { refresh });
-    return document;
+    const syncResult = await writeThroughSpotToElasticsearch({
+      client,
+      db,
+      log: app.log,
+      spotId: document.id,
+      operation: "patch",
+      refresh,
+    });
+    return withEsSyncStatus(document, syncResult);
   });
 
   // ---- スポット画像アップロード（管理画面） ----------------------------------
@@ -534,9 +512,15 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       const imageUrl = await saveSpotImage(req.params.id, req.body.mimeType, req.body.data);
       const row = await upsertSpot(db, mergeSpotRow(existing, { imageUrl }));
       const document = toSpotDocument(row);
-      const { id, ...partial } = document;
-      await patchSpotInElasticsearch(client, id, partial, { refresh });
-      return document;
+      const syncResult = await writeThroughSpotToElasticsearch({
+        client,
+        db,
+        log: app.log,
+        spotId: document.id,
+        operation: "patch",
+        refresh,
+      });
+      return withEsSyncStatus(document, syncResult);
     } catch (error) {
       const message = error instanceof Error ? error.message : "画像の保存に失敗しました";
       return reply.code(400).send({ error: message });
@@ -556,9 +540,15 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       await deleteSpotImageFiles(req.params.id);
       const row = await upsertSpot(db, { ...mergeSpotRow(existing, {}), imageUrl: null });
       const document = toSpotDocument(row);
-      const { id, ...partial } = document;
-      await patchSpotInElasticsearch(client, id, partial, { refresh });
-      return document;
+      const syncResult = await writeThroughSpotToElasticsearch({
+        client,
+        db,
+        log: app.log,
+        spotId: document.id,
+        operation: "patch",
+        refresh,
+      });
+      return withEsSyncStatus(document, syncResult);
     },
   );
 
@@ -599,6 +589,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         prepared.map((entry) => entry.rowInput),
       );
       const documents = rows.map(toSpotDocument);
+      const syncedDocuments = [];
 
       for (const [i, document] of documents.entries()) {
         const isLast = i === documents.length - 1;
@@ -609,29 +600,19 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
           });
         }
 
-        try {
-          await upsertSpotInElasticsearch(
-            client,
-            { ...document, embedding },
-            {
-              refresh: refresh && isLast,
-            },
-          );
-        } catch (error) {
-          app.log.error(
-            { err: error, spotId: document.id },
-            "POST /spots/bulk: Elasticsearch への反映に失敗",
-          );
-          return reply.code(502).send({
-            error:
-              error instanceof Error
-                ? error.message
-                : `スポット ${document.id} の Elasticsearch 反映に失敗しました。`,
-          });
-        }
+        const syncResult = await writeThroughSpotToElasticsearch({
+          client,
+          db,
+          log: app.log,
+          spotId: document.id,
+          operation: "upsert",
+          payload: { embedding },
+          refresh: refresh && isLast,
+        });
+        syncedDocuments.push(withEsSyncStatus(document, syncResult));
       }
 
-      return { count: documents.length, spots: documents };
+      return { count: syncedDocuments.length, spots: syncedDocuments };
     },
   );
 
@@ -644,10 +625,20 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       const refresh = req.query.refresh === "true";
       await deleteSpotImageFiles(req.params.id);
       await deleteSpot(db, req.params.id);
-      const result = await deleteSpotInElasticsearch(client, req.params.id, {
+      const syncResult = await writeThroughSpotToElasticsearch({
+        client,
+        db,
+        log: app.log,
+        spotId: req.params.id,
+        operation: "delete",
         refresh,
       });
-      return result;
+      return {
+        index: "spots",
+        id: req.params.id,
+        deleted: true,
+        ...(syncResult.synced ? {} : { esSyncPending: true }),
+      };
     },
   );
 
@@ -739,22 +730,13 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     },
   );
 
-  // ---- 候補スポット検索（A3: kNN × geo_distance × category） ----
+  // ---- 候補スポット検索（A3: kNN × category） ----
   app.post<{ Body: SearchCandidateSpotsBody }>(
     "/search/candidates",
     { schema: searchCandidateSpotsSchema },
     async (req) => {
       const results = await searchCandidateSpots(client, req.body);
       return { count: results.length, results };
-    },
-  );
-
-  // ---- 移動時間マトリクス（A4: getTravelTimes） ----
-  app.post<{ Body: TravelTimesParams }>(
-    "/travel-times",
-    { schema: travelTimesSchema },
-    async (req) => {
-      return getTravelTimes(req.body);
     },
   );
 
@@ -804,46 +786,9 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
       }
 
-      const dbCoupons = await getCouponsBySpotId(db, req.params.id);
-      const coupons = dbCoupons.map((c) => ({
-        id: c.id,
-        spotId: c.spotId,
-        title: c.title,
-        description: c.description ?? undefined,
-        discount: c.discount,
-        conditions: c.conditions ?? undefined,
-        validUntil: c.validUntil ?? undefined,
-      }));
-
-      return { spot: toSpotDocument(dbSpot), coupons };
+      return { spot: toSpotDocument(dbSpot) };
     },
   );
-
-  app.get<{ Params: { id: string } }>(
-    "/v1/spots/:id/coupons",
-    { schema: getSpotCouponsSchema },
-    async (req, reply) => {
-      const dbSpot = await getSpotById(db, req.params.id);
-      if (!dbSpot) {
-        return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
-      }
-
-      const dbCoupons = await getCouponsBySpotId(db, req.params.id);
-      const coupons = dbCoupons.map((c) => ({
-        id: c.id,
-        spotId: c.spotId,
-        title: c.title,
-        description: c.description ?? undefined,
-        discount: c.discount,
-        conditions: c.conditions ?? undefined,
-        validUntil: c.validUntil ?? undefined,
-      }));
-
-      return { coupons };
-    },
-  );
-
-  const agentApiUrl = process.env.AGENT_API_URL ?? "http://localhost:8080";
 
   // エージェントプロキシ：旅行プランの生成とディベート（DB カタログで enrich）
   app.post("/v1/personalized/plan", async (req, reply) => {
@@ -887,11 +832,10 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
 
     let res: Response;
     try {
-      res = await fetchWithTimeout(
-        `${agentApiUrl}/v1/personalized/plan`,
+      res = await fetchAgent(
+        "/v1/personalized/plan",
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
           body: JSON.stringify({
             ...body,
             catalog,
@@ -999,11 +943,10 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
 
     let res: Response;
     try {
-      res = await fetchWithTimeout(
-        `${agentApiUrl}/v1/spots/${spotId}/ask`,
+      res = await fetchAgent(
+        `/v1/spots/${spotId}/ask`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
           body: JSON.stringify({
             ...body,
             spot: spotForAgent,
@@ -1024,6 +967,49 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       return reply.code(res.status).send(data);
     }
     return data;
+  });
+
+  // 管理画面向け agent プロキシ（JWT 必須 → 内部トークンで agent へ転送）
+  app.post("/v1/collect-spots", async (req, reply) => {
+    try {
+      const res = await fetchAgent("/v1/collect-spots", {
+        method: "POST",
+        body: JSON.stringify(req.body ?? {}),
+      });
+      const data = await res.json();
+      return reply.code(res.status).send(data);
+    } catch (error) {
+      req.log.error({ err: error }, "collect-spots: agent への接続に失敗しました");
+      return reply.code(503).send({ error: "AI 収集サービスに接続できませんでした。" });
+    }
+  });
+
+  app.post("/v1/describe-spot", async (req, reply) => {
+    try {
+      const res = await fetchAgent("/v1/describe-spot", {
+        method: "POST",
+        body: JSON.stringify(req.body ?? {}),
+      });
+      const data = await res.json();
+      return reply.code(res.status).send(data);
+    } catch (error) {
+      req.log.error({ err: error }, "describe-spot: agent への接続に失敗しました");
+      return reply.code(503).send({ error: "AI 文案サービスに接続できませんでした。" });
+    }
+  });
+
+  app.post("/v1/generate-spot-image", async (req, reply) => {
+    try {
+      const res = await fetchAgent("/v1/generate-spot-image", {
+        method: "POST",
+        body: JSON.stringify(req.body ?? {}),
+      });
+      const data = await res.json();
+      return reply.code(res.status).send(data);
+    } catch (error) {
+      req.log.error({ err: error }, "generate-spot-image: agent への接続に失敗しました");
+      return reply.code(503).send({ error: "AI 画像サービスに接続できませんでした。" });
+    }
   });
 
   // ---- 共通エラーハンドラ --------------------------------------------------
@@ -1056,6 +1042,10 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       });
     },
   );
+
+  if (!options.disableEsSyncWorker) {
+    startEsSyncWorker({ client, db, log: app.log });
+  }
 
   return app;
 }

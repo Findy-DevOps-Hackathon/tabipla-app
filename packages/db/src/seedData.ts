@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { NewCouponRow, NewSpotRow } from "./schema.js";
+import type { NewSpotRow } from "./schema.js";
 
 const srcDir = dirname(fileURLToPath(import.meta.url));
 
@@ -15,7 +15,6 @@ export type SeedManifest = {
     municipalities: number;
     adminUsers: number;
     spots: number;
-    coupons: number;
     images: number;
   };
 };
@@ -42,12 +41,15 @@ export type SeedSpot = {
   prefecture?: string | null;
   address?: string | null;
   highlights?: string[] | null;
-  lat?: number | null;
-  lon?: number | null;
   imageUrl?: string | null;
 };
 
-export type SeedCoupon = NewCouponRow;
+export type SeedBundle = {
+  manifest: SeedManifest;
+  municipalities: SeedMunicipality[];
+  adminUsers: SeedAdminUser[];
+  spots: SeedSpot[];
+};
 
 /** Seed JSON を DB upsert 用の行へ変換する。 */
 export function seedSpotToRow(spot: SeedSpot): Omit<NewSpotRow, "createdAt" | "updatedAt"> {
@@ -61,8 +63,6 @@ export function seedSpotToRow(spot: SeedSpot): Omit<NewSpotRow, "createdAt" | "u
     prefecture: spot.prefecture ?? null,
     address: spot.address ?? null,
     highlights: spot.highlights ?? null,
-    lat: spot.lat ?? null,
-    lon: spot.lon ?? null,
     imageUrl: spot.imageUrl ?? null,
   };
 }
@@ -76,8 +76,6 @@ type SpotSeedSource = {
   prefecture?: string | null;
   address?: string | null;
   highlights?: string[] | null;
-  lat?: number | null;
-  lon?: number | null;
   imageUrl?: string | null;
 };
 
@@ -93,19 +91,9 @@ export function stripSpotForSeed(row: SpotSeedSource): SeedSpot {
   if (row.prefecture != null) spot.prefecture = row.prefecture;
   if (row.address != null) spot.address = row.address;
   if (row.highlights != null) spot.highlights = row.highlights;
-  if (row.lat != null) spot.lat = row.lat;
-  if (row.lon != null) spot.lon = row.lon;
   if (row.imageUrl != null) spot.imageUrl = row.imageUrl;
   return spot;
 }
-
-export type SeedBundle = {
-  manifest: SeedManifest;
-  municipalities: SeedMunicipality[];
-  adminUsers: SeedAdminUser[];
-  spots: SeedSpot[];
-  coupons: SeedCoupon[];
-};
 
 async function readJsonFile<T>(path: string): Promise<T> {
   const raw = await readFile(path, "utf8");
@@ -114,15 +102,14 @@ async function readJsonFile<T>(path: string): Promise<T> {
 
 /** `packages/db/seed-data/` からシード用 JSON を読み込む。 */
 export async function loadSeedBundle(): Promise<SeedBundle> {
-  const [manifest, municipalities, adminUsers, spots, coupons] = await Promise.all([
+  const [manifest, municipalities, adminUsers, spots] = await Promise.all([
     readJsonFile<SeedManifest>(join(SEED_DATA_DIR, "manifest.json")),
     readJsonFile<SeedMunicipality[]>(join(SEED_DATA_DIR, "municipalities.json")),
     readJsonFile<SeedAdminUser[]>(join(SEED_DATA_DIR, "admin-users.json")),
     readJsonFile<SeedSpot[]>(join(SEED_DATA_DIR, "spots.json")),
-    readJsonFile<SeedCoupon[]>(join(SEED_DATA_DIR, "coupons.json")),
   ]);
 
-  return { manifest, municipalities, adminUsers, spots, coupons };
+  return { manifest, municipalities, adminUsers, spots };
 }
 
 /** `/uploads/spots/foo.webp` や GCS/CDN の `/spots/foo.webp` から seed-data 内のファイル名を得る。 */

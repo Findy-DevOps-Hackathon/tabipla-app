@@ -1,5 +1,20 @@
 import { COMPARISON_DIAGNOSIS_CATEGORIES, COMPARISON_SPOT_POOL } from "../data/comparisonSpots.ts";
 import type { DiagnosisSpotCategory, SwipeSpot } from "../data/spots.ts";
+import type { SpotDocument } from "../types.ts";
+import { spotImageUrl } from "./spotMapper.ts";
+
+/** API カタログがあれば画像 URL を最新化し、本番で存在するスポットに絞る。 */
+function resolveComparisonPool(catalogDocs: readonly SpotDocument[]): readonly SwipeSpot[] {
+  if (catalogDocs.length === 0) return COMPARISON_SPOT_POOL;
+
+  const catalogById = new Map(catalogDocs.map((doc) => [doc.id, doc]));
+  const matched = COMPARISON_SPOT_POOL.filter((spot) => catalogById.has(spot.id)).map((spot) => {
+    const doc = catalogById.get(spot.id);
+    return doc ? { ...spot, image: spotImageUrl(doc) } : spot;
+  });
+
+  return matched.length >= 2 ? matched : COMPARISON_SPOT_POOL;
+}
 
 /** Fisher–Yates で配列をシャッフルする（元配列は変更しない）。 */
 function shuffle<T>(items: readonly T[]): T[] {
@@ -37,10 +52,12 @@ function pickRandomFromCategory(
 export function pickRandomComparisonDeck(
   count: number,
   excludeIds: readonly string[] = [],
+  catalogDocs: readonly SpotDocument[] = [],
 ): SwipeSpot[] {
   const exclude = new Set(excludeIds);
-  const available = COMPARISON_SPOT_POOL.filter((spot) => !exclude.has(spot.id));
-  const pool = available.length >= count ? available : COMPARISON_SPOT_POOL;
+  const comparisonPool = resolveComparisonPool(catalogDocs);
+  const available = comparisonPool.filter((spot) => !exclude.has(spot.id));
+  const pool = available.length >= count ? available : comparisonPool;
   const limit = Math.min(count, pool.length);
   if (limit === 0) return [];
 
@@ -49,7 +66,7 @@ export function pickRandomComparisonDeck(
 
   for (const category of shuffle(COMPARISON_DIAGNOSIS_CATEGORIES)) {
     if (picked.length >= limit) break;
-    const spot = pickRandomFromCategory(category, pool, COMPARISON_SPOT_POOL, pickedIds);
+    const spot = pickRandomFromCategory(category, pool, comparisonPool, pickedIds);
     if (!spot) continue;
     picked.push(spot);
     pickedIds.add(spot.id);
@@ -66,8 +83,12 @@ export function pickRandomComparisonDeck(
 }
 
 /** 保存済み ID から比較デッキを復元する（プール外 ID は無視）。 */
-export function resolveComparisonDeckFromIds(ids: readonly string[]): SwipeSpot[] {
+export function resolveComparisonDeckFromIds(
+  ids: readonly string[],
+  catalogDocs: readonly SpotDocument[] = [],
+): SwipeSpot[] {
   if (ids.length === 0) return [];
-  const byId = new Map(COMPARISON_SPOT_POOL.map((spot) => [spot.id, spot]));
+  const comparisonPool = resolveComparisonPool(catalogDocs);
+  const byId = new Map(comparisonPool.map((spot) => [spot.id, spot]));
   return ids.map((id) => byId.get(id)).filter((spot): spot is SwipeSpot => spot !== undefined);
 }

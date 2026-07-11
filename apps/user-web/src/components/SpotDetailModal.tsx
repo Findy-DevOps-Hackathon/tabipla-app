@@ -27,6 +27,8 @@ import {
 import { SpotImage } from "./SpotImage.tsx";
 import { VoiceWaveform } from "./VoiceWaveform.tsx";
 
+const CHAT_INPUT_MAX = 250;
+
 type ChatMessage = {
   role: "user" | "ai";
   text: string;
@@ -89,7 +91,7 @@ export function SpotDetailModal({
   } = useSpeechRecognition({
     getBaseText: () => textInputRef.current,
     onTranscript: (text) => {
-      setTextInput(text);
+      setTextInput(text.slice(0, CHAT_INPUT_MAX));
       setSpeechError(null);
     },
     onError: (message) => setSpeechError(message),
@@ -356,6 +358,11 @@ export function SpotDetailModal({
               {speechError}
             </p>
           )}
+          <p
+            className={`mb-1.5 text-right text-[11px] ${textInput.length >= CHAT_INPUT_MAX ? "text-rose-400" : "text-slate-400"}`}
+          >
+            {textInput.length} / {CHAT_INPUT_MAX} 文字
+          </p>
           <div className="flex items-end gap-2 text-[13px]">
             {speechSupported &&
               (listening ? (
@@ -393,8 +400,9 @@ export function SpotDetailModal({
                 ref={chatInputRef}
                 rows={1}
                 value={textInput}
+                maxLength={CHAT_INPUT_MAX}
                 onChange={(e) => {
-                  setTextInput(e.target.value);
+                  setTextInput(e.target.value.slice(0, CHAT_INPUT_MAX));
                   setSpeechError(null);
                 }}
                 onKeyDown={(e) => {
@@ -414,7 +422,7 @@ export function SpotDetailModal({
 
                   const before = value.slice(0, selectionStart);
                   const after = value.slice(selectionEnd);
-                  const next = `${before}\n${after}`;
+                  const next = `${before}\n${after}`.slice(0, CHAT_INPUT_MAX);
                   const cursor = selectionStart + 1;
                   setTextInput(next);
                   requestAnimationFrame(() => {

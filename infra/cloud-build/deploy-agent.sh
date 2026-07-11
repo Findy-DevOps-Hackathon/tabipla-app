@@ -35,7 +35,7 @@ optional_secret() {
   fi
 }
 
-optional_secret ADMIN_JWT_SECRET tabipla-admin-jwt-secret
+optional_secret AGENT_INTERNAL_SECRET tabipla-agent-internal-secret
 optional_secret ES_API_KEY tabipla-es-api-key
 optional_secret ES_PASSWORD tabipla-es-password
 optional_secret ES_USERNAME tabipla-es-username
