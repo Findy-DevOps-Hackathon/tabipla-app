@@ -30,7 +30,11 @@ Elasticsearch と連携します（ES へ直接アクセスしません）。
 | `HOST` | `0.0.0.0` | 待ち受けホスト |
 | `DATABASE_URL` | — | PostgreSQL 接続文字列（書き込み系で必須） |
 | `ES_NODE` ほか | — | Elasticsearch 接続系（`packages/search-core/README.md` 参照） |
-| `GEMINI_API_KEY` | — | 埋め込み生成（`embed-spots` / `POST /search/semantic`） |
+| `GOOGLE_CLOUD_PROJECT` | — | Vertex AI の GCP プロジェクト（Cloud Run では自動設定） |
+| `VERTEX_EMBEDDING_LOCATION` | `us-central1` | Vertex AI Embeddings のリージョン |
+| `VERTEX_EMBEDDING_MODEL` | `gemini-embedding-001` | Vertex AI の埋め込みモデル |
+| `EMBEDDING_PROVIDER` | `vertex`（Cloud Run） | `vertex` / `gemini` / `hash`。ローカルで未指定なら API キー有無に応じて選択 |
+| `GEMINI_API_KEY` | — | Gemini API を明示指定した移行検証・ローカル開発用 |
 | `GOOGLE_MAPS_API_KEY` | — | Places lookup（管理画面の住所自動補完） |
 | `ADMIN_JWT_SECRET` | 開発用既定値 | 管理画面 JWT 署名鍵（本番必須） |
 | `CORS_ORIGINS` | — | Firebase Hosting からの CORS 許可オリジン（カンマ区切り） |

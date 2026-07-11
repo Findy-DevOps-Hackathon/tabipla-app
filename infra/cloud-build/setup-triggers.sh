@@ -129,6 +129,7 @@ FRONT_DEPLOY_FILES=(
 )
 
 CORS_ORIGINS="https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com"
+VERTEX_EMBEDDING_LOCATION="${VERTEX_EMBEDDING_LOCATION:-us-central1}"
 
 write_ci_pr_trigger() {
   local out="$TRIGGER_DIR/tabipla-ci.yaml"
@@ -180,6 +181,7 @@ substitutions:
   _ES_INDEX: "${ES_INDEX:-}"
   _ES_VECTOR_DIMS: "${ES_VECTOR_DIMS:-}"
   _EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-}"
+  _VERTEX_EMBEDDING_LOCATION: ${VERTEX_EMBEDDING_LOCATION}
 repositoryEventConfig:
   repository: ${REPO_RESOURCE}
   push:

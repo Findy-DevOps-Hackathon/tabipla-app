@@ -221,6 +221,9 @@ importers:
       '@google-cloud/storage':
         specifier: ^7.21.0
         version: 7.21.0(encoding@0.1.13)
+      '@google/genai':
+        specifier: ^1.52.0
+        version: 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
       '@tabipla/db':
         specifier: workspace:*
         version: link:../../packages/db

@@ -1,26 +1,33 @@
 import { createHash } from "node:crypto";
+import { GoogleGenAI } from "@google/genai";
 import { type SpotDocument, VECTOR_DIMS } from "@tabipla/search-core";
 import { fetchWithTimeout } from "./fetchWithTimeout.js";
 
-export type EmbeddingProvider = "gemini" | "hash";
+export type EmbeddingProvider = "vertex" | "gemini" | "hash";
 
 /** Gemini embedContent の taskType（検索用途向け）。 */
 export type EmbedTaskType = "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT";
 
 const DEFAULT_GEMINI_MODEL = "gemini-embedding-2";
+const DEFAULT_VERTEX_MODEL = "gemini-embedding-001";
+const DEFAULT_VERTEX_LOCATION = "us-central1";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const EMBEDDING_TIMEOUT_MS = 30_000;
 
 /**
  * 埋め込み生成のプロバイダを解決する。
  *
- * - EMBEDDING_PROVIDER=gemini|hash で明示指定可能。
- * - 未指定時: GEMINI_API_KEY があれば gemini、なければ hash。
+ * - EMBEDDING_PROVIDER=vertex|gemini|hash で明示指定可能。
+ * - Cloud Run（GOOGLE_CLOUD_PROJECT あり）では Vertex AI を既定にする。
+ * - ローカルでは GEMINI_API_KEY があれば Gemini API、なければ hash を使う。
  */
 export function resolveEmbeddingProvider(): EmbeddingProvider {
   const explicit = process.env.EMBEDDING_PROVIDER;
-  if (explicit === "gemini" || explicit === "hash") {
+  if (explicit === "vertex" || explicit === "gemini" || explicit === "hash") {
     return explicit;
+  }
+  if (process.env.GOOGLE_CLOUD_PROJECT?.trim()) {
+    return "vertex";
   }
   if (process.env.GEMINI_API_KEY) {
     return "gemini";
@@ -54,6 +61,9 @@ export async function embedText(text: string, options: EmbedTextOptions = {}): P
   }
 
   const provider = resolveEmbeddingProvider();
+  if (provider === "vertex") {
+    return vertexEmbed(trimmed, options.taskType ?? "RETRIEVAL_QUERY");
+  }
   if (provider === "gemini") {
     return geminiEmbed(trimmed, options.taskType ?? "RETRIEVAL_QUERY");
   }
@@ -83,13 +93,62 @@ function resolveGeminiModel(): string {
   return process.env.GEMINI_EMBEDDING_MODEL ?? DEFAULT_GEMINI_MODEL;
 }
 
+function resolveVertexModel(): string {
+  return process.env.VERTEX_EMBEDDING_MODEL?.trim() || DEFAULT_VERTEX_MODEL;
+}
+
+function resolveVertexLocation(): string {
+  return process.env.VERTEX_EMBEDDING_LOCATION?.trim() || DEFAULT_VERTEX_LOCATION;
+}
+
+function getVertexClient(): GoogleGenAI {
+  const project = process.env.GOOGLE_CLOUD_PROJECT?.trim();
+  if (!project) {
+    throw new Error("[backend-api] GOOGLE_CLOUD_PROJECT が未設定です。");
+  }
+  return new GoogleGenAI({
+    vertexai: true,
+    project,
+    location: resolveVertexLocation(),
+  });
+}
+
 type GeminiEmbedResponse = {
   embedding?: { values?: number[] };
   error?: { message?: string };
 };
 
 /**
+ * Vertex AI の Gemini Embeddings を Application Default Credentials で呼び出す。
+ * Cloud Run ではサービスアカウントの roles/aiplatform.user を使うため、API キーは不要。
+ */
+async function vertexEmbed(text: string, taskType: EmbedTaskType): Promise<number[]> {
+  const model = resolveVertexModel();
+  const response = await getVertexClient().models.embedContent({
+    model,
+    contents: text,
+    config: {
+      taskType,
+      outputDimensionality: VECTOR_DIMS,
+      autoTruncate: false,
+      abortSignal: AbortSignal.timeout(EMBEDDING_TIMEOUT_MS),
+    },
+  });
+
+  const values = response.embeddings?.[0]?.values;
+  if (!values || values.length !== VECTOR_DIMS) {
+    throw new Error(
+      `[backend-api] Vertex AI の embedding 次元数が一致しません。期待=${VECTOR_DIMS}, 実際=${values?.length ?? 0}。` +
+        " ES_VECTOR_DIMS と VERTEX_EMBEDDING_MODEL の outputDimensionality を確認してください。",
+    );
+  }
+
+  return l2Normalize(values);
+}
+
+/**
  * Gemini Embeddings API（Google AI Studio）でベクトルを生成する。
+ * ローカル開発・移行検証用の互換プロバイダとして残す。
  *
  * - モデル既定: gemini-embedding-2
  * - outputDimensionality: VECTOR_DIMS（ES mapping と一致させる）
