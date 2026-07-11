@@ -29,7 +29,6 @@ import {
   isDestinationSpot,
   setCurrentDestinations,
 } from "./lib/destination.ts";
-import { isDisplayableRecommendation } from "./lib/spotCompleteness.ts";
 import {
   isDetailedDiagnosisComplete,
   isDiagnosisComplete,
@@ -45,6 +44,7 @@ import {
   refreshRecommendationImages,
   resolveSpotById,
 } from "./lib/spotCatalog.ts";
+import { isDisplayableRecommendation } from "./lib/spotCompleteness.ts";
 import { readSpotIdFromLocation, setSpotIdInLocation } from "./lib/spotLink.ts";
 import { InputScreen } from "./screens/InputScreen.tsx";
 import { MemoryScreen } from "./screens/MemoryScreen.tsx";
