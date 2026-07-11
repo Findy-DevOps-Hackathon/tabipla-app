@@ -11,6 +11,13 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
                                          ──▶ agent（おすすめ・ガイド）
 ```
 
+## 本番サイト
+
+| 対象 | URL |
+|---|---|
+| 自治体向け（管理画面） | https://tabipla-admin-web.web.app |
+| 旅行者向け | https://tabipla-user-web.web.app |
+
 ## リポジトリ構成
 
 | パス | 説明 |
@@ -31,7 +38,7 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
 
 設定ファイル（`.firebaserc` / `firebase.json` / 各 `scripts/deploy.sh`）に基づく配信先です。
 
-### admin-web（管理画面）
+### admin-web（自治体向けサイト）
 
 | 項目 | 値 |
 |---|---|
@@ -47,7 +54,8 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
 
 | 項目 | 値 |
 |---|---|
-| 管理ユーザー | `seed-data/admin-users.json` の id 参照（メール・パスワードは環境変数） |
+| 小諸市 ID | `admin@example.com` |
+| 小諸市 PW | `test-admin-password` |
 
 **主な機能**
 
@@ -61,17 +69,44 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
 - admin-web は Firebase プロジェクト `tabipla-admin-web` のため、`/api` rewrite は使えません。
 - `apps/admin-web/scripts/deploy.sh` が `VITE_API_BASE` / `VITE_AGENT_BASE` に Cloud Run URL を埋め込みます。
 
+**デプロイ**
+
+```bash
+pnpm -C apps/admin-web run deploy
+```
+
 詳細は [`apps/admin-web/README.md`](apps/admin-web/README.md)。
+
+### user-web（旅行者向けサイト）
+
+| 項目 | 値 |
+|---|---|
+| Firebase プロジェクト | `tabipla-user-web`（`apps/user-web/.firebaserc`） |
+| Hosting URL | https://tabipla-user-web.web.app |
+| API | `firebase.json` の `/api/**` rewrite → Cloud Run `tabipla-backend-api`（同一オリジン） |
+
+**主な機能**
+
+- スワイプ型の好み診断
+- 目的地・旅の記憶に基づく AI おすすめ生成
+- スポット詳細と AI ガイド（質問応答）
+- 会員登録・ログインなし（訪問履歴は localStorage のみ）
+
+**デプロイ**
+
+```bash
+pnpm -C apps/user-web run deploy
+```
+
+詳細は [`apps/user-web/README.md`](apps/user-web/README.md)。
 
 ### その他
 
 | コンポーネント | ホスティング | 設定 |
 |---|---|---|
-| user-web | Firebase Hosting | プロジェクト `tabipla-user-web`（`apps/user-web/.firebaserc`）、`/api/**` → Cloud Run `tabipla-backend-api` |
 | backend-api | Cloud Run | プロジェクト `tabipla-user-web`、サービス名 `tabipla-backend-api` |
 | agent | Cloud Run | プロジェクト `tabipla-user-web`、サービス名 `tabipla-agent` |
 
-- user-web: [`apps/user-web/README.md`](apps/user-web/README.md)
 - backend-api: [`services/backend-api/README.md`](services/backend-api/README.md)
 - agent: [`services/agent/README.md`](services/agent/README.md)
 
