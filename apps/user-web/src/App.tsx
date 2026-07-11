@@ -33,6 +33,7 @@ import {
   isDiagnosisComplete,
   markDetailedDiagnosisComplete,
   markDiagnosisComplete,
+  resetDetailedDiagnosisComplete,
 } from "./lib/diagnosis.ts";
 import { isSystemFacingError, sanitizeUserFacingError } from "./lib/planError.ts";
 import { preloadImages } from "./lib/preloadImage.ts";
@@ -212,7 +213,7 @@ export default function App() {
   const [swipeDeck, setSwipeDeck] = useState<SwipeSpot[]>([]);
   const [refining, setRefining] = useState(initialFlow.refining);
   const [diagnosisComplete, setDiagnosisComplete] = useState(isDiagnosisComplete);
-  const [, setDetailedComplete] = useState(isDetailedDiagnosisComplete);
+  const [detailedComplete, setDetailedComplete] = useState(isDetailedDiagnosisComplete);
 
   const [likes, setLikes] = useState<string[]>(initialFlow.likes);
   const [likeWeights, setLikeWeights] = useState<Record<string, number>>(initialFlow.likeWeights);
@@ -459,6 +460,13 @@ export default function App() {
     setRefining(true);
     setRunId((id) => id + 1);
     setStep("swipe");
+  }, []);
+
+  const goHome = useCallback(() => {
+    setDetailedComplete(false);
+    resetDetailedDiagnosisComplete();
+    setRefining(false);
+    setStep("welcome");
   }, []);
 
   const handleSwipeComplete = useCallback(
@@ -808,7 +816,8 @@ export default function App() {
           diagnosisComplete={diagnosisComplete}
           onStartDiagnosis={beginSwipe}
           onRestart={refinePreferences}
-          onGoHome={() => setStep("welcome")}
+          detailedDiagnosisComplete={detailedComplete}
+          onGoHome={goHome}
           onOpenSpot={openSpotDetail}
           aiIntroMessage={planMessage}
           preferenceSummary={planProfileSummary}
