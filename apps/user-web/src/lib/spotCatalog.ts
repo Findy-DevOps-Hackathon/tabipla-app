@@ -45,18 +45,6 @@ export function refreshRecommendationImages(
   });
 }
 
-/** 公開 GET /v1/spots からスワイプ用カタログを取得する（失敗時は空配列）。 */
-export async function loadSwipeCatalog(limit = 30): Promise<SwipeSpot[]> {
-  const { swipeSpots } = await loadSpotCatalogBundle(limit);
-  return swipeSpots;
-}
-
-/** 探索一覧用の Recommendation 配列を GET /v1/spots から取得する。 */
-export async function loadExploreSpots(limit = 30): Promise<Recommendation[]> {
-  const { exploreSpots } = await loadSpotCatalogBundle(limit);
-  return exploreSpots;
-}
-
 /** URL ディープリンク用：ID から Recommendation を GET /v1/spots/:id で解決する。 */
 export async function resolveSpotById(
   id: string,

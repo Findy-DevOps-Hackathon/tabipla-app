@@ -91,7 +91,6 @@ trap 'rm -f "$ENV_VARS_FILE"' EXIT
   [[ -n "${EMBEDDING_PROVIDER:-}" ]] && echo "EMBEDDING_PROVIDER: \"${EMBEDDING_PROVIDER}\""
   [[ -n "${GOOGLE_MAPS_API_KEY:-}" ]] && echo "GOOGLE_MAPS_API_KEY: \"${GOOGLE_MAPS_API_KEY}\""
   [[ -n "${ADMIN_JWT_SECRET:-}" ]] && echo "ADMIN_JWT_SECRET: \"${ADMIN_JWT_SECRET}\""
-  [[ -n "${USER_JWT_SECRET:-}" ]] && echo "USER_JWT_SECRET: \"${USER_JWT_SECRET}\""
   [[ -n "${CORS_ORIGINS:-}" ]] && echo "CORS_ORIGINS: \"${CORS_ORIGINS}\""
   [[ -n "${GCS_BUCKET:-}" ]] && echo "GCS_BUCKET: \"${GCS_BUCKET}\""
   [[ -n "${GCS_PUBLIC_BASE_URL:-}" ]] && echo "GCS_PUBLIC_BASE_URL: \"${GCS_PUBLIC_BASE_URL}\""

@@ -6,18 +6,16 @@
  * `searchPlaces` で名称・読み・都道府県名のいずれかに前方/部分一致した候補を返す。
  */
 
-import type { TripDestination } from "../lib/destination.ts";
 import {
   compressNotoSelectionLabels,
+  compressToshinSelectionLabels,
   NOTO_MUNICIPALITY_NAMES,
   NOTO_SUBREGIONS,
-} from "./notoAreas.ts";
-import placesDataJson from "./places-data.json";
-import {
-  compressToshinSelectionLabels,
   TOSHIN_MUNICIPALITY_NAMES,
   TOSHIN_SUBREGIONS,
-} from "./toshinAreas.ts";
+} from "@tabipla/domain";
+import type { TripDestination } from "../lib/destination.ts";
+import placesDataJson from "./places-data.json";
 
 /** 実在地名の 1 件。`prefecture` が null のものは都道府県そのもの。 */
 export type Place = {

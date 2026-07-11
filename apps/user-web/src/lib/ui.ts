@@ -24,10 +24,3 @@ export const PRIMARY_BUTTON =
  */
 export const SECONDARY_BUTTON =
   "flex w-full items-center justify-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white font-semibold text-[#475569] shadow-sm transition active:scale-[0.98] active:bg-[#f1f5f9]";
-
-/**
- * 破壊的操作（削除・退会）。rose 系のソリッドボタン。
- * サイズは呼び出し側で付け足す。
- */
-export const DANGER_BUTTON =
-  "flex w-full items-center justify-center gap-1.5 rounded-full bg-[#f43f5e] font-bold text-white transition active:scale-[0.99] disabled:opacity-60";

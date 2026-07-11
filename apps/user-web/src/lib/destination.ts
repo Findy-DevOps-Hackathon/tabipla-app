@@ -1,9 +1,10 @@
 import {
   compressNotoSelectionLabels,
+  compressToshinSelectionLabels,
   NOTO_MUNICIPALITY_NAMES,
   spotMatchesDestinations,
-} from "../data/notoAreas.ts";
-import { compressToshinSelectionLabels, TOSHIN_MUNICIPALITY_NAMES } from "../data/toshinAreas.ts";
+  TOSHIN_MUNICIPALITY_NAMES,
+} from "@tabipla/domain";
 import type { SpotDocument } from "../types.ts";
 
 export type TripDestination = {
@@ -102,19 +103,4 @@ export function encodeDestinationsQuery(destinations: TripDestination[]): string
   return destinations
     .map((dest) => `${encodeURIComponent(dest.area)}:${encodeURIComponent(dest.prefecture)}`)
     .join(",");
-}
-
-/** API クエリ用: encodeDestinationsQuery の逆。 */
-export function decodeDestinationsQuery(value: string): TripDestination[] {
-  return value
-    .split(",")
-    .map((pair) => {
-      const [area, prefecture] = pair.split(":");
-      if (!area || !prefecture) return null;
-      return {
-        area: decodeURIComponent(area),
-        prefecture: decodeURIComponent(prefecture),
-      };
-    })
-    .filter((dest): dest is TripDestination => dest !== null);
 }

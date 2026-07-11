@@ -1,14 +1,11 @@
 import {
   countSpots,
   createDatabase,
-  createUser,
   type Database,
   deleteSpot,
-  deleteUserById,
   getAdminUserByEmail,
   getCouponsBySpotId,
   getSpotById,
-  getUserByEmail,
   hashPassword,
   listSpots,
   type SpotRow,
@@ -34,7 +31,6 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { normalizeApiPath, registerApiMirrorRoutes } from "./apiPrefix.js";
 import { extractBearerToken, isAdminApiPath, issueAdminToken, verifyAdminToken } from "./auth.js";
 import { registerCors } from "./cors.js";
-import { getNextPair } from "./diagnosis.js";
 import { embedText, formatEmbeddingError, requireSpotEmbedding } from "./embedding.js";
 import { patchSpotInElasticsearch, upsertSpotInElasticsearch } from "./esSync.js";
 import { fetchWithTimeout } from "./fetchWithTimeout.js";
@@ -55,7 +51,6 @@ import {
 const PUBLIC_SPOT_PREFECTURE = "長野県";
 const PUBLIC_SPOT_AREA = "小諸市";
 const AGENT_REQUEST_TIMEOUT_MS = 240_000;
-const AGENT_IMAGE_TIMEOUT_MS = 15_000;
 
 type DestinationFilter = { area: string; prefecture: string };
 
@@ -88,20 +83,14 @@ import {
   listPublicSpotsSchema,
   listSpotsSchema,
   loginSchema,
-  nextPairSchema,
   placeLookupSchema,
-  postRecommendationsSchema,
   postSpotImageSchema,
   searchCandidateSpotsSchema,
   semanticSearchSchema,
   travelTimesSchema,
   updateSpotSchema,
-  userDeleteSchema,
-  userLoginSchema,
-  userRegisterSchema,
   vectorSearchSchema,
 } from "./schemas.js";
-import { issueUserToken } from "./userAuth.js";
 
 /**
  * backend-api は検索ロジックを持たず、必ず search-core を経由して Elasticsearch を扱う。
@@ -375,66 +364,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
           municipalityName: user.municipalityName ?? undefined,
         },
       };
-    },
-  );
-
-  // ---- 会員登録（user-web） ------------------------------------------------
-  app.post<{ Body: { name: string; email: string; password: string } }>(
-    "/users/register",
-    { schema: userRegisterSchema },
-    async (req, reply) => {
-      const name = req.body.name.trim();
-      const email = req.body.email.trim().toLowerCase();
-
-      const existing = await getUserByEmail(db, email);
-      if (existing) {
-        return reply.code(409).send({ error: "このメールアドレスは既に登録されています" });
-      }
-
-      const passwordHash = await hashPassword(req.body.password);
-      const user = await createUser(db, { name, email, passwordHash });
-      const token = issueUserToken({ id: user.id, name: user.name, email: user.email });
-
-      return reply.code(201).send({
-        token,
-        user: { id: user.id, name: user.name, email: user.email },
-      });
-    },
-  );
-
-  // ---- 会員ログイン（user-web） --------------------------------------------
-  app.post<{ Body: { email: string; password: string } }>(
-    "/users/login",
-    { schema: userLoginSchema },
-    async (req, reply) => {
-      const email = req.body.email.trim().toLowerCase();
-      const user = await getUserByEmail(db, email);
-      if (!user || !(await verifyPassword(req.body.password, user.passwordHash))) {
-        return reply.code(401).send({ error: "メールアドレスまたはパスワードが正しくありません" });
-      }
-
-      const token = issueUserToken({ id: user.id, name: user.name, email: user.email });
-      return {
-        token,
-        user: { id: user.id, name: user.name, email: user.email },
-      };
-    },
-  );
-
-  // ---- 会員退会（user-web） ------------------------------------------------
-  // メール・パスワードで本人確認のうえアカウントを削除する。
-  app.post<{ Body: { email: string; password: string } }>(
-    "/users/delete",
-    { schema: userDeleteSchema },
-    async (req, reply) => {
-      const email = req.body.email.trim().toLowerCase();
-      const user = await getUserByEmail(db, email);
-      if (!user || !(await verifyPassword(req.body.password, user.passwordHash))) {
-        return reply.code(401).send({ error: "メールアドレスまたはパスワードが正しくありません" });
-      }
-
-      await deleteUserById(db, user.id);
-      return reply.code(200).send({ ok: true });
     },
   );
 
@@ -829,28 +758,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     },
   );
 
-  // ---- コールドスタート診断：動的ペア提示 API ----
-  app.post<{ Body: { likes: string[]; nopes: string[] } }>(
-    "/v1/diagnosis/next-pair",
-    { schema: nextPairSchema },
-    async (req) => {
-      return getNextPair(req.body);
-    },
-  );
-
-  // ---- v1 Reference & Mock APIs (B5 / B7) ---------------------------------
-  app.get("/v1/meta/preference-tags", async (_req, _reply) => {
-    return {
-      tags: [
-        { id: "sakagura", label: "酒蔵" },
-        { id: "jinja", label: "神社" },
-        { id: "cafe", label: "カフェ" },
-        { id: "shizen", label: "自然" },
-        { id: "isan", label: "遺産" },
-      ],
-    };
-  });
-
   app.get<{
     Querystring: {
       q?: string;
@@ -933,39 +840,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       }));
 
       return { coupons };
-    },
-  );
-
-  app.post<{ Body: { transportMode: string } }>(
-    "/v1/recommendations",
-    { schema: postRecommendationsSchema },
-    async (req) => {
-      const body = req.body;
-      const mockSpotId = "spot-kiyomizu";
-      return {
-        recommendations: [
-          {
-            spot: {
-              id: mockSpotId,
-              name: "清水寺",
-              category: "isan",
-              location: { lat: 34.9948, lng: 135.785 },
-              address: "京都府京都市東山区清水1丁目294",
-              estimatedStayMinutes: 90,
-            },
-            travel: {
-              mode: body.transportMode,
-              travelMinutes: 15,
-              distanceMeters: 5000,
-            },
-            fitsInTime: true,
-            reason:
-              "歴史ある寺院で、静かな自然を楽しみたいというご希望にぴったりです。現在地から15分ほどで到着し、空き時間内で十分に楽しめます。",
-            matchScore: 0.92,
-          },
-        ],
-        agentMessage: "ご希望に合わせて、歴史と自然を感じられるスポットを見つけました。",
-      };
     },
   );
 
@@ -1150,30 +1024,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       return reply.code(res.status).send(data);
     }
     return data;
-  });
-
-  // エージェントプロキシ：画像SVG配信（DB カテゴリをクエリで渡す）
-  app.get("/img/:id", async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const dbSpot = await getSpotById(db, id);
-    const category = dbSpot?.category?.[0] ? toAgentCatalogSpot(dbSpot).category : undefined;
-    const url = category
-      ? `${agentApiUrl}/img/${encodeURIComponent(id)}?category=${encodeURIComponent(category)}`
-      : `${agentApiUrl}/img/${encodeURIComponent(id)}`;
-    let res: Response;
-    try {
-      res = await fetchWithTimeout(url, {}, AGENT_IMAGE_TIMEOUT_MS);
-    } catch (error) {
-      req.log.error({ err: error, id, agentApiUrl }, "img: agent への接続に失敗しました");
-      return reply.code(503).send({ error: "画像サービスに接続できません。" });
-    }
-    if (!res.ok) {
-      return reply.code(res.status).send();
-    }
-    const buffer = await res.arrayBuffer();
-    reply.header("content-type", "image/svg+xml; charset=utf-8");
-    reply.header("cache-control", "public, max-age=86400");
-    return reply.send(Buffer.from(buffer));
   });
 
   // ---- 共通エラーハンドラ --------------------------------------------------

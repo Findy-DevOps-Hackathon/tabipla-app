@@ -12,20 +12,10 @@ import {
 import { type DescribeMode, describeAgent, describeSpot } from "./agents/describe.js";
 import { askIntroduce } from "./agents/introduce.js";
 import { personalizedPlan } from "./agents/personalized.js";
-import { recommendAgent } from "./agents/recommend.js";
-import { ask } from "./agents/run.js";
 import { generateSpotImage } from "./agents/spotImage.js";
 import type { Spot } from "./contracts.js";
-import { KOMORO_SPOTS, SPOT_IMAGES } from "./fixtures/spots.js";
-import { sceneSvg } from "./sceneSvg.js";
-import { toolCallStorage } from "./tools/tracker.js";
-import { pageHtml, swipePageHtml } from "./ui.js";
 
 const app = new Hono();
-
-app.use("*", async (_c, next) => {
-  return toolCallStorage.run({ count: 0 }, next);
-});
 
 /** Firebase Hosting /agent/** プロキシ: プレフィックスを除去して既存ルートに合わせる。 */
 app.use("*", async (c, next) => {
@@ -51,34 +41,8 @@ app.use("/v1/collect-spots", requireAdminAuth);
 app.use("/v1/describe-spot", requireAdminAuth);
 app.use("/v1/generate-spot-image", requireAdminAuth);
 
-// スワイプUI(主役)。開発用パネルは /dev。
-app.get("/", (c) => c.html(swipePageHtml));
-app.get("/dev", (c) => c.html(pageHtml));
-
+app.get("/", (c) => c.json({ service: "tabipla-agent", ok: true }));
 app.get("/healthz", (c) => c.json({ ok: true }));
-
-// カード用の生成SVG風景（デモ用。後で実写真URLに差し替え可）
-app.get("/img/:id", (c) => {
-  const id = c.req.param("id");
-  const queryCategory = c.req.query("category");
-  const spot = KOMORO_SPOTS.find((x) => x.id === id);
-  const category = queryCategory || spot?.category || "nature";
-  const seed = id.split("").reduce((a, ch) => a + ch.charCodeAt(0), 0);
-  return c.body(sceneSvg(category, seed), 200, {
-    "content-type": "image/svg+xml; charset=utf-8",
-    "cache-control": "public, max-age=86400",
-  });
-});
-
-// スワイプ用カタログ（画像込み）。本番はDB/検索から。
-app.get("/v1/spots", (c) =>
-  c.json({
-    spots: KOMORO_SPOTS.map((s) => ({
-      ...s,
-      image: SPOT_IMAGES[s.id] ?? "",
-    })),
-  }),
-);
 
 const USER_BUSY_MESSAGE = "ただいま混み合っています。1分ほど待ってから再度お試しください。";
 const USER_GENERIC_ERROR_MESSAGE =
@@ -93,16 +57,6 @@ function friendly(e: unknown): string {
   }
   return USER_GENERIC_ERROR_MESSAGE;
 }
-
-// A5: 推薦
-app.post("/v1/recommendations", async (c) => {
-  const { request } = await c.req.json<{ request: string }>();
-  try {
-    return c.json({ result: await ask(recommendAgent, request) });
-  } catch (e) {
-    return c.json({ result: friendly(e) });
-  }
-});
 
 // パーソナライズ: スワイプ→好み学習→エージェント間のディベートを経てプラン提案
 app.post("/v1/personalized/plan", async (c) => {
@@ -125,9 +79,11 @@ app.post("/v1/personalized/plan", async (c) => {
     limit?: number;
     planKey?: string;
   }>();
+  if (!catalog || catalog.length === 0) {
+    return c.json({ error: "catalog は必須です" }, 400);
+  }
   try {
-    const spotCatalog = catalog ?? KOMORO_SPOTS;
-    const res = await personalizedPlan({ likes, nopes, likeWeights }, travelMemory, spotCatalog, {
+    const res = await personalizedPlan({ likes, nopes, likeWeights }, travelMemory, catalog, {
       page,
       limit,
       planKey,

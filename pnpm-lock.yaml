@@ -23,6 +23,9 @@ importers:
 
   apps/admin-web:
     dependencies:
+      '@tabipla/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       lucide-react:
         specifier: ^0.511.0
         version: 0.511.0(react@19.2.7)
@@ -69,6 +72,9 @@ importers:
 
   apps/user-web:
     dependencies:
+      '@tabipla/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       react:
         specifier: ^19.0.0
         version: 19.2.7
@@ -109,6 +115,9 @@ importers:
       '@google-cloud/storage':
         specifier: ^7.21.0
         version: 7.21.0(encoding@0.1.13)
+      '@tabipla/domain':
+        specifier: workspace:*
+        version: link:../domain
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -131,6 +140,12 @@ importers:
       tsx:
         specifier: ^4.19.0
         version: 4.22.4
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
+  packages/domain:
+    devDependencies:
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -168,6 +183,9 @@ importers:
       '@tabipla/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@tabipla/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@tabipla/search-core':
         specifier: workspace:*
         version: link:../../packages/search-core
@@ -199,6 +217,9 @@ importers:
       '@tabipla/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@tabipla/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@tabipla/maps-core':
         specifier: workspace:*
         version: link:../../packages/maps-core

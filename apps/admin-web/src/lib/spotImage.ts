@@ -1,7 +1,7 @@
+import { SPOT_IMAGE_PLACEHOLDER } from "@tabipla/domain";
 import { API_BASE } from "../config.ts";
 
-/** 画像未設定時の中立プレースホルダー（実在風景の代用にしない）。 */
-export const SPOT_IMAGE_PLACEHOLDER = "/spots/placeholder.svg";
+export { SPOT_IMAGE_PLACEHOLDER };
 
 /** 管理画面・一覧で表示するスポット画像 URL。 */
 export function resolveSpotImageSrc(spot: { id: string; imageUrl?: string }): string | null {

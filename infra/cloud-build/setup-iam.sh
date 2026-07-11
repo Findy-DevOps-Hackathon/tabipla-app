@@ -49,7 +49,6 @@ echo "Granting Secret Manager access..."
 SECRETS=(
   tabipla-database-url
   tabipla-admin-jwt-secret
-  tabipla-user-jwt-secret
   tabipla-gemini-api-key
   tabipla-google-maps-api-key
   tabipla-es-api-key

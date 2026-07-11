@@ -47,7 +47,6 @@ require_secret DATABASE_URL tabipla-database-url
 require_secret ADMIN_JWT_SECRET tabipla-admin-jwt-secret
 
 for pair in \
-  "USER_JWT_SECRET=tabipla-user-jwt-secret" \
   "GEMINI_API_KEY=tabipla-gemini-api-key" \
   "GOOGLE_MAPS_API_KEY=tabipla-google-maps-api-key" \
   "ES_API_KEY=tabipla-es-api-key" \
