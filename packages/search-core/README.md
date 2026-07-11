@@ -3,7 +3,7 @@
 Elasticsearch を用いた検索ロジックを集約する共通ライブラリです。
 
 検索処理を特定のアプリに依存させず、このパッケージに集約することで、
-`backend-api` / `agent-api` など複数の利用者が同じ検索基盤を共有できるようにします。
+`backend-api` / `agent` など複数の利用者が同じ検索基盤を共有できるようにします。
 
 > **重要:** `apps/*`（管理画面・ユーザー画面）や AI エージェントは Elasticsearch に
 > 直接アクセスしません。必ず API 層を経由して本パッケージを利用してください。
@@ -27,13 +27,16 @@ Elasticsearch を用いた検索ロジックを集約する共通ライブラリ
 | `id` | string | yes | 一意なID（ES の _id） |
 | `name` | string | yes | スポット名（全文検索の主対象） |
 | `description` | string | yes | 説明・本文 |
-| `category` | string | no | カテゴリ（観光 / グルメ / 自然 / 歴史 等） |
+| `category` | string \| string[] | no | カテゴリ（最大3件） |
 | `area` | string | no | エリア・地域名（例: 京都市） |
 | `prefecture` | string | no | 都道府県 |
 | `address` | string | no | 住所 |
-| `tags` | string[] | no | タグ |
+| `highlights` | string[] | no | おすすめポイント |
+| `imageUrl` | string | no | スポット画像 URL |
 | `location` | `{ lat, lon }` | no | 緯度経度（geo_point） |
-| `embedding` | number[] | no | ベクトル（生成は責務外） |
+| `embedding` | number[] | no | ベクトル（生成は search-core の責務外） |
+| `clusterId` | number | no | クラスタリング ID |
+| `sensoryScores` | object | no | 9次元の感性・知名度スコア |
 | `createdAt` / `updatedAt` | string | no | ISO 8601 日時 |
 
 ---
@@ -135,10 +138,10 @@ await indexDocument(
     id: "spot-1",
     name: "清水寺",
     description: "京都を代表する世界遺産の寺院。",
-    category: "観光",
+    category: ["観光", "歴史"],
     area: "京都市",
     prefecture: "京都府",
-    tags: ["寺", "世界遺産"],
+    highlights: ["紅葉の名所", "世界遺産"],
     location: { lat: 34.9948, lon: 135.785 },
     createdAt: new Date().toISOString(),
   },
@@ -181,7 +184,7 @@ await deleteDocument(client, "spot-1", { refresh: true });
 | Mapping (`dense_vector`) | **初期実装済み**（`ES_VECTOR_DIMS` で次元数を管理） |
 | `vectorSearch` (kNN) | **初期実装済み**（埋め込みベクトルは呼び出し元が渡す） |
 | `hybridSearch` | **初期実装済み**（キーワード + kNN のスコア加算による統合） |
-| Embedding 生成 | **未実装（対象外）** — 将来 `agent-api` 等で生成する |
+| Embedding 生成 | **本パッケージの責務外** — `backend-api` / `agent` が生成して渡す |
 | RAG パイプライン | **未実装（対象外）** |
 
 ### ベクトル検索の使い方（埋め込みは外部生成）
@@ -213,7 +216,8 @@ const results = await vectorSearch(client, {
 ## 注意事項 / 未実装範囲
 
 - 本パッケージは **検索ロジックのみ** を担います。認証・DB アクセス・UI は含みません。
-- **Embedding 生成** と **RAG パイプライン** は対象外です（将来対応）。
+- **Embedding 生成** は本パッケージの責務外です（`backend-api` の `embed-spots` 等で生成）。
+- **RAG パイプライン** は対象外です。
 - `infra/docker` の構成は **ローカル開発専用** です。本番用の認証・TLS・クラスタ設計は含みません。
 - `ensureIndex` は index が存在する場合に **mapping の差分適用や再作成を行いません**
   （破壊的変更を避けるため）。mapping を変更する場合は別途マイグレーションを設計してください。

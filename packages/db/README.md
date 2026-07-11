@@ -41,14 +41,18 @@ PostgreSQL (正本)  ──reindex──▶  Elasticsearch (検索用の写し)
 | カラム | 型 | 必須 | 説明 |
 |---|---|---|---|
 | `id` | text (PK) | yes | 一意なID（未指定時は UUID 採番。ES の _id と一致させる） |
+| `municipality_id` | text (FK) | no | 自治体 ID |
 | `name` | text | yes | スポット名 |
 | `description` | text | yes | 説明・本文 |
-| `category` | text | no | カテゴリ |
+| `category` | text[] | no | カテゴリ（最大3件） |
 | `area` | text | no | エリア・地域名 |
 | `prefecture` | text | no | 都道府県 |
 | `address` | text | no | 住所 |
-| `tags` | text[] | no | タグ |
+| `highlights` | text[] | no | おすすめポイント |
+| `image_url` | text | no | 画像 URL（相対パスまたは GCS URL） |
 | `lat` / `lon` | double precision | no | 緯度経度（reindex 時に `{ lat, lon }` へ組み立て） |
+| `cluster_id` | integer | no | クラスタリング ID |
+| `sensory_scores` | jsonb | no | 9次元の感性・知名度スコア |
 | `created_at` / `updated_at` | timestamptz | yes | 作成・更新日時（既定 now()） |
 
 > `embedding`（ベクトル）は本テーブルでは保持しません。ベクトルは Elasticsearch 側で管理し、
@@ -147,7 +151,7 @@ await upsertSpot(db, {
   name: "清水寺",
   description: "京都の有名な寺院",
   prefecture: "京都府",
-  tags: ["寺"],
+  category: ["観光", "歴史"],
   lat: 34.9948,
   lon: 135.785,
 });
