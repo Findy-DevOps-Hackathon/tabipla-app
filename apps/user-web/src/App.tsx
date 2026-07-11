@@ -93,21 +93,14 @@ const RECOMMENDATIONS_KEY = "tabipla-recommendations";
 const PLAN_MESSAGE_KEY = "tabipla-plan-message";
 const PLAN_PROFILE_SUMMARY_KEY = "tabipla-plan-profile-summary";
 const PLAN_TOTAL_KEY = "tabipla-plan-total";
-const QR_ENTRY_SESSION_KEY = "tabipla-qr-entry-url";
+
+/** Strict Mode の二重マウントでも同じ QR 初期値を返すためのモジュールキャッシュ。 */
+let cachedQrDestinationNames: string[] | null = null;
 
 function readInitialQrDestinationNames(): string[] {
-  const names = readQrDestinationNamesFromLocation();
-  if (names.length === 0) return [];
-
-  try {
-    const currentUrl = window.location.href;
-    if (sessionStorage.getItem(QR_ENTRY_SESSION_KEY) === currentUrl) return [];
-    sessionStorage.setItem(QR_ENTRY_SESSION_KEY, currentUrl);
-  } catch {
-    // sessionStorage 不可環境では QR の初期化を通常通り適用する。
-  }
-
-  return names;
+  if (cachedQrDestinationNames !== null) return cachedQrDestinationNames;
+  cachedQrDestinationNames = readQrDestinationNamesFromLocation();
+  return cachedQrDestinationNames;
 }
 
 /** 保存済みのおすすめ結果を読み出す（未保存・不正値なら空配列）。 */

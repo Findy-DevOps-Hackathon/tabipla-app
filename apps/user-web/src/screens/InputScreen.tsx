@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -66,6 +66,14 @@ export function InputScreen({
   const [collapsedPrefectures, setCollapsedPrefectures] = useState<Set<string>>(() =>
     buildInitialCollapsedPrefectures(preferredPrefecture),
   );
+
+  const appliedInitialRef = useRef(initialSelected.length > 0);
+
+  useEffect(() => {
+    if (!afterDiagnosis || appliedInitialRef.current || initialSelected.length === 0) return;
+    setSelected(initialSelected);
+    appliedInitialRef.current = true;
+  }, [afterDiagnosis, initialSelected]);
   const location = value.trim();
   const placeMatches = afterDiagnosis
     ? AVAILABLE_DESTINATIONS
