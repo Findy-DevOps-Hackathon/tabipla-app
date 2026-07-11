@@ -160,6 +160,8 @@ type ComparisonCardProps = {
   selected: boolean;
   rejected: boolean;
   wiggle: boolean;
+  /** 1回目の対戦のみ、操作ヒントの揺れを大きくする。 */
+  wiggleStrong?: boolean;
   onSelect: () => void;
 };
 
@@ -175,9 +177,19 @@ function ComparisonCard({
   selected,
   rejected,
   wiggle,
+  wiggleStrong = false,
   onSelect,
 }: ComparisonCardProps) {
   const showWiggle = wiggle && !selected && !rejected;
+  const wiggleClass = showWiggle
+    ? position === "top"
+      ? wiggleStrong
+        ? "animate-compare-hint-top-strong"
+        : "animate-compare-hint-top"
+      : wiggleStrong
+        ? "animate-compare-hint-bottom-strong"
+        : "animate-compare-hint-bottom"
+    : "";
 
   return (
     <button
@@ -197,7 +209,7 @@ function ComparisonCard({
       }}
       className={`relative flex w-full touch-manipulation flex-col overflow-hidden rounded-2xl bg-white text-left disabled:cursor-not-allowed ${
         position === "top" ? "origin-top" : "origin-bottom"
-      } ${showWiggle ? (position === "top" ? "animate-compare-hint-top" : "animate-compare-hint-bottom") : ""}`}
+      } ${wiggleClass}`}
     >
       <div className="relative h-[230px] w-full">
         <SpotImage
@@ -354,6 +366,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
 
   const progress = totalRounds > 0 ? (roundNumber / totalRounds) * 100 : 0;
   const canUndo = history.length > 0 && !locked;
+  const isFirstRound = roundNumber === 1;
 
   return (
     <div className="flex flex-1 flex-col justify-between">
@@ -414,6 +427,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
                 selected={pick?.winnerId === currentTop.id}
                 rejected={pick?.loserId === currentTop.id}
                 wiggle={hintActive && !locked}
+                wiggleStrong={isFirstRound}
                 onSelect={() => pickWinner(currentTop.id, currentBottom.id)}
               />
               <div className="flex items-center justify-center">
@@ -428,6 +442,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
                 selected={pick?.winnerId === currentBottom.id}
                 rejected={pick?.loserId === currentBottom.id}
                 wiggle={hintActive && !locked}
+                wiggleStrong={isFirstRound}
                 onSelect={() => pickWinner(currentBottom.id, currentTop.id)}
               />
             </div>
