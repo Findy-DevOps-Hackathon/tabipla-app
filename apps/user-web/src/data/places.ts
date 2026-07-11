@@ -115,7 +115,6 @@ function getRegionalMunicipalityNames(prefecture: string): readonly string[] {
 
 export function groupDestinationsByPrefecture(
   destinations: Place[] = AVAILABLE_DESTINATIONS,
-  preferredPrefecture?: string | null,
 ): DestinationPrefectureGroup[] {
   const groups = new Map<string, { regional: Place[]; direct: Place[] }>();
 
@@ -136,25 +135,18 @@ export function groupDestinationsByPrefecture(
     groups.set(prefecture, bucket);
   }
 
-  return [...groups.entries()]
-    .map(([prefecture, { regional, direct }]) => ({
-      prefecture,
-      cities: direct,
-      subregions: (PREFECTURE_SUBREGIONS[prefecture] ?? [])
-        .map((subregion) => ({
-          name: subregion.name,
-          cities: regional.filter((place) =>
-            (subregion.municipalities as readonly string[]).includes(place.name),
-          ),
-        }))
-        .filter((subregion) => subregion.cities.length > 0),
-    }))
-    .sort((a, b) => {
-      if (!preferredPrefecture) return 0;
-      if (a.prefecture === preferredPrefecture) return -1;
-      if (b.prefecture === preferredPrefecture) return 1;
-      return 0;
-    });
+  return [...groups.entries()].map(([prefecture, { regional, direct }]) => ({
+    prefecture,
+    cities: direct,
+    subregions: (PREFECTURE_SUBREGIONS[prefecture] ?? [])
+      .map((subregion) => ({
+        name: subregion.name,
+        cities: regional.filter((place) =>
+          (subregion.municipalities as readonly string[]).includes(place.name),
+        ),
+      }))
+      .filter((subregion) => subregion.cities.length > 0),
+  }));
 }
 
 /** 市区町村名から旅先（area + prefecture）を解決する。 */
