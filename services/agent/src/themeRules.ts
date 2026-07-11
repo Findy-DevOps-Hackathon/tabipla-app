@@ -98,8 +98,3 @@ export function extractThemesFromText(
   }
   return [...themes];
 }
-
-/** @deprecated extractThemesFromText を使用 */
-export function extractThemesFromHighlight(text: string, category?: string): string[] {
-  return extractThemesFromText(text, category);
-}

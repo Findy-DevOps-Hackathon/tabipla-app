@@ -1,29 +1,19 @@
 import { API_BASE } from "./config.ts";
 import {
-  decodeDestinationsQuery,
   encodeDestinationsQuery,
   getCurrentDestinations,
   isDestinationSpot,
   type TripDestination,
 } from "./lib/destination.ts";
 import { isDisplayableDocument } from "./lib/spotCompleteness.ts";
-import type { SearchMode, SearchResponse, SpotDocument } from "./types.ts";
+import type { SpotDocument } from "./types.ts";
 
 /**
- * backend-api への検索リクエストを担う薄いクライアント。
+ * backend-api への HTTP クライアント。
  *
  * - 開発時は Vite の dev server が `/api` を backend-api へプロキシする（vite.config.ts）。
  * - 本番: 未設定のまま `/api`（Firebase Hosting が `/api/**` を Cloud Run へ rewrite）
- * - フロントは Elasticsearch / search-core に直接触れず、必ずこの HTTP 経由で検索する。
  */
-
-export type SearchParams = {
-  query: string;
-  mode?: SearchMode;
-  size?: number;
-  from?: number;
-  signal?: AbortSignal;
-};
 
 /** backend-api がエラー時に返す JSON 形（{ error, ... }）。 */
 type ApiErrorBody = {
@@ -32,44 +22,7 @@ type ApiErrorBody = {
 
 async function parseApiError(res: Response): Promise<never> {
   const body = (await res.json().catch(() => null)) as ApiErrorBody | null;
-  throw new Error(body?.error ?? `検索に失敗しました（HTTP ${res.status}）。`);
-}
-
-export async function searchSpots(params: SearchParams): Promise<SearchResponse> {
-  const mode = params.mode ?? "hybrid";
-
-  if (mode === "keyword") {
-    const search = new URLSearchParams();
-    search.set("q", params.query);
-    if (params.size !== undefined) search.set("size", String(params.size));
-    if (params.from !== undefined) search.set("from", String(params.from));
-
-    const res = await fetch(`${API_BASE}/search?${search.toString()}`, {
-      headers: { accept: "application/json" },
-      signal: params.signal,
-    });
-
-    if (!res.ok) await parseApiError(res);
-    return (await res.json()) as SearchResponse;
-  }
-
-  const semanticMode = mode === "vector" ? "vector" : "hybrid";
-  const res = await fetch(`${API_BASE}/search/semantic`, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      query: params.query,
-      mode: semanticMode,
-      size: params.size ?? 30,
-    }),
-    signal: params.signal,
-  });
-
-  if (!res.ok) await parseApiError(res);
-  return (await res.json()) as SearchResponse;
+  throw new Error(body?.error ?? `リクエストに失敗しました（HTTP ${res.status}）。`);
 }
 
 export type FetchSpotsParams = {
@@ -142,5 +95,3 @@ export async function fetchSpotById(id: string, signal?: AbortSignal): Promise<S
   }
   return data.spot;
 }
-
-export { decodeDestinationsQuery, encodeDestinationsQuery };

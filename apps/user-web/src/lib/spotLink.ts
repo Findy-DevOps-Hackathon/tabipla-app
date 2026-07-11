@@ -1,6 +1,3 @@
-import type { Recommendation } from "../data/spots.ts";
-import { isDestinationSpot } from "./destination.ts";
-
 const SPOT_PARAM = "spot";
 
 /** 共有・ディープリンク用 URL（例: https://example.com/?spot=s1） */
@@ -29,17 +26,4 @@ export function setSpotIdInLocation(spotId: string | null): void {
     url.searchParams.delete(SPOT_PARAM);
   }
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
-}
-
-/** おすすめ結果または探索用マスタからスポットを ID で検索する。 */
-export function findRecommendationById(
-  id: string,
-  recommendations: Recommendation[],
-  exploreSpots: Recommendation[] = [],
-): Recommendation | null {
-  return (
-    recommendations.find((r) => r.id === id && isDestinationSpot(r)) ??
-    exploreSpots.find((r) => r.id === id && isDestinationSpot(r)) ??
-    null
-  );
 }

@@ -1,15 +1,7 @@
 import type { SpotRow } from "@tabipla/db";
+import { toAgentCategory } from "@tabipla/domain";
 
-/** agent の Spot.category（nature / gourmet / history）へ変換する。 */
-export function toAgentCategory(adminCategory: string): string {
-  if (adminCategory === "自然") return "nature";
-  if (adminCategory === "食") return "gourmet";
-  if (adminCategory === "歴史・文化") return "history";
-  if (/グルメ|食/.test(adminCategory)) return "gourmet";
-  if (/自然|高原|絶景/.test(adminCategory)) return "nature";
-  if (/歴史|文化|遺産|神社|城/.test(adminCategory)) return "history";
-  return "history";
-}
+export { toAgentCategory };
 
 /** PostgreSQL の行を agent personalized 用カタログへ変換する。 */
 export function toAgentCatalogSpot(row: SpotRow) {

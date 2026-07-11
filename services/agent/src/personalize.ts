@@ -222,7 +222,7 @@ export function cosineSimilarity(normalizedQuery: number[], vec: number[]): numb
 }
 
 /** おすすめポイントの長文から、短い体験テーマ語を抽出する。 */
-export { extractThemesFromHighlight, extractThemesFromText } from "./themeRules.js";
+export { extractThemesFromText } from "./themeRules.js";
 
 export interface Swipes {
   likes: string[];

@@ -1,18 +1,10 @@
 import { GOOGLE_SEARCH, LlmAgent } from "@google/adk";
+import { MAX_COLLECT_TARGET_COUNT } from "@tabipla/domain";
 import { z } from "zod";
 import { SPOT_CATEGORIES } from "../categories.js";
 import { CHAT_MODEL } from "../modelConfig.js";
 
-// Gemini API の制約:
-//   - outputSchema(JSON強制モード)はツールと併用できない
-//   - 組み込み googleSearch とカスタム関数ツールの混在も拒否されることがある
-// そのためツールは GOOGLE_SEARCH のみ・JSON出力はプロンプト指示 + zodバリデーションで担保する。
-
-// モデルは name/description 以外のフィールドを取りこぼすことがある（特に件数が多いと後半で
-// sources 等が欠落しやすい）。欠落で収集全体を失敗させないよう、非必須項目には
-// デフォルトを与える。必須は name/description のみ。
-/** 1回の AI 収集で要求できる最大件数。 */
-export const MAX_COLLECT_TARGET_COUNT = 30;
+export { MAX_COLLECT_TARGET_COUNT };
 
 const DESCRIPTION_MAX = 200;
 const HIGHLIGHT_MAX = 30;

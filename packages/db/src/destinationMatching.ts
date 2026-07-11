@@ -1,43 +1,26 @@
-/** 能登半島アカウントで登録されたスポットの umbrella エリア名（レガシー）。 */
-export const NOTO_UMBRELLA_AREA = "能登半島";
+import {
+  type DestinationFilter,
+  extractNotoAreaFromAddress,
+  inferNotoAreaFromName,
+  isIncompleteNotoSpot,
+  isNotoMunicipality,
+  NOTO_MUNICIPALITY_AREAS,
+  NOTO_UMBRELLA_AREA,
+  spotMatchesDestinations,
+} from "@tabipla/domain";
 
-/** user-web / admin-web が選択可能な能登半島の市区町村。 */
-export const NOTO_MUNICIPALITY_AREAS = [
-  "七尾市",
-  "輪島市",
-  "珠洲市",
-  "羽咋市",
-  "志賀町",
-  "宝達志水町",
-  "中能登町",
-  "穴水町",
-  "能登町",
-] as const;
-
-export type DestinationFilter = {
-  area: string;
-  prefecture: string;
+export {
+  type DestinationFilter,
+  extractNotoAreaFromAddress,
+  inferNotoAreaFromName,
+  isIncompleteNotoSpot,
+  isNotoMunicipality,
+  NOTO_MUNICIPALITY_AREAS,
+  NOTO_UMBRELLA_AREA,
+  spotMatchesDestinations,
 };
 
 const ISHIKAWA_PREFECTURE = "石川県";
-
-/** 石川県の能登市区町村かどうか。 */
-export function isNotoMunicipality(area: string, prefecture: string): boolean {
-  return (
-    prefecture === ISHIKAWA_PREFECTURE &&
-    (NOTO_MUNICIPALITY_AREAS as readonly string[]).includes(area)
-  );
-}
-
-/** 住所文字列から能登の市区町村名を探す。 */
-export function extractNotoAreaFromAddress(address: string): string {
-  const trimmed = address.trim();
-  if (!trimmed) return "";
-  for (const city of NOTO_MUNICIPALITY_AREAS) {
-    if (trimmed.includes(city)) return city;
-  }
-  return "";
-}
 
 /**
  * スポットの area を市区町村名へ正規化する。
@@ -85,38 +68,6 @@ export type DestinationMatchClause = {
   legacyPrefectureOnly?: boolean;
 };
 
-/** スポット名から能登の市区町村名を推定する（住所未入力データの補完用）。 */
-export function inferNotoAreaFromName(name: string): string | null {
-  let trimmed = name.trim();
-  if (!trimmed) return null;
-  try {
-    if (trimmed.includes("%")) trimmed = decodeURIComponent(trimmed);
-  } catch {
-    // decode 失敗時はそのまま
-  }
-
-  for (const city of NOTO_MUNICIPALITY_AREAS) {
-    if (trimmed.includes(city)) return city;
-    const stem = city.replace(/[市区町村]$/, "");
-    if (stem.length >= 2 && trimmed.includes(stem)) return city;
-  }
-
-  if (trimmed.includes("すず") || trimmed.includes("珠洲")) return "珠洲市";
-  if (trimmed.includes("のと") || trimmed.includes("能登")) return "能登町";
-
-  return null;
-}
-
-/** 石川県の能登エリア向けスポットで area が未設定または umbrella のもの。 */
-export function isIncompleteNotoSpot(spot: {
-  area?: string | null;
-  prefecture?: string | null;
-}): boolean {
-  if (spot.prefecture !== ISHIKAWA_PREFECTURE) return false;
-  const area = spot.area?.trim() ?? "";
-  return area === "" || area === NOTO_UMBRELLA_AREA;
-}
-
 /** listSpots 向け: 市ごとの OR 条件（レガシー umbrella は住所で絞る）。 */
 export function buildDestinationMatchClauses(
   destinations: DestinationFilter[],
@@ -157,45 +108,4 @@ export function buildDestinationMatchClauses(
   }
 
   return clauses;
-}
-
-/** スポットが選択中旅先に該当するか（市単位。レガシー umbrella は住所で判定）。 */
-export function spotMatchesDestinations(
-  spot: {
-    area: string | null;
-    prefecture: string | null;
-    address?: string | null;
-  },
-  destinations: DestinationFilter[],
-): boolean {
-  if (!spot.prefecture) return false;
-
-  const area = spot.area?.trim() ?? "";
-  const hasNotoDestination = destinations.some((dest) =>
-    isNotoMunicipality(dest.area, dest.prefecture),
-  );
-
-  if (
-    area &&
-    destinations.some((dest) => area === dest.area && spot.prefecture === dest.prefecture)
-  ) {
-    return true;
-  }
-
-  if (hasNotoDestination && isIncompleteNotoSpot(spot)) {
-    if (!area) return true;
-    if (area === NOTO_UMBRELLA_AREA && !spot.address?.trim()) return true;
-  }
-
-  if (
-    area === NOTO_UMBRELLA_AREA &&
-    spot.prefecture === ISHIKAWA_PREFECTURE &&
-    spot.address?.trim()
-  ) {
-    return destinations.some(
-      (dest) => isNotoMunicipality(dest.area, dest.prefecture) && spot.address?.includes(dest.area),
-    );
-  }
-
-  return false;
 }

@@ -55,7 +55,9 @@ export function displayCategoryFromAgent(category?: string): SpotCategory {
 }
 
 /** 画像未設定時の中立プレースホルダー（実在風景の代用にしない）。 */
-export const SPOT_IMAGE_PLACEHOLDER = "/spots/placeholder.svg";
+import { SPOT_IMAGE_PLACEHOLDER } from "@tabipla/domain";
+
+export { SPOT_IMAGE_PLACEHOLDER };
 
 /** スポット画像 URL（DB に画像があればそれを、なければ中立プレースホルダー）。 */
 export function spotImageUrl(doc: Pick<SpotDocument, "id" | "imageUrl">): string {
@@ -119,9 +121,6 @@ export function documentToRecommendation(
   return {
     ...swipe,
     category: displayCategory(doc),
-    reason: "",
-    match: 0,
-    memberOnly: false,
   };
 }
 
@@ -179,9 +178,6 @@ export function planItemToRecommendation(
     category: displayCategoryFromAgent(item.category),
     description: item.description ?? "",
     highlights: item.highlights ?? [],
-    reason: "",
-    match: Math.round((item.score ?? 0.8) * 100),
-    memberOnly: false,
     image:
       item.imageUrl != null && item.imageUrl !== ""
         ? spotImageUrl({ id: item.id, imageUrl: item.imageUrl })

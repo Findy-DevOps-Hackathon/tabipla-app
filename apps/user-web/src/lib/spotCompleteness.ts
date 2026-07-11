@@ -1,7 +1,6 @@
+import { SPOT_IMAGE_PLACEHOLDER } from "@tabipla/domain";
 import type { Recommendation } from "../data/spots.ts";
 import type { SpotDocument } from "../types.ts";
-
-const SPOT_IMAGE_PLACEHOLDER = "/spots/placeholder.svg";
 
 function normalizeCategories(value?: string | string[] | null): string[] {
   if (!value) return [];

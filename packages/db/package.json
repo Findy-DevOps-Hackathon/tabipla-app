@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^7.21.0",
+    "@tabipla/domain": "workspace:*",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.21.0"

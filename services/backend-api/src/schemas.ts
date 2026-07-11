@@ -361,35 +361,6 @@ export const loginSchema = {
   },
 } as const;
 
-/** 会員ログイン（user-web）。 */
-export const userLoginSchema = loginSchema;
-
-/** 会員退会（user-web）。メール・パスワードで本人確認してから削除する。 */
-export const userDeleteSchema = loginSchema;
-
-/** 会員登録（user-web）。
- *  - name: 前後空白を除いて1文字以上（空白のみは pattern で弾く）、50文字以内
- *  - email: メール形式、256文字以内
- *  - password: 8〜128文字、英字と数字を両方含む
- */
-export const userRegisterSchema = {
-  body: {
-    type: "object",
-    required: ["name", "email", "password"],
-    additionalProperties: false,
-    properties: {
-      name: { type: "string", minLength: 1, maxLength: 50, pattern: "\\S" },
-      email: { type: "string", format: "email", maxLength: 256 },
-      password: {
-        type: "string",
-        minLength: 8,
-        maxLength: 128,
-        pattern: "^(?=.*[A-Za-z])(?=.*\\d).+$",
-      },
-    },
-  },
-} as const;
-
 /** GET /v1/spots（ユーザー向け公開一覧） */
 export const listPublicSpotsSchema = {
   querystring: {
@@ -419,43 +390,6 @@ export const getSpotCouponsSchema = {
   params: idParams,
 } as const;
 
-/** 緯度経度 (lng キー版、contracts 定義準拠) */
-const locationLngSchema = {
-  type: "object",
-  required: ["lat", "lng"],
-  additionalProperties: false,
-  properties: {
-    lat: { type: "number", minimum: -90, maximum: 90 },
-    lng: { type: "number", minimum: -180, maximum: 180 },
-  },
-} as const;
-
-/** POST /v1/recommendations */
-export const postRecommendationsSchema = {
-  body: {
-    type: "object",
-    required: ["location", "availableMinutes", "transportMode", "preferences"],
-    additionalProperties: false,
-    properties: {
-      location: locationLngSchema,
-      availableMinutes: { type: "integer", minimum: 0 },
-      budgetYen: { type: "integer", minimum: 0 },
-      transportMode: { type: "string", enum: ["walk", "car", "transit"] },
-      preferences: {
-        type: "object",
-        required: ["tags"],
-        additionalProperties: false,
-        properties: {
-          tags: { type: "array", items: { type: "string" } },
-          freeText: { type: "string" },
-        },
-      },
-      excludeSpotIds: { type: "array", items: { type: "string" } },
-      limit: { type: "integer", minimum: 1 },
-    },
-  },
-} as const;
-
 const spotIdParams = {
   type: "object",
   required: ["spotId"],
@@ -474,25 +408,6 @@ export const postSpotImageSchema = {
     properties: {
       mimeType: { type: "string", enum: ["image/jpeg", "image/png", "image/webp"] },
       data: { type: "string", minLength: 1 },
-    },
-  },
-} as const;
-
-/** POST /v1/diagnosis/next-pair */
-export const nextPairSchema = {
-  body: {
-    type: "object",
-    required: ["likes", "nopes"],
-    additionalProperties: false,
-    properties: {
-      likes: {
-        type: "array",
-        items: { type: "string" },
-      },
-      nopes: {
-        type: "array",
-        items: { type: "string" },
-      },
     },
   },
 } as const;

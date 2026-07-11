@@ -76,7 +76,7 @@ export function initialCollectDraft(): CollectDraft {
   };
 }
 
-export function initialImportDraft(): ImportDraft {
+function initialImportDraft(): ImportDraft {
   return {
     step: 1,
     rows: [],
