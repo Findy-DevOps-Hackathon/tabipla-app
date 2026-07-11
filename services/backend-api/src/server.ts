@@ -43,6 +43,7 @@ import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./ma
 import { lookupPlaceByName } from "./places.js";
 import { type AskSpotPayload, buildAskFacts, buildAskFactsFromClient } from "./spotAskFacts.js";
 import { enrichRecommendation, toAgentCatalogSpot } from "./spotCatalog.js";
+import { isPublicDisplayableDocument, isPublicDisplayableRow } from "./spotCompleteness.js";
 import {
   deleteSpotImageFiles,
   readSpotImageFile,
@@ -879,10 +880,11 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       sort: req.query.sort,
       order: req.query.order,
     });
+    const displayableRows = rows.filter(isPublicDisplayableRow);
     return {
-      total,
-      count: rows.length,
-      spots: rows.map(toSpotDocument),
+      total: displayableRows.length,
+      count: displayableRows.length,
+      spots: displayableRows.map(toSpotDocument),
     };
   });
 
@@ -891,7 +893,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     { schema: getSpotByIdSchema },
     async (req, reply) => {
       const dbSpot = await getSpotById(db, req.params.id);
-      if (!dbSpot) {
+      if (!dbSpot || !isPublicDisplayableRow(dbSpot)) {
         return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
       }
 
@@ -992,12 +994,13 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
             },
           ];
     const { rows: dbRows } = await listSpots(db, { destinations, limit: 100 });
-    const catalog = dbRows.map(toAgentCatalogSpot);
-    const rowById = new Map(dbRows.map((row: SpotRow) => [row.id, row]));
-    const rowByName = new Map(dbRows.map((row: SpotRow) => [row.name, row]));
-    const allowedIds = new Set(dbRows.map((row: SpotRow) => row.id));
+    const displayableRows = dbRows.filter(isPublicDisplayableRow);
+    const catalog = displayableRows.map(toAgentCatalogSpot);
+    const rowById = new Map(displayableRows.map((row: SpotRow) => [row.id, row]));
+    const rowByName = new Map(displayableRows.map((row: SpotRow) => [row.name, row]));
+    const allowedIds = new Set(displayableRows.map((row: SpotRow) => row.id));
 
-    if (dbRows.length === 0) {
+    if (displayableRows.length === 0) {
       return {
         profileSummary: "まだ好みが少なめ（もう少し比較して選ぶと精度が上がります）",
         recommendations: [],
@@ -1049,7 +1052,25 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
           const row = rowById.get(id) ?? rowByName.get(name);
           return enrichRecommendation(rec, row);
         })
-        .filter((rec) => allowedIds.has(String(rec.id ?? "")));
+        .filter((rec) => allowedIds.has(String(rec.id ?? "")))
+        .filter((rec) =>
+          isPublicDisplayableDocument({
+            id: String(rec.id ?? ""),
+            name: String(rec.name ?? ""),
+            description: String(rec.description ?? ""),
+            address: typeof rec.address === "string" ? rec.address : undefined,
+            imageUrl: typeof rec.imageUrl === "string" ? rec.imageUrl : undefined,
+            category:
+              typeof rec.category === "string"
+                ? rec.category
+                : Array.isArray(rec.category)
+                  ? rec.category.map(String)
+                  : undefined,
+            highlights: Array.isArray(rec.highlights)
+              ? rec.highlights.map((item) => String(item))
+              : undefined,
+          }),
+        );
 
       req.log.info(
         {

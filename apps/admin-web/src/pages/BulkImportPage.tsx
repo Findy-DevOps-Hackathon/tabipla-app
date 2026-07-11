@@ -36,32 +36,35 @@ function parseCsv(text: string): ParsedRow[] {
       name: name?.trim() ?? "",
       description: description?.trim() ?? "",
     };
-    if (!row.name || !row.description) {
-      row.error = "name / description は必須です";
+    const categoryValue = category?.trim() ?? "";
+    const addressValue = address?.trim() ?? "";
+    const highlightsValue = highlights?.trim() ?? "";
+    const missing: string[] = [];
+    if (!row.name) missing.push("name");
+    if (!categoryValue) missing.push("category");
+    if (!addressValue) missing.push("address");
+    if (!row.description) missing.push("description");
+    if (!highlightsValue) missing.push("highlights");
+    if (missing.length > 0) {
+      row.error = `${missing.join(" / ")} が未入力です`;
       return row;
     }
-    if (highlights?.trim()) {
-      row.highlights = parseHighlights(highlights);
+    row.highlights = parseHighlights(highlightsValue);
+    const cats = parseCategories(categoryValue);
+    const invalid = cats.filter((c) => !isSpotCategory(c));
+    if (invalid.length > 0) {
+      row.error = `不正なカテゴリ: ${invalid.join(", ")}（${SPOT_CATEGORIES.join(" / ")} のみ）`;
+      return row;
     }
-    if (category?.trim()) {
-      const cats = parseCategories(category);
-      const invalid = cats.filter((c) => !isSpotCategory(c));
-      if (invalid.length > 0) {
-        row.error = `不正なカテゴリ: ${invalid.join(", ")}（${SPOT_CATEGORIES.join(" / ")} のみ）`;
-        return row;
-      }
-      row.category = cats;
-    }
+    row.category = cats;
     const fixedPrefecture = getFixedPrefecture();
     if (prefecture?.trim() && prefecture.trim() !== fixedPrefecture) {
       row.error = `都道府県は ${fixedPrefecture} のみ取り込み可能です`;
       return row;
     }
     row.prefecture = fixedPrefecture;
-    if (address?.trim()) {
-      row.address = address.trim();
-      row.area = extractAreaFromAddress(row.address, fixedPrefecture);
-    }
+    row.address = addressValue;
+    row.area = extractAreaFromAddress(row.address, fixedPrefecture);
     return row;
   });
 }

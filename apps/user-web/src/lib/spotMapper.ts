@@ -7,6 +7,7 @@ import {
   isDestinationSpot,
   type TripDestination,
 } from "./destination.ts";
+import { isDisplayableSpot } from "./spotCompleteness.ts";
 
 /** 管理画面カテゴリ → user-web 表示用バッジカテゴリ。 */
 const ADMIN_TO_DISPLAY: Record<string, SpotCategory> = {
@@ -118,6 +119,19 @@ export function planItemToRecommendation(
     ) {
       return null;
     }
+  }
+
+  if (
+    !isDisplayableSpot({
+      name: item.name,
+      description: item.description,
+      address: item.address,
+      imageUrl: item.imageUrl ?? item.image,
+      category: item.category,
+      highlights: item.highlights,
+    })
+  ) {
+    return null;
   }
 
   const dest =

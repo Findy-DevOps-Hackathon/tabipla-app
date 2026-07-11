@@ -367,13 +367,17 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
 
   const validate = (): boolean => {
     const next: Partial<Record<keyof FormState, string>> = {};
-    if (!form.name.trim()) next.name = "必須項目です";
-    if (!form.description.trim()) next.description = "必須項目です";
+    if (!form.name.trim()) next.name = "観光地名を入力してください";
+    if (!form.address.trim()) next.address = "住所を入力してください";
+    if (!form.description.trim()) next.description = "紹介文を入力してください";
     else if (form.description.length > MAX_DESCRIPTION_LENGTH) {
       next.description = `${MAX_DESCRIPTION_LENGTH}文字以内で入力してください`;
     }
-    if (isEdit && form.categories.length === 0) {
-      next.categories = "1件以上選択してください";
+    if (!parseHighlightsText(form.highlights).length) {
+      next.highlights = "おすすめポイントを入力してください";
+    }
+    if (form.categories.length === 0) {
+      next.categories = "カテゴリを1件以上選択してください";
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -527,6 +531,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 value={form.address}
                 onChange={setAddress}
                 placeholder="例: 国道沿い1丁目"
+                error={errors.address}
                 className="lg:col-span-2"
               />
               <SpotImageField
@@ -610,8 +615,13 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                     setHighlightsGenerateMiss(false);
                     setField("highlights", enforceHighlightsText(e.target.value));
                   }}
-                  className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30 bg-white ${
+                    errors.highlights ? "border-[#dc2626]" : "border-[#e2e8f0]"
+                  }`}
                 />
+                {errors.highlights && (
+                  <p className="mt-2 text-xs text-[#dc2626]">{errors.highlights}</p>
+                )}
               </div>
               <div className="lg:col-span-2">
                 <p className="mb-3 text-sm font-medium text-[#0f172a]">

@@ -29,6 +29,7 @@ import {
   isDestinationSpot,
   setCurrentDestinations,
 } from "./lib/destination.ts";
+import { isDisplayableRecommendation } from "./lib/spotCompleteness.ts";
 import {
   isDetailedDiagnosisComplete,
   isDiagnosisComplete,
@@ -115,7 +116,9 @@ function readStoredRecommendations(): Recommendation[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return (parsed as Recommendation[]).filter((rec) => isDestinationSpot(rec));
+    return (parsed as Recommendation[])
+      .filter((rec) => isDestinationSpot(rec))
+      .filter(isDisplayableRecommendation);
   } catch {
     return [];
   }
