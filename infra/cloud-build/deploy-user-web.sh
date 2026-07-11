@@ -7,7 +7,7 @@ FIREBASE_PROJECT="${TABIPLA_USER_FIREBASE_PROJECT:-tabipla-user-web}"
 
 echo "=== Deploy user-web → ${FIREBASE_PROJECT} ==="
 cd "$ROOT"
-pnpm --filter @tabipla/user-web build
+pnpm --filter @tabipla/user-web... build
 
 cd "$ROOT/apps/user-web"
 pnpm exec firebase deploy --only hosting --project "${FIREBASE_PROJECT}" --non-interactive
