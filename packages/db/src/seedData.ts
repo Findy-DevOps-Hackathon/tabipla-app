@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { NewCouponRow, NewSpotRow, NewUnchikuFactRow } from "./schema.js";
+import type { NewCouponRow, NewSpotRow } from "./schema.js";
 
 const srcDir = dirname(fileURLToPath(import.meta.url));
 
@@ -16,7 +16,6 @@ export type SeedManifest = {
     adminUsers: number;
     spots: number;
     coupons: number;
-    unchikuFacts: number;
     images: number;
   };
 };
@@ -34,7 +33,6 @@ export type SeedAdminUser = {
 
 export type SeedSpot = Omit<NewSpotRow, "createdAt" | "updatedAt">;
 export type SeedCoupon = NewCouponRow;
-export type SeedUnchikuFact = NewUnchikuFactRow;
 
 export type SeedBundle = {
   manifest: SeedManifest;
@@ -42,7 +40,6 @@ export type SeedBundle = {
   adminUsers: SeedAdminUser[];
   spots: SeedSpot[];
   coupons: SeedCoupon[];
-  unchikuFacts: SeedUnchikuFact[];
 };
 
 async function readJsonFile<T>(path: string): Promise<T> {
@@ -52,16 +49,15 @@ async function readJsonFile<T>(path: string): Promise<T> {
 
 /** `packages/db/seed-data/` からシード用 JSON を読み込む。 */
 export async function loadSeedBundle(): Promise<SeedBundle> {
-  const [manifest, municipalities, adminUsers, spots, coupons, unchikuFacts] = await Promise.all([
+  const [manifest, municipalities, adminUsers, spots, coupons] = await Promise.all([
     readJsonFile<SeedManifest>(join(SEED_DATA_DIR, "manifest.json")),
     readJsonFile<SeedMunicipality[]>(join(SEED_DATA_DIR, "municipalities.json")),
     readJsonFile<SeedAdminUser[]>(join(SEED_DATA_DIR, "admin-users.json")),
     readJsonFile<SeedSpot[]>(join(SEED_DATA_DIR, "spots.json")),
     readJsonFile<SeedCoupon[]>(join(SEED_DATA_DIR, "coupons.json")),
-    readJsonFile<SeedUnchikuFact[]>(join(SEED_DATA_DIR, "unchiku-facts.json")),
   ]);
 
-  return { manifest, municipalities, adminUsers, spots, coupons, unchikuFacts };
+  return { manifest, municipalities, adminUsers, spots, coupons };
 }
 
 /** `/uploads/spots/foo.webp` や GCS/CDN の `/spots/foo.webp` から seed-data 内のファイル名を得る。 */

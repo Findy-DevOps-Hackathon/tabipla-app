@@ -3,9 +3,9 @@
 ADKエージェント層。`@google/adk`（LlmAgent + FunctionTool + InMemoryRunner）で
 推薦 / 旅程 / パーソナライズ(## 構成
 
-- `src/agents/` … LlmAgent（recommend / unchiku / introduce / debate / rerank）＋ run(ask)
+- `src/agents/` … LlmAgent（recommend / introduce / debate / rerank）＋ run(ask)
   - `rerank.ts`: **`attendPlannerAgent`**（120点アテンドガイド）。ストーリーテラー、コンシェルジュ、ルートプランナーの3つの知性を協調させ、時間予算（short / half / 1day）に応じた一筆書き旅程と食事時間を考慮したタイムラインを構築。
-- `src/tools/` … FunctionTool（search/travel/unchiku）＋ `tracker.ts`（ループ監視） ＋ `dataSources.ts`（live データ層）
+- `src/tools/` … FunctionTool（search/travel）＋ `tracker.ts`（ループ監視） ＋ `dataSources.ts`（live データ層）
 - `src/personalize.ts` … スワイプ好み学習（決定的）
 - `src/agents/personalized.ts` … 嗜好ベクトル・要望ベクトルの算出と、タイムラインプランとサブおすすめの最終組み立て。
 - `src/fixtures/spots.ts` … `packages/db/seed-data/spots.json` から読み込むカタログ（モック用）

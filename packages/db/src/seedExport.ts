@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createDatabase } from "./client.js";
-import { adminUsers, coupons, municipalities, spots, unchikuFacts } from "./schema.js";
+import { adminUsers, coupons, municipalities, spots } from "./schema.js";
 import {
   resolveSpotUploadDir,
   SEED_DATA_DIR,
@@ -12,7 +12,6 @@ import {
   type SeedManifest,
   type SeedMunicipality,
   type SeedSpot,
-  type SeedUnchikuFact,
   seedImageFilename,
 } from "./seedData.js";
 
@@ -45,16 +44,6 @@ function stripCoupon(row: typeof coupons.$inferSelect): SeedCoupon {
   };
 }
 
-function stripUnchiku(row: typeof unchikuFacts.$inferSelect): SeedUnchikuFact {
-  return {
-    id: row.id,
-    spotId: row.spotId,
-    label: row.label,
-    text: row.text,
-    source: row.source,
-  };
-}
-
 async function writeJson(path: string, value: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
@@ -73,7 +62,6 @@ async function main(): Promise<void> {
     const adminUserRows = await db.select().from(adminUsers).orderBy(adminUsers.email);
     const spotRows = await db.select().from(spots).orderBy(spots.name);
     const couponRows = await db.select().from(coupons).orderBy(coupons.title);
-    const unchikuRows = await db.select().from(unchikuFacts).orderBy(unchikuFacts.label);
 
     const seedMunicipalities: SeedMunicipality[] = municipalityRows.map((row) => ({
       id: row.id,
@@ -86,7 +74,6 @@ async function main(): Promise<void> {
     }));
     const seedSpots = spotRows.map(stripSpot);
     const seedCoupons = couponRows.map(stripCoupon);
-    const seedUnchiku = unchikuRows.map(stripUnchiku);
 
     await mkdir(SEED_DATA_DIR, { recursive: true });
     await mkdir(SEED_IMAGES_DIR, { recursive: true });
@@ -120,7 +107,6 @@ async function main(): Promise<void> {
         adminUsers: seedAdminUsers.length,
         spots: seedSpots.length,
         coupons: seedCoupons.length,
-        unchikuFacts: seedUnchiku.length,
         images: imageCount,
       },
     };
@@ -131,7 +117,6 @@ async function main(): Promise<void> {
       adminUsers: seedAdminUsers,
       spots: seedSpots,
       coupons: seedCoupons,
-      unchikuFacts: seedUnchiku,
     };
 
     await Promise.all([
@@ -140,13 +125,12 @@ async function main(): Promise<void> {
       writeJson(join(SEED_DATA_DIR, "admin-users.json"), seedAdminUsers),
       writeJson(join(SEED_DATA_DIR, "spots.json"), seedSpots),
       writeJson(join(SEED_DATA_DIR, "coupons.json"), seedCoupons),
-      writeJson(join(SEED_DATA_DIR, "unchiku-facts.json"), seedUnchiku),
     ]);
 
     console.log(
       `[db] seed:export 完了: 自治体 ${manifest.counts.municipalities} 件、` +
         `管理ユーザー ${manifest.counts.adminUsers} 件、スポット ${manifest.counts.spots} 件、` +
-        `クーポン ${manifest.counts.coupons} 件、蘊蓄 ${manifest.counts.unchikuFacts} 件、` +
+        `クーポン ${manifest.counts.coupons} 件、` +
         `画像 ${manifest.counts.images} 件を ${SEED_DATA_DIR} に書き出しました。`,
     );
 

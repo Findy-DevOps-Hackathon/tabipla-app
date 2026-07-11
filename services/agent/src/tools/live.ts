@@ -1,29 +1,7 @@
 import { createElasticsearchClient, searchCandidateSpots } from "@tabipla/search-core";
 import { embedText } from "../agents/embedding.js";
-import type { GetUnchikuSourceFn, SearchFn } from "../contracts.js";
+import type { SearchFn } from "../contracts.js";
 import { mapSpotDocumentToAgentSpot } from "../fixtures/spots.js";
-import { fetchSpotFactsFromBackend } from "./spotFacts.js";
-
-/** 同一リクエスト内で backend から渡された facts をツール呼び出しでも返す。 */
-let pendingAskFacts: Map<string, string[]> | null = null;
-
-export function setPendingAskFacts(spotId: string, facts: string[]): void {
-  pendingAskFacts = new Map([[spotId, facts]]);
-}
-
-export function clearPendingAskFacts(): void {
-  pendingAskFacts = null;
-}
-
-export const getUnchikuRepo: GetUnchikuSourceFn = async ({ spotId }) => {
-  const cached = pendingAskFacts?.get(spotId);
-  if (cached?.length) {
-    return { spotId, facts: cached };
-  }
-
-  const facts = await fetchSpotFactsFromBackend(spotId);
-  return { spotId, facts };
-};
 
 const AGENT_TO_ES_CATEGORIES: Record<string, string[]> = {
   nature: ["自然", "レジャー・スポーツ"],

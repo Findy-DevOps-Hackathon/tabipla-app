@@ -19,7 +19,7 @@ export type SwipeSpot = {
   description: string;
   /** DB のおすすめポイント（最大3件） */
   highlights?: string[];
-  /** デモデータ用の蘊蓄（highlights がない場合のフォールバック） */
+  /** デモデータ用の補足テキスト（highlights がない場合のフォールバック） */
   trivia?: string;
   image: string;
 };
@@ -256,7 +256,7 @@ export const EXPLORE_SPOTS: Recommendation[] = [...SWIPE_SPOTS, ...SWIPE_SPOTS_R
   memberOnly: false,
 }));
 
-/** スポットIDから蘊蓄テキストを取得する。 */
+/** スポットIDから補足テキストを取得する。 */
 export function getSpotTrivia(id: string): string | undefined {
   return [...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE].find((sp) => sp.id === id)?.trivia;
 }

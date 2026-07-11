@@ -15,7 +15,6 @@ import { personalizedPlan } from "./agents/personalized.js";
 import { recommendAgent } from "./agents/recommend.js";
 import { ask } from "./agents/run.js";
 import { generateSpotImage } from "./agents/spotImage.js";
-import { story } from "./agents/unchiku.js";
 import type { Spot } from "./contracts.js";
 import { KOMORO_SPOTS, SPOT_IMAGES } from "./fixtures/spots.js";
 import { sceneSvg } from "./sceneSvg.js";
@@ -102,15 +101,6 @@ app.post("/v1/recommendations", async (c) => {
     return c.json({ result: await ask(recommendAgent, request) });
   } catch (e) {
     return c.json({ result: friendly(e) });
-  }
-});
-
-// A6: 蘊蓄
-app.post("/v1/spots/:id/story", async (c) => {
-  try {
-    return c.json({ story: await story(c.req.param("id")) });
-  } catch (e) {
-    return c.json({ story: friendly(e) });
   }
 });
 

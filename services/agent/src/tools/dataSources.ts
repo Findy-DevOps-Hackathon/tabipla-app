@@ -1,6 +1,3 @@
-import { clearPendingAskFacts, getUnchikuRepo, searchEs, setPendingAskFacts } from "./live.js";
-
-export { clearPendingAskFacts, setPendingAskFacts };
+import { searchEs } from "./live.js";
 
 export const search = searchEs;
-export const getUnchikuSource = getUnchikuRepo;

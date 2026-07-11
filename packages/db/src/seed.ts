@@ -3,7 +3,6 @@ import { hashPassword } from "./password.js";
 import { upsertAdminUser } from "./repository/adminUsers.js";
 import { upsertCoupon } from "./repository/coupons.js";
 import { upsertSpots } from "./repository/spots.js";
-import { upsertUnchikuFact } from "./repository/unchiku.js";
 import { municipalities } from "./schema.js";
 import { loadSeedBundle } from "./seedData.js";
 import { installSeedImages } from "./seedInstallImages.js";
@@ -48,15 +47,10 @@ async function main(): Promise<void> {
       await upsertCoupon(db, coupon);
     }
 
-    for (const unchiku of bundle.unchikuFacts) {
-      await upsertUnchikuFact(db, unchiku);
-    }
-
     const { counts } = bundle.manifest;
     console.log(
       `[db] seed 完了: 自治体 ${counts.municipalities} 件、管理ユーザー ${counts.adminUsers} 件、` +
-        `スポット ${rows.length} 件（画像 ${imageInstall.installed} 件/${imageInstall.target}）、クーポン ${counts.coupons} 件、` +
-        `蘊蓄 ${counts.unchikuFacts} 件を upsert しました。`,
+        `スポット ${rows.length} 件（画像 ${imageInstall.installed} 件/${imageInstall.target}）、クーポン ${counts.coupons} 件を upsert しました。`,
     );
     for (const adminUser of bundle.adminUsers) {
       const password = adminUser.email === "admin@example.com" ? komoroPassword : defaultPassword;

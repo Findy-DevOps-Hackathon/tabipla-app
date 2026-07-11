@@ -16,10 +16,3 @@ export interface SearchInput {
   k?: number; // 取得件数（既定8）
 }
 export type SearchFn = (i: SearchInput) => Promise<Spot[]>;
-
-// ② 蘊蓄ソース取得（本データは B2 リポジトリ）
-export interface UnchikuSource {
-  spotId: string;
-  facts: string[];
-}
-export type GetUnchikuSourceFn = (i: { spotId: string }) => Promise<UnchikuSource>;

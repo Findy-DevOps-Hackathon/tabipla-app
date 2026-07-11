@@ -8,7 +8,6 @@ import {
   getAdminUserByEmail,
   getCouponsBySpotId,
   getSpotById,
-  getUnchikuFactsBySpotId,
   getUserByEmail,
   hashPassword,
   listSpots,
@@ -92,7 +91,6 @@ import {
   placeLookupSchema,
   postRecommendationsSchema,
   postSpotImageSchema,
-  postSpotStorySchema,
   searchCandidateSpotsSchema,
   semanticSearchSchema,
   travelTimesSchema,
@@ -157,13 +155,6 @@ type SearchCandidateSpotsBody = {
   index?: string;
 };
 type SensoryScores = NonNullable<SpotDocument["sensoryScores"]>;
-type SpotStoryBody = {
-  preferences: {
-    tags: string[];
-    freeText?: string;
-  };
-  tone?: string;
-};
 
 export type BuildServerOptions = {
   /** 既存の Elasticsearch クライアントを注入する場合に指定（テスト用途など）。 */
@@ -976,30 +967,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     },
   );
 
-  app.post<{ Params: { spotId: string }; Body: SpotStoryBody }>(
-    "/v1/spots/:spotId/story",
-    { schema: postSpotStorySchema },
-    async (req) => {
-      const spotId = req.params.spotId;
-      return {
-        spotId,
-        story:
-          "清水寺は、実は「釘を一本も使わずに」建てられていることで有名です。139本の大柱に支えられた「清水の舞台」は、懸造り（かけづくり）と呼ばれる伝統工法で組まれています。",
-        sourceFacts: [
-          {
-            label: "工法",
-            text: "釘を一本も使わない懸造り（かけづくり）で組まれた舞台",
-          },
-          {
-            label: "歴史",
-            text: "世界遺産に登録されている京都を代表する寺院",
-          },
-        ],
-        talkingPoints: ["釘を一本も使わない「懸造り」", "清水の舞台から見下ろす京都の絶景"],
-      };
-    },
-  );
-
   const agentApiUrl = process.env.AGENT_API_URL ?? "http://localhost:8080";
 
   // エージェントプロキシ：旅行プランの生成とディベート（DB カタログで enrich）
@@ -1118,8 +1085,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     let spotForAgent: AskSpotPayload;
 
     if (dbSpot) {
-      const unchikuRows = await getUnchikuFactsBySpotId(db, spotId);
-      facts = buildAskFacts(dbSpot, unchikuRows);
+      facts = buildAskFacts(dbSpot);
       spotForAgent = {
         name: dbSpot.name,
         description: dbSpot.description,

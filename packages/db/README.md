@@ -94,7 +94,7 @@ pnpm -C packages/db db:push
 pnpm -C packages/db seed
 ```
 
-自治体・管理ユーザー・スポット・クーポン・蘊蓄を冪等に upsert し、`seed-data/images/` の画像を `services/backend-api/data/uploads/spots/` へコピーします。`GCS_BUCKET` が設定されている場合は画像を GCS の `GCS_OBJECT_PREFIX`（既定 `spots`）へアップロードし、DB の `imageUrl` には公開 URL を保存します。
+自治体・管理ユーザー・スポット・クーポンを冪等に upsert し、`seed-data/images/` の画像を `services/backend-api/data/uploads/spots/` へコピーします。`GCS_BUCKET` が設定されている場合は画像を GCS の `GCS_OBJECT_PREFIX`（既定 `spots`）へアップロードし、DB の `imageUrl` には公開 URL を保存します。
 
 管理画面ログイン（パスワードは `ADMIN_SEED_PASSWORD`、未設定時 `test-admin-password`）:
 
@@ -110,7 +110,7 @@ DATABASE_URL=postgresql://tabipla:tabipla@localhost:5433/tabipla pnpm -C package
 pnpm -C packages/db seed
 ```
 
-`seed:export` は DB の全スポット・自治体・管理ユーザー（メールのみ）・クーポン・蘊蓄と、スポット画像ファイルを `seed-data/` へ書き出します。
+`seed:export` は DB の全スポット・自治体・管理ユーザー（メールのみ）・クーポンと、スポット画像ファイルを `seed-data/` へ書き出します。
 
 ---
 
