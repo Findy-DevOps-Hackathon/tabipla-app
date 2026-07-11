@@ -6,8 +6,8 @@ import { presentPlanError } from "../lib/planError.ts";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "../lib/ui.ts";
 
 type ProcessingScreenProps = {
-  /** 比較した件数（本文に表示）。 */
-  count: number;
+  /** 好み比較の回数（自由記述テキストは含めない）。 */
+  comparisonCount: number;
   /** 分析完了時。 */
   onDone: () => void;
   /** APIフェッチが完了したか */
@@ -32,7 +32,7 @@ type ProcessingScreenProps = {
 
 /** フロー 4: 好みを分析中であることを示す画面（ai-processing）。 */
 export function ProcessingScreen({
-  count,
+  comparisonCount,
   onDone,
   isFetchDone = false,
   apiError = null,
@@ -170,9 +170,9 @@ export function ProcessingScreen({
             </div>
 
             <div className="flex flex-col items-center gap-3">
-              <p className="text-[18px] font-semibold text-[#0f172a]">回答を基に診断中…</p>
-              <p className="text-center text-[14px] leading-[1.6] text-[#64748b]">
-                回答 {count} 件をもとに
+              <p className="text-[18px] font-semibold text-[#0f172a]">診断中…</p>
+              <p className="text-center text-[16px] leading-[1.6] text-[#64748b]">
+                {comparisonCount} 件をもとに
                 <br />
                 あなたに合うおすすめを選んでいます。
               </p>

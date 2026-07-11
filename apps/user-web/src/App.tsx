@@ -10,8 +10,6 @@ import {
   resolveTripDestinations,
 } from "./data/places.ts";
 import {
-  COMPARISON_ROUNDS,
-  COMPARISON_ROUNDS_REFINE,
   RECOMMENDATIONS_PAGE_SIZE,
   type Recommendation,
   SWIPE_LIMIT,
@@ -83,6 +81,10 @@ type PersonalizedPlanResponse = {
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
+}
+
+function totalComparisonCount(wins: Record<string, number>): number {
+  return Object.values(wins).reduce((sum, count) => sum + count, 0);
 }
 
 /** 匿名ユーザー向け user-web の体験フロー。 */
@@ -202,7 +204,7 @@ export default function App() {
       : initialFlow.step;
   const [step, setStep] = useState<Step>(initialStep);
   const [, setLocation] = useState("");
-  const [swipedCount, setSwipedCount] = useState(initialFlow.swipedCount);
+  const [comparisonCount, setComparisonCount] = useState(initialFlow.comparisonCount);
   const [runId, setRunId] = useState(initialFlow.runId);
   const [exploreSpots, setExploreSpots] = useState<Recommendation[]>([]);
   const [homeFeaturedSpots, setHomeFeaturedSpots] =
@@ -379,7 +381,7 @@ export default function App() {
       likeWeights,
       travelMemory,
       refining,
-      swipedCount,
+      comparisonCount,
       runId,
       swipeDeckIds: swipeDeck.map((spot) => spot.id),
       selectedDestinationNames,
@@ -392,7 +394,7 @@ export default function App() {
     likeWeights,
     travelMemory,
     refining,
-    swipedCount,
+    comparisonCount,
     runId,
     swipeDeck,
     selectedDestinationNames,
@@ -487,7 +489,7 @@ export default function App() {
         return next;
       });
 
-      setSwipedCount(refining ? COMPARISON_ROUNDS_REFINE : COMPARISON_ROUNDS);
+      setComparisonCount(totalComparisonCount(wins));
       if (refining) {
         setDetailedComplete(true);
         markDetailedDiagnosisComplete();
@@ -780,7 +782,7 @@ export default function App() {
 
       {step === "processing" && (
         <ProcessingScreen
-          count={swipedCount}
+          comparisonCount={comparisonCount}
           onDone={() => {
             setDiagnosisComplete(true);
             markDiagnosisComplete();
