@@ -35,6 +35,7 @@ Elasticsearch と連携します（ES へ直接アクセスしません）。
 | `ADMIN_JWT_SECRET` | 開発用既定値 | 管理画面 JWT 署名鍵（本番必須） |
 | `CORS_ORIGINS` | — | Firebase Hosting からの CORS 許可オリジン（カンマ区切り） |
 | `AGENT_API_URL` | `http://localhost:8080` | agent サービスのベース URL |
+| `AGENT_INTERNAL_SECRET` | 開発用既定値 | agent への内部トークン（本番必須） |
 | `GCS_BUCKET` ほか | — | スポット画像の GCS 保存（`infra/gcs/README.md` 参照） |
 
 ---
@@ -145,6 +146,14 @@ pnpm --filter @tabipla/backend-api run deploy
 | GET | `/v1/spots/:id` | スポット詳細 |
 | POST | `/v1/personalized/plan` | おすすめ生成（DB カタログ付与 → agent プロキシ） |
 | POST | `/v1/spots/:spotId/ask` | AI ガイド質問（DB ファクト付与 → agent プロキシ） |
+
+### 管理向け AI API（JWT 必須 → agent プロキシ）
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| POST | `/v1/collect-spots` | 観光地 Web 収集 |
+| POST | `/v1/describe-spot` | 紹介文・おすすめポイント生成 |
+| POST | `/v1/generate-spot-image` | スポット用イラスト生成 |
 
 ### その他
 

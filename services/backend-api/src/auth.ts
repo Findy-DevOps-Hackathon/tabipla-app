@@ -84,6 +84,9 @@ export function isAdminApiPath(url: string): boolean {
     path === "/geocode" ||
     path === "/indices" ||
     path.startsWith("/places/") ||
-    path.startsWith("/spots")
+    path.startsWith("/spots") ||
+    path === "/v1/collect-spots" ||
+    path === "/v1/describe-spot" ||
+    path === "/v1/generate-spot-image"
   );
 }

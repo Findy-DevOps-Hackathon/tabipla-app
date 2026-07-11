@@ -4,9 +4,11 @@ ADK（`@google/adk`）と Hono で動く AI エージェントサービスです
 ユーザー向けのおすすめ生成・スポット質問、管理画面向けの Web 収集・文案生成・画像生成を担います。
 
 ```text
-user-web ──▶ backend-api ──▶ agent（/v1/personalized/plan, /v1/spots/:id/ask）
-admin-web ──▶ agent（/v1/collect-spots, /v1/describe-spot, /v1/generate-spot-image）
+user-web  ──▶ backend-api ──▶ agent（/v1/personalized/plan, /v1/spots/:id/ask）
+admin-web ──▶ backend-api ──▶ agent（/v1/collect-spots, /v1/describe-spot, /v1/generate-spot-image）
 ```
+
+`/v1/*` は `AGENT_INTERNAL_SECRET` によるサービス間認証が必須です（直接 curl 不可）。
 
 検索は `@tabipla/search-core` を直接利用します（`personalizedPlan` の候補ランキングなど）。
 
@@ -25,7 +27,7 @@ admin-web ──▶ agent（/v1/collect-spots, /v1/describe-spot, /v1/generate-s
 | `src/agents/spotImage.ts` | スポット用スケッチ風イラスト生成 |
 | `src/personalize.ts` | 好みプロファイル・スコアリング（決定的ロジック） |
 | `src/fixtures/spots.ts` | `packages/db/seed-data/spots.json` 由来のモックカタログ |
-| `src/adminAuth.ts` | 管理向け API の JWT 検証 |
+| `src/internalAuth.ts` | backend-api からのサービス間トークン検証 |
 
 ---
 
@@ -39,7 +41,7 @@ admin-web ──▶ agent（/v1/collect-spots, /v1/describe-spot, /v1/generate-s
 | `GOOGLE_CLOUD_LOCATION` | —（`.env.example` で `asia-northeast1`） | Vertex AI リージョン |
 | `BACKEND_API_URL` | —（`.env.example` 参照） | backend-api のベース URL |
 | `ES_NODE` | —（`.env.example` 参照） | Elasticsearch 接続先 |
-| `ADMIN_JWT_SECRET` | 開発用既定値 | 管理向け API の JWT 署名鍵（本番必須） |
+| `AGENT_INTERNAL_SECRET` | 開発用既定値 | backend-api からの内部トークン（本番必須） |
 
 詳細は `.env.example` を参照してください。
 
@@ -58,26 +60,23 @@ pnpm --filter @tabipla/agent dev
 
 ## API エンドポイント
 
-### ユーザー向け（認証不要）
+### `/v1/*`（backend-api からの内部トークン必須）
 
 | メソッド | パス | 説明 |
 |---|---|---|
-| GET | `/healthz` | 稼働確認 |
-| POST | `/v1/personalized/plan` | スワイプ好みからおすすめ一覧を生成（`catalog` 必須） |
+| POST | `/v1/personalized/plan` | 好みからおすすめ一覧を生成（`catalog` 必須） |
 | POST | `/v1/spots/:id/ask` | スポットに関するテキスト・画像・音声質問 |
-
-通常は `backend-api` が DB カタログを付与してプロキシします。直接呼ぶ場合も `catalog` / `spot` / `facts` を渡してください。
-
-### 管理向け（Bearer JWT 必須）
-
-| メソッド | パス | 説明 |
-|---|---|---|
 | POST | `/v1/collect-spots` | 市区町村の観光地 Web 収集 |
 | POST | `/v1/describe-spot` | 紹介文またはおすすめポイント生成 |
 | POST | `/v1/generate-spot-image` | スポット用イラスト生成 |
 
-`admin-web` からは `/agent/*` プロキシ（開発）または `VITE_AGENT_BASE`（本番ビルド）経由で呼び出します。
-Cloud Run 上では `/agent/**` プレフィックスを除去するミドルウェアがあります。
+通常は `backend-api` がプロキシします。`X-Tabipla-Agent-Token` ヘッダー（`AGENT_INTERNAL_SECRET`）が必要です。
+
+### 公開（ヘルスチェックのみ）
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| GET | `/healthz` | 稼働確認 |
 
 ---
 
@@ -93,7 +92,7 @@ pnpm --filter @tabipla/agent run deploy
 
 ### backend-api との接続
 
-`services/backend-api` は `AGENT_API_URL`（既定 `http://localhost:8080`）経由で agent を呼び出します。
+`services/backend-api` は `AGENT_API_URL` と `AGENT_INTERNAL_SECRET` 経由で agent を呼び出します。
 
 ```bash
 AGENT_API_URL=https://tabipla-agent-xxxxx-an.a.run.app

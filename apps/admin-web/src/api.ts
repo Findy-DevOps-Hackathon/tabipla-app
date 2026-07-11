@@ -1,5 +1,5 @@
 import { getAuthToken, logout } from "./auth.ts";
-import { AGENT_BASE, API_BASE } from "./config.ts";
+import { API_BASE } from "./config.ts";
 import { resolveSpotImageSrc } from "./lib/spotImage.ts";
 import type { BulkImportResponse, Spot, SpotListResponse } from "./types.ts";
 
@@ -22,6 +22,10 @@ async function fetchWithTimeout(
 function authHeaders(): HeadersInit {
   const token = getAuthToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function jsonAuthHeaders(): HeadersInit {
+  return { ...authHeaders(), "Content-Type": "application/json" };
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -49,14 +53,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const text = await res.text();
   if (!text) return undefined as T;
   return JSON.parse(text) as T;
-}
-
-function agentHeaders(init?: HeadersInit): Headers {
-  const headers = new Headers(init);
-  for (const [key, value] of Object.entries(authHeaders())) {
-    headers.set(key, value);
-  }
-  return headers;
 }
 
 function handleUnauthorized(res: Response): void {
@@ -325,13 +321,13 @@ export type CollectSpotsParams = {
   excludeNames: string[];
 };
 
-/** AI 収集: 指定自治体の観光地を agent 経由で Web から収集する。 */
+/** AI 収集: 指定自治体の観光地を backend-api 経由で Web から収集する。 */
 export async function collectSpots(params: CollectSpotsParams): Promise<CollectedSpotPayload[]> {
   const res = await fetchWithTimeout(
-    `${AGENT_BASE}/v1/collect-spots`,
+    `${BASE}/v1/collect-spots`,
     {
       method: "POST",
-      headers: agentHeaders({ "Content-Type": "application/json" }),
+      headers: jsonAuthHeaders(),
       body: JSON.stringify(params),
     },
     AGENT_REQUEST_TIMEOUT_MS,
@@ -436,7 +432,7 @@ export function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
 }
 
-/** スケッチ風観光イラストを agent 経由で生成する（16:11 WebP）。 */
+/** スケッチ風観光イラストを backend-api 経由で生成する（16:11 WebP）。 */
 export async function generateSpotImage(
   params: GenerateSpotImageParams,
 ): Promise<GenerateSpotImageResult> {
@@ -447,10 +443,10 @@ export async function generateSpotImage(
   const signal = params.signal ? AbortSignal.any([params.signal, timeoutSignal]) : timeoutSignal;
 
   const res = await fetchWithTimeout(
-    `${AGENT_BASE}/v1/generate-spot-image`,
+    `${BASE}/v1/generate-spot-image`,
     {
       method: "POST",
-      headers: agentHeaders({ "Content-Type": "application/json" }),
+      headers: jsonAuthHeaders(),
       cache: "no-store",
       signal,
       body: JSON.stringify({
@@ -495,10 +491,10 @@ export async function generateSpotContent(
 
   try {
     const res = await fetchWithTimeout(
-      `${AGENT_BASE}/v1/describe-spot`,
+      `${BASE}/v1/describe-spot`,
       {
         method: "POST",
-        headers: agentHeaders({ "Content-Type": "application/json" }),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({
           name,
           prefecture: params.prefecture,

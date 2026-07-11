@@ -45,6 +45,7 @@ require_secret() {
 
 require_secret DATABASE_URL tabipla-database-url
 require_secret ADMIN_JWT_SECRET tabipla-admin-jwt-secret
+require_secret AGENT_INTERNAL_SECRET tabipla-agent-internal-secret
 
 for pair in \
   "GEMINI_API_KEY=tabipla-gemini-api-key" \

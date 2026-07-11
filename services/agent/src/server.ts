@@ -1,8 +1,6 @@
 import { InMemoryRunner, type LlmAgent, stringifyContent } from "@google/adk";
 import { serve } from "@hono/node-server";
 import { Hono, type MiddlewareHandler } from "hono";
-import { cors } from "hono/cors";
-import { extractBearerToken, verifyAdminToken } from "./adminAuth.js";
 import {
   COLLECT_CATEGORIES,
   collectAgent,
@@ -14,6 +12,7 @@ import { askIntroduce } from "./agents/introduce.js";
 import { personalizedPlan } from "./agents/personalized.js";
 import { generateSpotImage } from "./agents/spotImage.js";
 import type { Spot } from "./contracts.js";
+import { AGENT_INTERNAL_TOKEN_HEADER, verifyAgentInternalToken } from "./internalAuth.js";
 
 const app = new Hono();
 
@@ -26,20 +25,15 @@ app.use("*", async (c, next) => {
   return app.fetch(new Request(url, c.req.raw));
 });
 
-// admin-web(5174) からのクロスオリジン呼び出しを許可（ローカル開発用）
-app.use("/v1/*", cors());
-
-const requireAdminAuth: MiddlewareHandler = async (c, next) => {
-  const token = extractBearerToken(c.req.header("authorization"));
-  if (!token || !verifyAdminToken(token)) {
+const requireInternalAuth: MiddlewareHandler = async (c, next) => {
+  const token = c.req.header(AGENT_INTERNAL_TOKEN_HEADER);
+  if (!verifyAgentInternalToken(token)) {
     return c.json({ error: "認証が必要です" }, 401);
   }
   return next();
 };
 
-app.use("/v1/collect-spots", requireAdminAuth);
-app.use("/v1/describe-spot", requireAdminAuth);
-app.use("/v1/generate-spot-image", requireAdminAuth);
+app.use("/v1/*", requireInternalAuth);
 
 app.get("/", (c) => c.json({ service: "tabipla-agent", ok: true }));
 app.get("/healthz", (c) => c.json({ ok: true }));

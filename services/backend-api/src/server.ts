@@ -27,6 +27,7 @@ import {
   vectorSearch,
 } from "@tabipla/search-core";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import { fetchAgent } from "./agentClient.js";
 import { normalizeApiPath, registerApiMirrorRoutes } from "./apiPrefix.js";
 import { extractBearerToken, isAdminApiPath, issueAdminToken, verifyAdminToken } from "./auth.js";
 import { registerCors } from "./cors.js";
@@ -806,8 +807,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     },
   );
 
-  const agentApiUrl = process.env.AGENT_API_URL ?? "http://localhost:8080";
-
   // エージェントプロキシ：旅行プランの生成とディベート（DB カタログで enrich）
   app.post("/v1/personalized/plan", async (req, reply) => {
     const body = req.body as {
@@ -850,11 +849,10 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
 
     let res: Response;
     try {
-      res = await fetchWithTimeout(
-        `${agentApiUrl}/v1/personalized/plan`,
+      res = await fetchAgent(
+        "/v1/personalized/plan",
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
           body: JSON.stringify({
             ...body,
             catalog,
@@ -962,11 +960,10 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
 
     let res: Response;
     try {
-      res = await fetchWithTimeout(
-        `${agentApiUrl}/v1/spots/${spotId}/ask`,
+      res = await fetchAgent(
+        `/v1/spots/${spotId}/ask`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
           body: JSON.stringify({
             ...body,
             spot: spotForAgent,
@@ -987,6 +984,49 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       return reply.code(res.status).send(data);
     }
     return data;
+  });
+
+  // 管理画面向け agent プロキシ（JWT 必須 → 内部トークンで agent へ転送）
+  app.post("/v1/collect-spots", async (req, reply) => {
+    try {
+      const res = await fetchAgent("/v1/collect-spots", {
+        method: "POST",
+        body: JSON.stringify(req.body ?? {}),
+      });
+      const data = await res.json();
+      return reply.code(res.status).send(data);
+    } catch (error) {
+      req.log.error({ err: error }, "collect-spots: agent への接続に失敗しました");
+      return reply.code(503).send({ error: "AI 収集サービスに接続できませんでした。" });
+    }
+  });
+
+  app.post("/v1/describe-spot", async (req, reply) => {
+    try {
+      const res = await fetchAgent("/v1/describe-spot", {
+        method: "POST",
+        body: JSON.stringify(req.body ?? {}),
+      });
+      const data = await res.json();
+      return reply.code(res.status).send(data);
+    } catch (error) {
+      req.log.error({ err: error }, "describe-spot: agent への接続に失敗しました");
+      return reply.code(503).send({ error: "AI 文案サービスに接続できませんでした。" });
+    }
+  });
+
+  app.post("/v1/generate-spot-image", async (req, reply) => {
+    try {
+      const res = await fetchAgent("/v1/generate-spot-image", {
+        method: "POST",
+        body: JSON.stringify(req.body ?? {}),
+      });
+      const data = await res.json();
+      return reply.code(res.status).send(data);
+    } catch (error) {
+      req.log.error({ err: error }, "generate-spot-image: agent への接続に失敗しました");
+      return reply.code(503).send({ error: "AI 画像サービスに接続できませんでした。" });
+    }
   });
 
   // ---- 共通エラーハンドラ --------------------------------------------------

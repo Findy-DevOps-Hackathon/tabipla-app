@@ -67,7 +67,7 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
 **接続の注意**
 
 - admin-web は Firebase プロジェクト `tabipla-admin-web` のため、`/api` rewrite は使えません。
-- `apps/admin-web/scripts/deploy.sh` が `VITE_API_BASE` / `VITE_AGENT_BASE` に Cloud Run URL を埋め込みます。
+- `apps/admin-web/scripts/deploy.sh` が `VITE_API_BASE` に Cloud Run URL を埋め込みます（AI 機能も backend-api 経由）。
 
 **デプロイ**
 
