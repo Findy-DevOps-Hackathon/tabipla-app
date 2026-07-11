@@ -227,9 +227,6 @@ importers:
       '@tabipla/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@tabipla/maps-core':
-        specifier: workspace:*
-        version: link:../../packages/maps-core
       '@tabipla/search-core':
         specifier: workspace:*
         version: link:../../packages/search-core

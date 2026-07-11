@@ -13,7 +13,6 @@ import {
   upsertSpots,
   verifyPassword,
 } from "@tabipla/db";
-import { getTravelTimes, type TravelTimesParams } from "@tabipla/maps-core";
 import {
   createElasticsearchClient,
   type ElasticsearchClient,
@@ -37,7 +36,6 @@ import {
   writeThroughSpotToElasticsearch,
 } from "./esOutbox.js";
 import { fetchWithTimeout } from "./fetchWithTimeout.js";
-import { geocodeAddressQuery } from "./geocode.js";
 import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./mapper.js";
 import { lookupPlaceByName } from "./places.js";
 import { type AskSpotPayload, buildAskFacts, buildAskFactsFromClient } from "./spotAskFacts.js";
@@ -77,7 +75,6 @@ import {
   createSpotSchema,
   deleteSpotSchema,
   ensureIndexSchema,
-  geocodeSchema,
   getSpotByIdSchema,
   getSpotSchema,
   hybridSearchSchema,
@@ -89,7 +86,6 @@ import {
   postSpotImageSchema,
   searchCandidateSpotsSchema,
   semanticSearchSchema,
-  travelTimesSchema,
   updateSpotSchema,
   vectorSearchSchema,
 } from "./schemas.js";
@@ -139,8 +135,6 @@ type SearchCandidateSpotsBody = {
   area?: string | string[];
   ids?: string[];
   excludeIds?: string[];
-  near?: { lat: number; lon: number };
-  radiusKm?: number;
   size?: number;
   k?: number;
   knnBoost?: number;
@@ -376,19 +370,6 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     return ensureIndex(client, req.body?.index);
   });
 
-  // ---- ジオコーディング（管理画面） ----------------------------------------
-  app.get<{ Querystring: { q: string } }>(
-    "/geocode",
-    { schema: geocodeSchema },
-    async (req, reply) => {
-      const location = await geocodeAddressQuery(req.query.q);
-      if (!location) {
-        return reply.code(404).send({ error: "住所から座標を取得できませんでした" });
-      }
-      return location;
-    },
-  );
-
   // ---- スポット名検索（管理画面フォーム自動入力） --------------------------
   app.get<{
     Querystring: { name: string; prefecture?: string; municipality?: string };
@@ -403,12 +384,10 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     // 外部 API で見つからない場合のみ、登録済みスポット（同一都道府県・名称一致）を参照
     const { rows } = await listSpots(db, { q: name, prefecture, limit: 20 });
     const dbMatch = rows.find((row) => row.name === name);
-    if (dbMatch && dbMatch.lat != null && dbMatch.lon != null) {
+    if (dbMatch) {
       return {
         name: dbMatch.name,
         address: dbMatch.address ?? undefined,
-        lat: dbMatch.lat,
-        lon: dbMatch.lon,
         category: dbMatch.category ?? undefined,
         description: dbMatch.description,
       };
@@ -751,22 +730,13 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     },
   );
 
-  // ---- 候補スポット検索（A3: kNN × geo_distance × category） ----
+  // ---- 候補スポット検索（A3: kNN × category） ----
   app.post<{ Body: SearchCandidateSpotsBody }>(
     "/search/candidates",
     { schema: searchCandidateSpotsSchema },
     async (req) => {
       const results = await searchCandidateSpots(client, req.body);
       return { count: results.length, results };
-    },
-  );
-
-  // ---- 移動時間マトリクス（A4: getTravelTimes） ----
-  app.post<{ Body: TravelTimesParams }>(
-    "/travel-times",
-    { schema: travelTimesSchema },
-    async (req) => {
-      return getTravelTimes(req.body);
     },
   );
 

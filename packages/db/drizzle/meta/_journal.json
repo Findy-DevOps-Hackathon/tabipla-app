@@ -106,6 +106,13 @@
       "when": 1783800000000,
       "tag": "0014_es_sync_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1783900000000,
+      "tag": "0015_drop_spot_lat_lon",
+      "breakpoints": true
     }
   ]
 }

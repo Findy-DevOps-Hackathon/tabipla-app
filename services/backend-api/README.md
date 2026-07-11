@@ -18,7 +18,7 @@ Elasticsearch と連携します（ES へ直接アクセスしません）。
 
 - TypeScript / Node.js 22+
 - [Fastify](https://fastify.dev/) v5
-- `@tabipla/db` / `@tabipla/search-core` / `@tabipla/maps-core` / `@tabipla/domain`
+- `@tabipla/db` / `@tabipla/search-core` / `@tabipla/domain`
 
 ---
 
@@ -31,7 +31,7 @@ Elasticsearch と連携します（ES へ直接アクセスしません）。
 | `DATABASE_URL` | — | PostgreSQL 接続文字列（書き込み系で必須） |
 | `ES_NODE` ほか | — | Elasticsearch 接続系（`packages/search-core/README.md` 参照） |
 | `GEMINI_API_KEY` | — | 埋め込み生成（`embed-spots` / `POST /search/semantic`） |
-| `GOOGLE_MAPS_API_KEY` | — | Places / Geocoding / `POST /travel-times` |
+| `GOOGLE_MAPS_API_KEY` | — | Places lookup（管理画面の住所自動補完） |
 | `ADMIN_JWT_SECRET` | 開発用既定値 | 管理画面 JWT 署名鍵（本番必須） |
 | `CORS_ORIGINS` | — | Firebase Hosting からの CORS 許可オリジン（カンマ区切り） |
 | `AGENT_API_URL` | `http://localhost:8080` | agent サービスのベース URL |
@@ -99,7 +99,7 @@ pnpm --filter @tabipla/backend-api run deploy
 
 | 対象 | 方式 |
 |---|---|
-| 管理画面 API（`/spots`, `/geocode`, `/places/*`, `/indices`） | Bearer JWT（`POST /auth/login` で発行） |
+| 管理画面 API（`/spots`, `/places/*`, `/indices`） | Bearer JWT（`POST /auth/login` で発行） |
 | ユーザー向け API（`/v1/spots`, `/v1/personalized/plan` 等） | 認証不要 |
 | スポット画像（`GET /uploads/spots/:filename`） | 認証不要 |
 
@@ -128,8 +128,7 @@ pnpm --filter @tabipla/backend-api run deploy
 | DELETE | `/spots/:id?refresh=true` | 削除 |
 | POST | `/spots/:id/image` | 画像アップロード |
 | DELETE | `/spots/:id/image` | 画像削除 |
-| GET | `/geocode?q=` | 住所 → 座標 |
-| GET | `/places/lookup?name=` | スポット名 → 住所・座標 |
+| GET | `/places/lookup?name=` | スポット名 → 住所・カテゴリ |
 
 ### 検索（`/indices` のみ JWT 必須）
 
@@ -140,7 +139,7 @@ pnpm --filter @tabipla/backend-api run deploy
 | POST | `/search/vector` | ベクトル検索 |
 | POST | `/search/hybrid` | ハイブリッド検索 |
 | POST | `/search/semantic` | クエリ文字列 → embedding → vector/hybrid |
-| POST | `/search/candidates` | 候補スポット検索（kNN × geo × category） |
+| POST | `/search/candidates` | 候補スポット検索（kNN × category） |
 
 ### ユーザー向け公開 API
 
@@ -163,7 +162,6 @@ pnpm --filter @tabipla/backend-api run deploy
 
 | メソッド | パス | 説明 |
 |---|---|---|
-| POST | `/travel-times` | 移動時間マトリクス（`@tabipla/maps-core`） |
 | GET | `/uploads/spots/:filename` | スポット画像配信（GCS 設定時は 301 リダイレクト） |
 
 Firebase Hosting 経由では `/api` プレフィックス付きでも同じルートが利用できます（`registerApiMirrorRoutes`）。
@@ -185,7 +183,7 @@ curl -X POST localhost:3001/auth/login \
 curl -X POST 'localhost:3001/spots?refresh=true' \
   -H 'content-type: application/json' \
   -H 'authorization: Bearer <token>' \
-  -d '{"id":"spot-1","name":"清水寺","description":"京都の有名な寺院","category":["観光"],"area":"京都市","prefecture":"京都府","location":{"lat":34.9948,"lon":135.785}}'
+  -d '{"id":"spot-1","name":"清水寺","description":"京都の有名な寺院","category":["観光"],"area":"京都市","prefecture":"京都府","address":"京都府京都市東山区清水"}'
 
 # 公開スポット一覧
 curl 'localhost:3001/v1/spots?prefecture=長野県&area=小諸市'

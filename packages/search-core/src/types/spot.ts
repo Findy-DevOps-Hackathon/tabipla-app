@@ -1,12 +1,4 @@
 /**
- * 緯度経度。Elasticsearch の geo_point にマッピングする。
- */
-export type GeoPoint = {
-  lat: number;
-  lon: number;
-};
-
-/**
  * 観光スポット（Spot）ドキュメント。検索の1ドキュメントに相当するドメイン型。
  *
  * tabipla（旅行プラン）における検索対象の中心エンティティ。
@@ -31,8 +23,6 @@ export type SpotDocument = {
   highlights?: string[];
   /** スポット画像 URL。 */
   imageUrl?: string;
-  /** 緯度経度。geo_point 検索・距離計算に利用する。 */
-  location?: GeoPoint;
   /**
    * ベクトル検索用の埋め込みベクトル。
    * 生成処理は search-core の責務外（将来 agent-api 等で生成する）。

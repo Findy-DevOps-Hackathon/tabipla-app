@@ -41,8 +41,6 @@ export type SeedSpot = {
   prefecture?: string | null;
   address?: string | null;
   highlights?: string[] | null;
-  lat?: number | null;
-  lon?: number | null;
   imageUrl?: string | null;
 };
 
@@ -65,8 +63,6 @@ export function seedSpotToRow(spot: SeedSpot): Omit<NewSpotRow, "createdAt" | "u
     prefecture: spot.prefecture ?? null,
     address: spot.address ?? null,
     highlights: spot.highlights ?? null,
-    lat: spot.lat ?? null,
-    lon: spot.lon ?? null,
     imageUrl: spot.imageUrl ?? null,
   };
 }
@@ -80,8 +76,6 @@ type SpotSeedSource = {
   prefecture?: string | null;
   address?: string | null;
   highlights?: string[] | null;
-  lat?: number | null;
-  lon?: number | null;
   imageUrl?: string | null;
 };
 
@@ -97,8 +91,6 @@ export function stripSpotForSeed(row: SpotSeedSource): SeedSpot {
   if (row.prefecture != null) spot.prefecture = row.prefecture;
   if (row.address != null) spot.address = row.address;
   if (row.highlights != null) spot.highlights = row.highlights;
-  if (row.lat != null) spot.lat = row.lat;
-  if (row.lon != null) spot.lon = row.lon;
   if (row.imageUrl != null) spot.imageUrl = row.imageUrl;
   return spot;
 }

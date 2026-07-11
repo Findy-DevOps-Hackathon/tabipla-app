@@ -31,8 +31,6 @@ type ReferenceSpot = {
   prefecture: string;
   address: string;
   highlights?: string[];
-  lat: number;
-  lon: number;
   sensoryScores?: NonNullable<SpotDocument["sensoryScores"]>;
 };
 const spotsData = JSON.parse(rawData) as ReferenceSpot[];
@@ -61,8 +59,6 @@ async function main() {
       prefecture: s.prefecture,
       address: s.address,
       highlights: s.highlights ?? null,
-      lat: s.lat,
-      lon: s.lon,
       sensoryScores: s.sensoryScores,
     }));
 
@@ -146,8 +142,6 @@ async function main() {
       prefecture: row.prefecture,
       address: row.address,
       highlights: row.highlights,
-      lat: row.lat,
-      lon: row.lon,
       sensoryScores: row.sensoryScores,
       clusterId: ans.clusters[idx], // クラスタIDを付与
     }));

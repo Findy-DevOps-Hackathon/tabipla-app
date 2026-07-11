@@ -62,7 +62,7 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
 - ログイン（JWT / `backend-api` の `/auth/login`）
 - 観光地一覧・検索・編集・削除（CSV エクスポート対応）
 - 観光地追加（個別登録 / CSV 一括 / AI 収集）
-- Places / Geocoding による住所・座標の自動補完（埋め込み地図 UI はなし）
+- Places lookup による住所の自動補完（埋め込み地図 UI はなし）
 
 **接続の注意**
 

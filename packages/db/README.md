@@ -50,7 +50,6 @@ PostgreSQL (正本)  ──reindex──▶  Elasticsearch (検索用の写し)
 | `address` | text | no | 住所 |
 | `highlights` | text[] | no | おすすめポイント |
 | `image_url` | text | no | 画像 URL（相対パスまたは GCS URL） |
-| `lat` / `lon` | double precision | no | 緯度経度（reindex 時に `{ lat, lon }` へ組み立て） |
 | `cluster_id` | integer | no | クラスタリング ID |
 | `sensory_scores` | jsonb | no | 9次元の感性・知名度スコア |
 | `created_at` / `updated_at` | timestamptz | yes | 作成・更新日時（既定 now()） |
@@ -157,8 +156,7 @@ await upsertSpot(db, {
   description: "京都の有名な寺院",
   prefecture: "京都府",
   category: ["観光", "歴史"],
-  lat: 34.9948,
-  lon: 135.785,
+  address: "京都府京都市東山区清水",
 });
 
 // バッチで全件処理（reindex 等）

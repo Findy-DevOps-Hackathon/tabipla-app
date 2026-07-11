@@ -1,13 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  doublePrecision,
-  index,
-  integer,
-  jsonb,
-  pgTable,
-  text,
-  timestamp,
-} from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 /**
  * municipalities テーブル（自治体データ）。
@@ -33,7 +25,6 @@ export type NewMunicipalityRow = typeof municipalities.$inferInsert;
  * Elasticsearch には検索用の写しを reindex で投入し、本テーブルが信頼できる正本とする。
  *
  * 設計メモ:
- *   - 緯度経度は `lat` / `lon` の2カラムで保持し、reindex 時に `{ lat, lon }` へ組み立てる。
  *   - `highlights` は PostgreSQL の text[] で保持する。
  *   - `embedding` は本テーブルでは保持しない（ベクトルは Elasticsearch 側で管理する方針）。
  *     Embedding 生成・投入は RAG パイプライン側（別タスク）で行う。
@@ -61,10 +52,6 @@ export const spots = pgTable(
     address: text("address"),
     /** おすすめポイント（例: ["紅葉の名所", "城址散策"]）。 */
     highlights: text("highlights").array(),
-    /** 緯度。 */
-    lat: doublePrecision("lat"),
-    /** 経度。 */
-    lon: doublePrecision("lon"),
     /** スポット画像 URL（相対パス `/uploads/spots/...` または外部 URL）。 */
     imageUrl: text("image_url"),
     /** クラスタリングID（事前クラスタリングによる分類）。 */

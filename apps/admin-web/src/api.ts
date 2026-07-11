@@ -347,8 +347,6 @@ export async function collectSpots(params: CollectSpotsParams): Promise<Collecte
 export type PlaceLookupResult = {
   name?: string;
   address?: string;
-  lat: number;
-  lon: number;
   category?: string | string[];
   description?: string;
 };
@@ -366,18 +364,6 @@ export async function lookupPlaceByName(
 
   try {
     return await request<PlaceLookupResult>(`/places/lookup?${qs}`);
-  } catch {
-    return null;
-  }
-}
-
-export async function geocodeAddress(
-  address: string,
-): Promise<{ lat: number; lon: number } | null> {
-  const q = address.trim();
-  if (!q) return null;
-  try {
-    return await request<{ lat: number; lon: number }>(`/geocode?${new URLSearchParams({ q })}`);
   } catch {
     return null;
   }

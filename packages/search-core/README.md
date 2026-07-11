@@ -33,7 +33,6 @@ Elasticsearch を用いた検索ロジックを集約する共通ライブラリ
 | `address` | string | no | 住所 |
 | `highlights` | string[] | no | おすすめポイント |
 | `imageUrl` | string | no | スポット画像 URL |
-| `location` | `{ lat, lon }` | no | 緯度経度（geo_point） |
 | `embedding` | number[] | no | ベクトル（生成は search-core の責務外） |
 | `clusterId` | number | no | クラスタリング ID |
 | `sensoryScores` | object | no | 9次元の感性・知名度スコア |
@@ -143,7 +142,6 @@ await indexDocument(
     area: "京都市",
     prefecture: "京都府",
     highlights: ["紅葉の名所", "世界遺産"],
-    location: { lat: 34.9948, lon: 135.785 },
     createdAt: new Date().toISOString(),
   },
   { refresh: true }, // すぐ検索可能にする（開発・テスト用）

@@ -10,10 +10,6 @@ export function toAgentCatalogSpot(row: SpotRow) {
     id: row.id,
     name: row.name,
     category: toAgentCategory(primaryCategory),
-    location: {
-      lat: row.lat ?? 36.326,
-      lon: row.lon ?? 138.423,
-    },
     description: row.description,
     highlights: row.highlights ?? [],
   };

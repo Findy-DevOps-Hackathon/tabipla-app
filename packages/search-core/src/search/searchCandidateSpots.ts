@@ -26,8 +26,7 @@ function hasStructuredFilters(params: CandidateSpotFilterParams): boolean {
     params.prefecture !== undefined ||
     params.area !== undefined ||
     Boolean(params.ids?.length) ||
-    Boolean(params.excludeIds?.length) ||
-    params.near !== undefined
+    Boolean(params.excludeIds?.length)
   );
 }
 
@@ -47,7 +46,7 @@ function assertValidEmbedding(embedding: number[]): void {
 /**
  * 候補スポット検索（A3 契約 I/F）。
  *
- * kNN × geo_distance × category を 1 関数に統合する。
+ * kNN × category フィルタを 1 関数に統合する。
  *
  * 挙動:
  *   - query のみ → キーワード + フィルタ

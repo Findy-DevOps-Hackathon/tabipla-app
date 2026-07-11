@@ -1,5 +1,3 @@
-export type GeoPoint = { lat: number; lon: number };
-
 export type Spot = {
   id: string;
   name: string;
@@ -10,7 +8,6 @@ export type Spot = {
   address?: string;
   highlights?: string[];
   imageUrl?: string;
-  location?: GeoPoint;
   createdAt?: string;
   updatedAt?: string;
 };
