@@ -105,26 +105,39 @@ gcloud builds submit "$ROOT" \
   --config=services/backend-api/cloudbuild.yaml \
   --substitutions=_IMAGE="${IMAGE}"
 
-DEPLOY_ARGS=(
-  --project="$PROJECT"
-  --region="$REGION"
-  --image="${IMAGE}"
-  --allow-unauthenticated
-  --port=8080
-  --memory=512Mi
-  --cpu=1
-  --timeout=300
-  --min-instances=0
-  --max-instances=5
-  --env-vars-file="$ENV_VARS_FILE"
-)
+# 既存サービスは Secret 参照の環境変数があるため、イメージのみ更新する。
+# 初回デプロイや環境変数の一括更新が必要なときは DEPLOY_WITH_ENV=1 を指定する。
+if [[ "${DEPLOY_WITH_ENV:-}" == "1" ]] || ! gcloud run services describe "$SERVICE" \
+  --project="$PROJECT" \
+  --region="$REGION" \
+  --format='value(metadata.name)' &>/dev/null; then
+  DEPLOY_ARGS=(
+    --project="$PROJECT"
+    --region="$REGION"
+    --image="${IMAGE}"
+    --allow-unauthenticated
+    --port=8080
+    --memory=512Mi
+    --cpu=1
+    --timeout=300
+    --min-instances=0
+    --max-instances=5
+    --env-vars-file="$ENV_VARS_FILE"
+  )
 
-if [[ -n "${CLOUD_SQL_INSTANCE:-}" ]]; then
-  DEPLOY_ARGS+=(--add-cloudsql-instances="$CLOUD_SQL_INSTANCE")
+  if [[ -n "${CLOUD_SQL_INSTANCE:-}" ]]; then
+    DEPLOY_ARGS+=(--add-cloudsql-instances="$CLOUD_SQL_INSTANCE")
+  fi
+
+  echo "Deploying ${SERVICE} to Cloud Run with env vars (project=${PROJECT}, region=${REGION})"
+  gcloud run deploy "$SERVICE" "${DEPLOY_ARGS[@]}"
+else
+  echo "Deploying ${SERVICE} to Cloud Run (image only; existing env/secrets preserved)"
+  gcloud run deploy "$SERVICE" \
+    --project="$PROJECT" \
+    --region="$REGION" \
+    --image="${IMAGE}"
 fi
-
-echo "Deploying ${SERVICE} to Cloud Run (project=${PROJECT}, region=${REGION})"
-gcloud run deploy "$SERVICE" "${DEPLOY_ARGS[@]}"
 
 URL="$(gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format='value(status.url)')"
 echo ""
