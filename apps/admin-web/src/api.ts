@@ -1,7 +1,15 @@
 import { getAuthToken, logout } from "./auth.ts";
 import { API_BASE } from "./config.ts";
 import { resolveSpotImageSrc } from "./lib/spotImage.ts";
+import {
+  convertSpotImageFileToWebp,
+  SPOT_IMAGE_ACCEPT,
+  SPOT_IMAGE_MAX_BYTES,
+  SPOT_IMAGE_OUTPUT_MIME,
+} from "./lib/spotImageCrop.ts";
 import type { BulkImportResponse, Spot, SpotListResponse } from "./types.ts";
+
+export { SPOT_IMAGE_ACCEPT, SPOT_IMAGE_MAX_BYTES };
 
 const BASE = API_BASE;
 const API_REQUEST_TIMEOUT_MS = 30_000;
@@ -153,19 +161,11 @@ async function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
-export const SPOT_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
-export const SPOT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-
 /** スポット画像ファイルを pendingImage 用の Base64 に変換する。 */
 export async function readSpotImageFile(file: File): Promise<{ mimeType: string; data: string }> {
-  if (!SPOT_IMAGE_ACCEPT.split(",").includes(file.type)) {
-    throw new Error("JPEG / PNG / WebP のみアップロードできます。");
-  }
-  if (file.size > SPOT_IMAGE_MAX_BYTES) {
-    throw new Error("画像サイズは 5MB 以下にしてください。");
-  }
-  const data = await readFileAsBase64(file);
-  return { mimeType: file.type, data };
+  const webpFile = await convertSpotImageFileToWebp(file);
+  const data = await readFileAsBase64(webpFile);
+  return { mimeType: SPOT_IMAGE_OUTPUT_MIME, data };
 }
 
 function spotImageMimeToExtension(mimeType: string): string {
@@ -282,10 +282,11 @@ export async function resolveReferenceImageForGenerate(params: {
 
 /** スポット画像をアップロードする。 */
 export async function uploadSpotImage(spotId: string, file: File): Promise<Spot> {
-  const data = await readFileAsBase64(file);
+  const webpFile = await convertSpotImageFileToWebp(file);
+  const data = await readFileAsBase64(webpFile);
   return request<Spot>(`/spots/${encodeURIComponent(spotId)}/image?refresh=true`, {
     method: "POST",
-    body: JSON.stringify({ mimeType: file.type, data }),
+    body: JSON.stringify({ mimeType: SPOT_IMAGE_OUTPUT_MIME, data }),
   });
 }
 
@@ -420,9 +421,13 @@ export async function uploadSpotImageBase64(
   mimeType: string,
   data: string,
 ): Promise<Spot> {
+  const payload =
+    mimeType === SPOT_IMAGE_OUTPUT_MIME
+      ? { mimeType, data }
+      : await readSpotImageFile(spotImageBase64ToFile(mimeType, data));
   return request<Spot>(`/spots/${encodeURIComponent(spotId)}/image?refresh=true`, {
     method: "POST",
-    body: JSON.stringify({ mimeType, data }),
+    body: JSON.stringify(payload),
   });
 }
 
