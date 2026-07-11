@@ -134,7 +134,7 @@ export function ProcessingScreen({
             </div>
           </div>
         ) : showRefinePrompt ? (
-          <div className="flex w-full max-w-[320px] flex-col items-center gap-6">
+          <div className="flex w-full max-w-[320px] flex-col items-center gap-16">
             <div className="flex w-full items-end gap-1">
               <AiGuideAvatar size={40} className="shrink-0" />
               <AiGuideSpeechBubble>
@@ -144,12 +144,12 @@ export function ProcessingScreen({
                 </span>
               </AiGuideSpeechBubble>
             </div>
-            <div className="flex w-full flex-col gap-2.5">
+            <div className="flex w-full flex-col gap-5.5">
               {onRefineMore && (
                 <button
                   type="button"
                   onClick={onRefineMore}
-                  className={`${PRIMARY_BUTTON} px-6 py-3 text-[14px]`}
+                  className={`${PRIMARY_BUTTON} px-6 h-14 text-[14px]`}
                 >
                   もう少し選んで絞り込む
                 </button>
@@ -157,7 +157,7 @@ export function ProcessingScreen({
               <button
                 type="button"
                 onClick={onDone}
-                className={`${SECONDARY_BUTTON} px-6 py-3 text-[14px]`}
+                className={`${SECONDARY_BUTTON} px-6 h-14 text-[14px]`}
               >
                 このままおすすめを見る
               </button>
