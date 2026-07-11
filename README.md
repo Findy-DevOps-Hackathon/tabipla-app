@@ -20,7 +20,7 @@ apps/user-web  ──▶ backend-api ──▶ agent / search-core
 | `services/agent` | AI エージェント（収集・プラン生成） |
 | `packages/search-core` | Elasticsearch 共通モジュール |
 | `packages/db` | PostgreSQL スキーマ・マイグレーション |
-| `infra/` | Docker / Cloud SQL 等 |
+| `infra/` | Docker / Cloud SQL / 監視 等 |
 
 ---
 
