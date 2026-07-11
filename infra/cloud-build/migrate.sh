@@ -22,7 +22,7 @@ pnpm config set store-dir /workspace/.pnpm-store
 pnpm install --frozen-lockfile
 
 echo "=== packages/db ビルド ==="
-pnpm --filter @tabipla/db build
+pnpm --filter @tabipla/db... build
 
 echo "=== Cloud SQL Auth Proxy ダウンロード (v${PROXY_VERSION}) ==="
 curl -fsSL -o /usr/local/bin/cloud-sql-proxy \
