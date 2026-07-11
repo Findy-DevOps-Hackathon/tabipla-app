@@ -69,12 +69,17 @@ function normalizeLikeWeights(value: unknown): Record<string, number> {
   return next;
 }
 
+type StoredFlowSession = Partial<FlowSession> & {
+  /** comparisonCount 改名前の localStorage 互換フィールド */
+  swipedCount?: number;
+};
+
 function normalizeSession(value: unknown): FlowSession {
   if (!value || typeof value !== "object") {
     return { ...DEFAULT_SESSION, step: readLegacyStep() };
   }
 
-  const raw = value as Partial<FlowSession>;
+  const raw = value as StoredFlowSession;
   const step =
     raw.step && (FLOW_STEPS as string[]).includes(raw.step) ? raw.step : readLegacyStep();
 
