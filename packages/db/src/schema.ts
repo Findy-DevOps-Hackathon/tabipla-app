@@ -88,24 +88,6 @@ export type SpotRow = typeof spots.$inferSelect;
 export type NewSpotRow = typeof spots.$inferInsert;
 
 /**
- * unchiku_facts テーブル（蘊蓄ネタ）。
- */
-export const unchikuFacts = pgTable("unchiku_facts", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => randomUUID()),
-  spotId: text("spot_id").references(() => spots.id, { onDelete: "cascade" }),
-  label: text("label").notNull(),
-  text: text("text").notNull(),
-  source: text("source"),
-});
-
-/** SELECT 時の行型。 */
-export type UnchikuFactRow = typeof unchikuFacts.$inferSelect;
-/** INSERT 時の入力型。 */
-export type NewUnchikuFactRow = typeof unchikuFacts.$inferInsert;
-
-/**
  * coupons テーブル（クーポン・特典）。
  */
 export const coupons = pgTable("coupons", {

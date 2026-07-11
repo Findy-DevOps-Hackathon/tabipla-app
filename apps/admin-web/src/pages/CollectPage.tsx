@@ -1,5 +1,5 @@
 import { Loader2, Pencil } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   bulkImportSpots,
@@ -7,6 +7,7 @@ import {
   collectSpots,
   generateSpotImage,
   geocodeAddress,
+  isAbortError,
   listSpots,
   lookupPlaceByName,
   readSpotImageFile,
@@ -114,6 +115,16 @@ async function enrichCollectedSpot(
   };
 }
 
+/** 登録前に入力内容を検証する。 */
+function validateCollectedSpot(spot: CollectedSpot): string | null {
+  if (!spot.name.trim()) return "観光地名を入力してください";
+  if (!spot.address.trim()) return "住所を入力してください";
+  if (!trimSpotDescription(spot.description)) return "紹介文を入力してください";
+  if (!normalizeHighlights(spot.highlights).length) return "おすすめポイントを入力してください";
+  if (!normalizeCategories(spot.categories).length) return "カテゴリを1件以上選択してください";
+  return null;
+}
+
 export default function CollectPage() {
   const navigate = useNavigate();
   const { collectDraft, setCollectDraft, resetCollectDraft } = useSpotAddDraft();
@@ -141,6 +152,7 @@ export default function CollectPage() {
     index: number;
     kind: "generate" | "upload";
   } | null>(null);
+  const imageGenerateAbortRef = useRef<AbortController | null>(null);
 
   const selectedCount = spots.filter((s) => s.selected).length;
   const selectedImageReadyCount = spots.filter((s) => s.selected && s.pendingImage).length;
@@ -192,6 +204,14 @@ export default function CollectPage() {
   };
 
   const finishEditing = () => {
+    if (editing === null) return;
+    const spot = spots[editing];
+    if (!spot) return;
+    const validationError = validateCollectedSpot(spot);
+    if (validationError) {
+      setToast(validationError);
+      return;
+    }
     setEditing(null);
     setEditingBackup(null);
   };
@@ -260,6 +280,9 @@ export default function CollectPage() {
     const spot = spots[index];
     if (!spot) return;
 
+    imageGenerateAbortRef.current?.abort();
+    const controller = new AbortController();
+    imageGenerateAbortRef.current = controller;
     setImageBusy({ index, kind: "generate" });
     try {
       const image = await generateSpotImage({
@@ -267,15 +290,24 @@ export default function CollectPage() {
         prefecture: spot.prefecture || prefecture,
         municipality,
         referenceImage: spot.pendingImage,
+        signal: controller.signal,
       });
       updateSpot(index, {
         pendingImage: { mimeType: image.mimeType, data: image.data },
       });
     } catch (e) {
+      if (isAbortError(e)) return;
       setToast(e instanceof Error ? e.message : "画像の作成に失敗しました");
     } finally {
+      if (imageGenerateAbortRef.current === controller) {
+        imageGenerateAbortRef.current = null;
+      }
       setImageBusy(null);
     }
+  };
+
+  const handleCancelGenerateSpotImage = () => {
+    imageGenerateAbortRef.current?.abort();
   };
 
   const handleUploadSpotImage = async (index: number, file: File) => {
@@ -300,8 +332,14 @@ export default function CollectPage() {
       setToast("登録する観光地を選択してください");
       return;
     }
-    if (selected.some((s) => normalizeCategories(s.categories).length === 0)) {
-      setToast("カテゴリ未設定の観光地があります。編集して1件以上選択してください");
+    const invalidSpot = selected.find((spot) => validateCollectedSpot(spot));
+    if (invalidSpot) {
+      const validationError = validateCollectedSpot(invalidSpot);
+      setToast(
+        validationError
+          ? `${invalidSpot.name || "観光地"}: ${validationError}`
+          : "入力内容が不足している観光地があります",
+      );
       return;
     }
     if (selected.length > MAX_COLLECT_TARGET_COUNT) {
@@ -452,12 +490,7 @@ export default function CollectPage() {
               <Button variant="secondary" onClick={() => navigate("/spots")}>
                 キャンセル
               </Button>
-              <Button
-                disabled={selectedCategories.length === 0}
-                onClick={() => void handleCollect()}
-              >
-                収集開始
-              </Button>
+              <Button onClick={() => void handleCollect()}>収集開始</Button>
             </div>
           </div>
         </div>
@@ -544,6 +577,7 @@ export default function CollectPage() {
                       className="border-b border-[#e2e8f0] bg-[#f8fafc] p-4 last:border-0"
                     >
                       <fieldset disabled={isRegistering} className="min-w-0 border-0 p-0">
+                        <p className="mb-2 text-xs font-medium text-[#475569]">観光地名</p>
                         <div className="flex flex-wrap gap-2">
                           <input
                             type="text"
@@ -560,6 +594,7 @@ export default function CollectPage() {
                             busy={imageBusy?.index === index ? imageBusy.kind : null}
                             disabled={step === "registering" || isImageBusy || isRegistering}
                             onGenerate={() => void handleGenerateSpotImage(index)}
+                            onCancelGenerate={handleCancelGenerateSpotImage}
                             onUpload={(file) => void handleUploadSpotImage(index, file)}
                             onRemove={() => handleRemoveSpotImage(index)}
                           />
@@ -598,14 +633,16 @@ export default function CollectPage() {
                             })}
                           </div>
                         </div>
+                        <p className="mt-3 mb-2 text-xs font-medium text-[#475569]">住所</p>
                         <input
                           type="text"
                           value={spot.address}
                           onChange={(e) => updateSpot(index, { address: e.target.value })}
                           placeholder="例: 国道沿い1丁目"
-                          className="mt-2 w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm"
+                          className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm"
                         />
                         <div>
+                          <p className="mt-3 mb-2 text-xs font-medium text-[#475569]">紹介文</p>
                           <textarea
                             value={spot.description}
                             onChange={(e) =>
@@ -616,7 +653,7 @@ export default function CollectPage() {
                             placeholder="例: 地元の特産品や食堂が楽しめる道の駅。旅の休憩・お土産選びに便利です。"
                             rows={3}
                             maxLength={MAX_SPOT_DESCRIPTION_LENGTH}
-                            className="mt-2 w-full resize-y rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm leading-relaxed"
+                            className="w-full resize-y rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm leading-relaxed"
                           />
                           <p className="mt-1 text-xs text-[#64748b]">
                             最大 {MAX_SPOT_DESCRIPTION_LENGTH} 文字（{spot.description.length}/
@@ -624,6 +661,9 @@ export default function CollectPage() {
                           </p>
                         </div>
                         <div>
+                          <p className="mt-3 mb-2 text-xs font-medium text-[#475569]">
+                            おすすめポイント
+                          </p>
                           <textarea
                             value={spot.highlights.join("\n")}
                             onChange={(e) =>
@@ -635,7 +675,7 @@ export default function CollectPage() {
                             }
                             placeholder={`例: 地元野菜の直売所が充実している（1行1件・最大${MAX_SPOT_HIGHLIGHT_COUNT}件・各${MAX_SPOT_HIGHLIGHT_LENGTH}文字）`}
                             rows={3}
-                            className="mt-2 w-full resize-y rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm leading-relaxed"
+                            className="w-full resize-y rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm leading-relaxed"
                           />
                         </div>
                         <div className="mt-3 flex justify-end gap-3">
@@ -672,6 +712,7 @@ export default function CollectPage() {
                         busy={imageBusy?.index === index ? imageBusy.kind : null}
                         disabled={step === "registering" || isImageBusy || isRegistering}
                         onGenerate={() => void handleGenerateSpotImage(index)}
+                        onCancelGenerate={handleCancelGenerateSpotImage}
                         onUpload={(file) => void handleUploadSpotImage(index, file)}
                         onRemove={() => handleRemoveSpotImage(index)}
                       />

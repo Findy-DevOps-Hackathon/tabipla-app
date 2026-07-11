@@ -478,28 +478,6 @@ export const postSpotImageSchema = {
   },
 } as const;
 
-/** POST /v1/spots/:spotId/story */
-export const postSpotStorySchema = {
-  params: spotIdParams,
-  body: {
-    type: "object",
-    required: ["preferences"],
-    additionalProperties: false,
-    properties: {
-      preferences: {
-        type: "object",
-        required: ["tags"],
-        additionalProperties: false,
-        properties: {
-          tags: { type: "array", items: { type: "string" } },
-          freeText: { type: "string" },
-        },
-      },
-      tone: { type: "string" },
-    },
-  },
-} as const;
-
 /** POST /v1/diagnosis/next-pair */
 export const nextPairSchema = {
   body: {

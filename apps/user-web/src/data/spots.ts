@@ -1,25 +1,30 @@
 /**
  * スワイプ型レコメンド体験のスポットデータ（長野県小諸市）。
  *
- * エージェント側 (s1〜s12) のスポット定義と一致させ、
- * バックエンド経由で直接エージェントから推薦を得られるように設計。
+ * 好み診断の比較カードは comparisonSpots.ts（seed-data 由来）を参照。
+ * 以下の SWIPE_SPOTS / SWIPE_SPOTS_REFINE はレガシーのデモ定義。
  */
 
-export type SpotCategory = "観光" | "グルメ" | "宿泊" | "自然" | "歴史";
+export type SpotCategory = "観光" | "グルメ" | "自然" | "歴史";
 
-export const SWIPE_LIMIT = 9; // 初回は8件スワイプ
-export const SWIPE_LIMIT_REFINE = 6; // 追加ラウンドは5件
+/** 好み診断の比較カード専用。DB カテゴリ（都市・芸術・レジャー）をそのまま使う。 */
+export type DiagnosisSpotCategory = SpotCategory | "都市" | "芸術" | "レジャー・スポーツ";
+
+export const SWIPE_LIMIT = 11; // 好み診断デッキのスポット数（比較回数より多めに確保）
+export const COMPARISON_ROUNDS = 8; // 初回の比較回数
+export const SWIPE_LIMIT_REFINE = 6; // 深掘りデッキのスポット数
+export const COMPARISON_ROUNDS_REFINE = 5; // 深掘りの比較回数
 
 export type SwipeSpot = {
   id: string;
   name: string;
   prefecture: string;
   area: string;
-  category: SpotCategory;
+  category: DiagnosisSpotCategory;
   description: string;
   /** DB のおすすめポイント（最大3件） */
   highlights?: string[];
-  /** デモデータ用の蘊蓄（highlights がない場合のフォールバック） */
+  /** デモデータ用の補足テキスト（highlights がない場合のフォールバック） */
   trivia?: string;
   image: string;
 };
@@ -247,16 +252,3 @@ export const RECOMMENDATIONS_PAGE_SIZE = 10;
 
 // 初期ロード時のモックデータは空にする（APIから動的に取得）
 export const RECOMMENDATIONS: Recommendation[] = [];
-
-/** 「探す」導線（好み診断前）で表示する全スポット一覧。 */
-export const EXPLORE_SPOTS: Recommendation[] = [...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE].map((s) => ({
-  ...s,
-  reason: "",
-  match: 0,
-  memberOnly: false,
-}));
-
-/** スポットIDから蘊蓄テキストを取得する。 */
-export function getSpotTrivia(id: string): string | undefined {
-  return [...SWIPE_SPOTS, ...SWIPE_SPOTS_REFINE].find((sp) => sp.id === id)?.trivia;
-}

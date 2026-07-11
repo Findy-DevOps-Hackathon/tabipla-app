@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UndoIcon } from "../components/icons.tsx";
 import { SpotImage } from "../components/SpotImage.tsx";
-import type { SwipeSpot } from "../data/spots.ts";
+import { COMPARISON_ROUNDS, COMPARISON_ROUNDS_REFINE, type SwipeSpot } from "../data/spots.ts";
 import { spotPreviewText } from "../lib/spotMapper.ts";
 
 const MAX_WINS_PER_SPOT = 3;
@@ -39,13 +39,14 @@ function createInitialMatch(spots: SwipeSpot[]): SwipeMatch | null {
   return { championId: champion.id, challengerId: challenger.id, searchIndex: 2 };
 }
 
-function findNextChallenger(
+function findNextChallengerInRange(
   spots: SwipeSpot[],
   championId: string,
-  startIndex: number,
+  from: number,
+  to: number,
   wins: Record<string, number>,
 ): SwipeSpot | null {
-  for (let index = startIndex; index < spots.length; index++) {
+  for (let index = from; index < to; index++) {
     const spot = spots[index];
     if (!spot || spot.id === championId || isRetired(spot.id, wins)) continue;
     return spot;
@@ -53,13 +54,27 @@ function findNextChallenger(
   return null;
 }
 
-function findFreshPair(
+/** searchIndex 以降に候補がなければ先頭から再探索し、規定ラウンド数まで比較を続けられるようにする。 */
+function findNextChallenger(
   spots: SwipeSpot[],
+  championId: string,
   startIndex: number,
+  wins: Record<string, number>,
+): SwipeSpot | null {
+  const fromStart = findNextChallengerInRange(spots, championId, startIndex, spots.length, wins);
+  if (fromStart) return fromStart;
+  if (startIndex === 0) return null;
+  return findNextChallengerInRange(spots, championId, 0, startIndex, wins);
+}
+
+function findFreshPairInRange(
+  spots: SwipeSpot[],
+  from: number,
+  to: number,
   wins: Record<string, number>,
 ): { top: SwipeSpot; bottom: SwipeSpot; nextIndex: number } | null {
   let first: SwipeSpot | null = null;
-  for (let index = startIndex; index < spots.length; index++) {
+  for (let index = from; index < to; index++) {
     const spot = spots[index];
     if (!spot || isRetired(spot.id, wins)) continue;
     if (!first) {
@@ -69,6 +84,18 @@ function findFreshPair(
     return { top: first, bottom: spot, nextIndex: index + 1 };
   }
   return null;
+}
+
+/** searchIndex 以降にペアがなければ先頭から再探索する。 */
+function findFreshPair(
+  spots: SwipeSpot[],
+  startIndex: number,
+  wins: Record<string, number>,
+): { top: SwipeSpot; bottom: SwipeSpot; nextIndex: number } | null {
+  const fromStart = findFreshPairInRange(spots, startIndex, spots.length, wins);
+  if (fromStart) return fromStart;
+  if (startIndex === 0) return null;
+  return findFreshPairInRange(spots, 0, startIndex, wins);
 }
 
 /** 勝者決定後の次の対戦カードを決める。3勝したスポットは退場し、以降は別ペアを組む。 */
@@ -133,6 +160,8 @@ type ComparisonCardProps = {
   selected: boolean;
   rejected: boolean;
   wiggle: boolean;
+  /** 1回目の対戦のみ、操作ヒントの揺れを大きくする。 */
+  wiggleStrong?: boolean;
   onSelect: () => void;
 };
 
@@ -148,9 +177,19 @@ function ComparisonCard({
   selected,
   rejected,
   wiggle,
+  wiggleStrong = false,
   onSelect,
 }: ComparisonCardProps) {
   const showWiggle = wiggle && !selected && !rejected;
+  const wiggleClass = showWiggle
+    ? position === "top"
+      ? wiggleStrong
+        ? "animate-compare-hint-top-strong"
+        : "animate-compare-hint-top"
+      : wiggleStrong
+        ? "animate-compare-hint-bottom-strong"
+        : "animate-compare-hint-bottom"
+    : "";
 
   return (
     <button
@@ -170,7 +209,7 @@ function ComparisonCard({
       }}
       className={`relative flex w-full touch-manipulation flex-col overflow-hidden rounded-2xl bg-white text-left disabled:cursor-not-allowed ${
         position === "top" ? "origin-top" : "origin-bottom"
-      } ${showWiggle ? (position === "top" ? "animate-compare-hint-top" : "animate-compare-hint-bottom") : ""}`}
+      } ${wiggleClass}`}
     >
       <div className="relative h-[230px] w-full">
         <SpotImage
@@ -181,9 +220,6 @@ function ComparisonCard({
           priority
         />
         <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/10 from-30% to-black/80" />
-        <span className="absolute left-3 top-3 inline-block rounded-md bg-slate-600/90 px-2.5 py-1 text-[12px] font-bold text-white">
-          {spot.category}
-        </span>
         <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 px-4 pb-4">
           <p className="text-[15px] font-bold leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
             {spot.name}
@@ -200,7 +236,7 @@ function ComparisonCard({
 /** フロー 3: 2つのスポットを比較して好みを伝える画面。 */
 export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: SwipeScreenProps) {
   const initialMatch = createInitialMatch(spots);
-  const totalRounds = Math.max(1, spots.length - 1);
+  const totalRounds = refine ? COMPARISON_ROUNDS_REFINE : COMPARISON_ROUNDS;
   const [roundNumber, setRoundNumber] = useState(1);
   const [championId, setChampionId] = useState(() => initialMatch?.championId ?? "");
   const [challengerId, setChallengerId] = useState(() => initialMatch?.challengerId ?? "");
@@ -330,6 +366,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
 
   const progress = totalRounds > 0 ? (roundNumber / totalRounds) * 100 : 0;
   const canUndo = history.length > 0 && !locked;
+  const isFirstRound = roundNumber === 1;
 
   return (
     <div className="flex flex-1 flex-col justify-between">
@@ -390,6 +427,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
                 selected={pick?.winnerId === currentTop.id}
                 rejected={pick?.loserId === currentTop.id}
                 wiggle={hintActive && !locked}
+                wiggleStrong={isFirstRound}
                 onSelect={() => pickWinner(currentTop.id, currentBottom.id)}
               />
               <div className="flex items-center justify-center">
@@ -404,6 +442,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
                 selected={pick?.winnerId === currentBottom.id}
                 rejected={pick?.loserId === currentBottom.id}
                 wiggle={hintActive && !locked}
+                wiggleStrong={isFirstRound}
                 onSelect={() => pickWinner(currentBottom.id, currentTop.id)}
               />
             </div>

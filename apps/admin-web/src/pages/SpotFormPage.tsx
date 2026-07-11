@@ -8,6 +8,7 @@ import {
   generateSpotImage,
   geocodeAddress,
   getSpot,
+  isAbortError,
   lookupPlaceByName,
   resolveReferenceImageForGenerate,
   spotImageResultToFile,
@@ -104,6 +105,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const [generatingDescription, setGeneratingDescription] = useState(false);
   const [generatingHighlights, setGeneratingHighlights] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
+  const imageGenerateAbortRef = useRef<AbortController | null>(null);
   const [descriptionGenerateMiss, setDescriptionGenerateMiss] = useState(false);
   const [highlightsGenerateMiss, setHighlightsGenerateMiss] = useState(false);
   const [imageGenerateMiss, setImageGenerateMiss] = useState(false);
@@ -112,8 +114,9 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   const coordsManualRef = useRef(false);
   const nameLookupSkipRef = useRef(isEdit);
 
-  const formBusy =
-    saving || deleting || generatingImage || generatingDescription || generatingHighlights;
+  const formSaving = saving || deleting;
+  const formGenerating = generatingImage || generatingDescription || generatingHighlights;
+  const formBusy = formSaving || formGenerating;
 
   useEffect(() => {
     if (!embedded) return;
@@ -320,6 +323,9 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
   };
 
   const handleGenerateImage = async () => {
+    imageGenerateAbortRef.current?.abort();
+    const controller = new AbortController();
+    imageGenerateAbortRef.current = controller;
     setGeneratingImage(true);
     setImageGenerateMiss(false);
 
@@ -341,17 +347,26 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
         municipality: params.municipality,
         address: params.address,
         referenceImage,
+        signal: controller.signal,
       });
       const file = spotImageResultToFile(image, spotName);
       setPendingImageFile(file);
     } catch (e) {
+      if (isAbortError(e)) return;
       setImageGenerateMiss(true);
       if (e instanceof Error && e.message) {
         setToast(e.message);
       }
     } finally {
+      if (imageGenerateAbortRef.current === controller) {
+        imageGenerateAbortRef.current = null;
+      }
       setGeneratingImage(false);
     }
+  };
+
+  const handleCancelGenerateImage = () => {
+    imageGenerateAbortRef.current?.abort();
   };
 
   const setAddress = (value: string) => {
@@ -367,13 +382,17 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
 
   const validate = (): boolean => {
     const next: Partial<Record<keyof FormState, string>> = {};
-    if (!form.name.trim()) next.name = "必須項目です";
-    if (!form.description.trim()) next.description = "必須項目です";
+    if (!form.name.trim()) next.name = "観光地名を入力してください";
+    if (!form.address.trim()) next.address = "住所を入力してください";
+    if (!form.description.trim()) next.description = "紹介文を入力してください";
     else if (form.description.length > MAX_DESCRIPTION_LENGTH) {
       next.description = `${MAX_DESCRIPTION_LENGTH}文字以内で入力してください`;
     }
-    if (isEdit && form.categories.length === 0) {
-      next.categories = "1件以上選択してください";
+    if (!parseHighlightsText(form.highlights).length) {
+      next.highlights = "おすすめポイントを入力してください";
+    }
+    if (form.categories.length === 0) {
+      next.categories = "カテゴリを1件以上選択してください";
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -491,7 +510,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
         )}
 
         <div className="mx-auto w-full pb-8">
-          <fieldset disabled={formBusy} className="min-w-0 border-0 p-0">
+          <fieldset disabled={formSaving} className="min-w-0 border-0 p-0">
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div className="lg:col-span-2 flex flex-col gap-2">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -527,6 +546,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 value={form.address}
                 onChange={setAddress}
                 placeholder="例: 国道沿い1丁目"
+                error={errors.address}
                 className="lg:col-span-2"
               />
               <SpotImageField
@@ -535,9 +555,10 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                 pendingFile={pendingImageFile}
                 onImageUrlChange={(imageUrl) => setField("imageUrl", imageUrl)}
                 onPendingFileChange={setPendingImageFile}
-                disabled={formBusy}
+                disabled={formSaving}
                 generating={generatingImage}
                 onGenerate={() => void handleGenerateImage()}
+                onCancelGenerate={handleCancelGenerateImage}
                 generateMiss={imageGenerateMiss}
               />
               <div className="lg:col-span-2">
@@ -555,7 +576,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                   <button
                     type="button"
                     className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={formBusy || generatingDescription || form.name.trim().length < 2}
+                    disabled={formSaving || generatingDescription || form.name.trim().length < 2}
                     onClick={() => void handleGenerateDescription()}
                   >
                     {generatingDescription ? "作成中…" : "AIで作成"}
@@ -593,7 +614,7 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                   <button
                     type="button"
                     className="cursor-pointer rounded-full text-xs text-[#2563eb] underline transition enabled:hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={formBusy || generatingHighlights || form.name.trim().length < 2}
+                    disabled={formSaving || generatingHighlights || form.name.trim().length < 2}
                     onClick={() => void handleGenerateHighlights()}
                   >
                     {generatingHighlights ? "作成中…" : "AIで作成"}
@@ -610,8 +631,13 @@ export default function SpotFormPage({ embedded = false }: { embedded?: boolean 
                     setHighlightsGenerateMiss(false);
                     setField("highlights", enforceHighlightsText(e.target.value));
                   }}
-                  className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/30 bg-white ${
+                    errors.highlights ? "border-[#dc2626]" : "border-[#e2e8f0]"
+                  }`}
                 />
+                {errors.highlights && (
+                  <p className="mt-2 text-xs text-[#dc2626]">{errors.highlights}</p>
+                )}
               </div>
               <div className="lg:col-span-2">
                 <p className="mb-3 text-sm font-medium text-[#0f172a]">

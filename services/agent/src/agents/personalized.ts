@@ -67,7 +67,7 @@ const LLM_INTRO_POOL = 15;
 const GLOBAL_KNN_LIMIT = 15;
 
 const DEFAULT_PAGE = 1;
-const DEFAULT_LIMIT = 20;
+const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
 
 type EsSpotRecord = Record<string, unknown> & {
@@ -100,22 +100,92 @@ function normalizePagination(options?: PersonalizedPlanOptions): { page: number;
   return { page, limit };
 }
 
+function hasStoredEmbedding(record?: SpotEmbeddingRecord): boolean {
+  return Array.isArray(record?.embedding) && record.embedding.length > 0;
+}
+
+function buildLikeEmbedText(catalogSpot?: Spot, esRecord?: EsSpotRecord): string {
+  const name = catalogSpot?.name ?? String(esRecord?.name ?? "");
+  const description = catalogSpot?.description ?? String(esRecord?.description ?? "");
+  const rawCategory = catalogSpot?.category ?? esRecord?.category;
+  const categories = Array.isArray(rawCategory)
+    ? rawCategory.map(String)
+    : rawCategory
+      ? [String(rawCategory)]
+      : [];
+  const highlights =
+    catalogSpot?.highlights ??
+    (Array.isArray(esRecord?.highlights) ? (esRecord.highlights as string[]) : []);
+  return [name, description, ...categories, ...highlights].filter(Boolean).join("\n");
+}
+
+function countLikesWithEmbedding(
+  likes: string[],
+  embeddingsById: Map<string, SpotEmbeddingRecord>,
+): number {
+  return likes.filter((id) => hasStoredEmbedding(embeddingsById.get(id))).length;
+}
+
+/** ES に embedding が無い Like スポットをテキストから生成して補完する。 */
+async function enrichEmbeddingsForLikes(
+  sw: Swipes,
+  catalogSpots: Spot[],
+  esById: Map<string, EsSpotRecord>,
+  embeddingsById: Map<string, SpotEmbeddingRecord>,
+): Promise<Map<string, SpotEmbeddingRecord>> {
+  const catalogById = new Map(catalogSpots.map((spot) => [spot.id, spot]));
+  const enriched = new Map(embeddingsById);
+  let generated = 0;
+
+  for (const id of sw.likes) {
+    if (hasStoredEmbedding(enriched.get(id))) continue;
+
+    const text = buildLikeEmbedText(catalogById.get(id), esById.get(id));
+    if (!text.trim()) continue;
+
+    try {
+      const embedding = await embedText(text, { taskType: "RETRIEVAL_DOCUMENT" });
+      const existing = enriched.get(id);
+      enriched.set(id, {
+        category: existing?.category ?? catalogById.get(id)?.category,
+        highlights: existing?.highlights ?? catalogById.get(id)?.highlights,
+        embedding,
+      });
+      generated += 1;
+    } catch (e) {
+      console.error(`[personalizedPlan] Like ${id} の embedding 生成に失敗:`, e);
+    }
+  }
+
+  if (generated > 0) {
+    console.log(`[personalizedPlan] ES に無かった Like embedding を ${generated} 件生成しました`);
+  }
+
+  return enriched;
+}
+
 async function fetchSpotsFromEsByIds(ids: string[]): Promise<Map<string, EsSpotRecord>> {
   if (ids.length === 0) return new Map();
   const es = createElasticsearchClient();
   try {
-    const res = await es.search({
+    const res = await es.mget({
       index: DEFAULT_INDEX_NAME,
-      size: ids.length,
-      query: { ids: { values: ids } },
+      ids,
     });
 
     const map = new Map<string, EsSpotRecord>();
-    for (const h of res.hits.hits) {
-      const id = h._id;
-      if (!id) continue;
-      map.set(id, { id, ...(h._source as Record<string, unknown>) });
+    for (const doc of res.docs) {
+      if ("error" in doc || !doc.found || !doc._id) continue;
+      map.set(doc._id, { id: doc._id, ...(doc._source as Record<string, unknown>) });
     }
+
+    const withEmbedding = [...map.values()].filter(
+      (record) => Array.isArray(record.embedding) && record.embedding.length > 0,
+    ).length;
+    console.log(
+      `[personalizedPlan] ES lookup ${map.size}/${ids.length} 件, embedding=${withEmbedding}`,
+    );
+
     return map;
   } catch (e) {
     console.error("[personalized] fetchSpotsFromEsByIdsエラー:", e);
@@ -142,7 +212,8 @@ function buildPersonalizedSearchQuery(
 
 function esScoreToRankSimilarity(index: number, total: number): number {
   if (total <= 1) return 0.9;
-  return Math.max(0.05, 0.9 - (index / (total - 1)) * 0.45);
+  // 順位を [0.05, 0.90] に線形写像（以前は下限 0.45 で下位が中央に寄っていた）
+  return Math.max(0.05, 0.9 - (index / (total - 1)) * 0.85);
 }
 
 /** 自然文 + ベクトル + ID filter で、目的地カタログ内の候補を ES から広めに取得する。 */
@@ -474,12 +545,19 @@ async function computeAndCachePlan(
 
   const lookupIds = [...new Set([...sw.likes, ...catalogSpots.map((s) => s.id)])];
   const esById = await fetchSpotsFromEsByIds(lookupIds);
-  const embeddingsById = buildEmbeddingRecordMap(catalogSpots, toEsEmbeddingRecords(esById));
+  const embeddingsById = await enrichEmbeddingsForLikes(
+    sw,
+    catalogSpots,
+    esById,
+    buildEmbeddingRecordMap(catalogSpots, toEsEmbeddingRecords(esById)),
+  );
+  const likedEmbeddings = buildLikedEmbeddings(sw, embeddingsById);
+  const likesWithEmbedding = countLikesWithEmbedding(sw.likes, embeddingsById);
 
   const vPrefFromLikes = buildWeightedPreferenceVector(sw.likes, sw.likeWeights, embeddingsById);
   const focusAssessment = assessProfileFocus(profile, {
     preferenceVector: vPrefFromLikes,
-    likedEmbeddings: buildLikedEmbeddings(sw, embeddingsById),
+    likedEmbeddings,
     catalog: catalogSpots,
     embeddingsById,
     nopedIds: sw.nopes,
@@ -553,6 +631,8 @@ async function computeAndCachePlan(
     }
   }
 
+  const cohesionLabel =
+    focusAssessment.vectorCohesion === null ? "n/a" : focusAssessment.vectorCohesion.toFixed(3);
   console.log(
     `[personalizedPlan] ランキング ${rankedAll.length} 件` +
       (catalogSpots.length > 0
@@ -560,9 +640,8 @@ async function computeAndCachePlan(
         : " (ES全件 k-NN)") +
       ` → cache key ${planKey.slice(0, 12)}…` +
       ` / needsRefinement=${focusAssessment.needsRefinement}` +
-      (focusAssessment.vectorCohesion !== null
-        ? ` / vectorCohesion=${focusAssessment.vectorCohesion.toFixed(3)}`
-        : ""),
+      ` / vectorCohesion=${cohesionLabel}` +
+      ` / likesWithEmbedding=${likesWithEmbedding}/${sw.likes.length}`,
   );
 
   let result = "";

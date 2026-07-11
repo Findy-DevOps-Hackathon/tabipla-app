@@ -1,12 +1,11 @@
 {
-  "exportedAt": "2026-07-08T15:24:11.765Z",
-  "sourceDatabaseUrl": "seed-data + local dev image overlay (:5432)",
+  "exportedAt": "2026-07-11T03:53:21.798Z",
+  "sourceDatabaseUrl": "postgresql://tabipla:***@localhost:5433/tabipla",
   "counts": {
     "municipalities": 12,
     "adminUsers": 2,
-    "spots": 60,
+    "spots": 56,
     "coupons": 0,
-    "unchikuFacts": 0,
-    "images": 60
+    "images": 56
   }
 }

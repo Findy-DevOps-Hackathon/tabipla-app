@@ -6,6 +6,7 @@ import {
   isDestinationSpot,
   type TripDestination,
 } from "./lib/destination.ts";
+import { isDisplayableDocument } from "./lib/spotCompleteness.ts";
 import type { SearchMode, SearchResponse, SpotDocument } from "./types.ts";
 
 /**
@@ -115,7 +116,9 @@ export async function fetchPublicSpots(params: FetchSpotsParams = {}): Promise<S
     (params.area && params.prefecture
       ? [{ area: params.area, prefecture: params.prefecture }]
       : destinations);
-  return (data.spots ?? []).filter((spot) => isDestinationSpot(spot, filterDestinations));
+  return (data.spots ?? [])
+    .filter((spot) => isDestinationSpot(spot, filterDestinations))
+    .filter(isDisplayableDocument);
 }
 
 type SpotDetailResponse = {
@@ -132,6 +135,9 @@ export async function fetchSpotById(id: string, signal?: AbortSignal): Promise<S
   if (!res.ok) await parseApiError(res);
   const data = (await res.json()) as SpotDetailResponse;
   if (!isDestinationSpot(data.spot)) {
+    throw new Error("スポットが見つかりません。");
+  }
+  if (!isDisplayableDocument(data.spot)) {
     throw new Error("スポットが見つかりません。");
   }
   return data.spot;

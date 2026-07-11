@@ -1,6 +1,6 @@
-import { Loader2, Sparkles, Upload, X } from "lucide-react";
+import { Crop, Loader2, Sparkles, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
-import { SPOT_IMAGE_ACCEPT } from "../api.ts";
+import { SPOT_IMAGE_ACCEPT, spotImageBase64ToFile } from "../api.ts";
 import type { CollectedSpotDraft } from "../context/SpotAddDraftContext.tsx";
 import { useSpotImageCropPicker } from "../hooks/useSpotImageCropPicker.tsx";
 
@@ -10,6 +10,7 @@ type CollectSpotImageCellProps = {
   disabled?: boolean;
   className?: string;
   onGenerate: () => void;
+  onCancelGenerate?: () => void;
   onUpload: (file: File) => void;
   onRemove: () => void;
 };
@@ -21,6 +22,7 @@ export function CollectSpotImageCell({
   disabled = false,
   className = "",
   onGenerate,
+  onCancelGenerate,
   onUpload,
   onRemove,
 }: CollectSpotImageCellProps) {
@@ -28,7 +30,7 @@ export function CollectSpotImageCell({
   const [error, setError] = useState<string | null>(null);
   const zoneDisabled = disabled || busy !== null;
 
-  const { handleRawFile, cropModal } = useSpotImageCropPicker({
+  const { handleRawFile, openCrop, cropModal } = useSpotImageCropPicker({
     onValidationError: setError,
     onFileReady: (file) => {
       setError(null);
@@ -43,24 +45,58 @@ export function CollectSpotImageCell({
     if (!zoneDisabled) inputRef.current?.click();
   };
 
+  const busyOverlay = busy ? (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-white/90 px-1">
+      <Loader2 className="size-4 animate-spin text-[#2563eb]" aria-hidden />
+      <span className="text-[10px] font-medium text-[#475569]">
+        {busy === "upload" ? "UPLOAD" : "イラスト化"}
+      </span>
+      {busy === "generate" && onCancelGenerate && (
+        <button
+          type="button"
+          className="relative z-20 mt-0.5 cursor-pointer text-[10px] text-[#64748b] underline transition hover:text-[#0f172a]"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCancelGenerate();
+          }}
+        >
+          キャンセル
+        </button>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className={`flex w-28 flex-col gap-2 ${className}`}>
       {src ? (
         <div className="group relative aspect-16/11 w-full overflow-hidden rounded-lg border border-[#cbd5e1] bg-[#f8fafc] shadow-sm transition">
-          {busy ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-white/90">
-              <Loader2 className="size-4 animate-spin text-[#2563eb]" aria-hidden />
-              <span className="text-[10px] font-medium text-[#475569]">
-                {busy === "upload" ? "UPLOAD" : "イラスト化"}
-              </span>
-            </div>
-          ) : (
+          {busyOverlay}
+          {!busy && (
             <>
               <img
                 src={src}
                 alt={`${spot.name} の画像`}
                 className="absolute inset-0 size-full object-cover"
               />
+              <button
+                type="button"
+                disabled={zoneDisabled}
+                onClick={() => {
+                  if (!spot.pendingImage) return;
+                  setError(null);
+                  openCrop(
+                    spotImageBase64ToFile(
+                      spot.pendingImage.mimeType,
+                      spot.pendingImage.data,
+                      spot.name,
+                    ),
+                  );
+                }}
+                aria-label={`${spot.name} の画像を調整`}
+                className="absolute top-1 left-1 z-10 flex size-5 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition group-hover:opacity-100 enabled:hover:bg-black/70 disabled:cursor-not-allowed"
+              >
+                <Crop className="size-3" aria-hidden />
+              </button>
               <button
                 type="button"
                 disabled={zoneDisabled}
@@ -73,6 +109,10 @@ export function CollectSpotImageCell({
             </>
           )}
         </div>
+      ) : busy ? (
+        <div className="relative aspect-16/11 w-full overflow-hidden rounded-lg border border-dashed border-[#cbd5e1] bg-[#f8fafc]">
+          {busyOverlay}
+        </div>
       ) : (
         <button
           type="button"
@@ -84,19 +124,10 @@ export function CollectSpotImageCell({
               : "cursor-pointer hover:border-[#2563eb] hover:bg-[#eff6ff]"
           }`}
         >
-          {busy ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-white/90">
-              <Loader2 className="size-4 animate-spin text-[#2563eb]" aria-hidden />
-              <span className="text-[10px] font-medium text-[#475569]">
-                {busy === "upload" ? "UPLOAD" : "イラスト化"}
-              </span>
-            </div>
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-[#475569]">
-              <Upload className="size-4" aria-hidden />
-              <span className="text-[10px] font-medium">UPLOAD</span>
-            </div>
-          )}
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-[#475569]">
+            <Upload className="size-4" aria-hidden />
+            <span className="text-[10px] font-medium">UPLOAD</span>
+          </div>
         </button>
       )}
 

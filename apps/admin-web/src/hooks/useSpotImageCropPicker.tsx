@@ -33,6 +33,15 @@ export function useSpotImageCropPicker({
     setCropFile(null);
   }
 
+  function openCrop(file: File) {
+    const validationError = validateSpotImageFile(file);
+    if (validationError) {
+      onValidationError?.(validationError);
+      return;
+    }
+    setCropFile(file);
+  }
+
   const cropModal = (
     <SpotImageCropModal
       open={cropFile !== null}
@@ -42,5 +51,5 @@ export function useSpotImageCropPicker({
     />
   );
 
-  return { handleRawFile, cropModal };
+  return { handleRawFile, openCrop, cropModal };
 }

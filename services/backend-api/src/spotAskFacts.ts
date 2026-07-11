@@ -1,4 +1,4 @@
-import type { SpotRow, UnchikuFactRow } from "@tabipla/db";
+import type { SpotRow } from "@tabipla/db";
 
 export type AskSpotPayload = {
   name: string;
@@ -35,15 +35,9 @@ function toAskSpotPayload(spot: SpotRow): AskSpotPayload {
 }
 
 /** AIガイド（紹介エージェント）向けに DB から回答根拠ファクトを組み立てる。 */
-export function buildAskFacts(spot: SpotRow, unchikuRows: UnchikuFactRow[]): string[] {
+export function buildAskFacts(spot: SpotRow): string[] {
   const facts: string[] = [];
   appendSpotFields(facts, toAskSpotPayload(spot));
-
-  for (const row of unchikuRows) {
-    const text = row.text.trim();
-    if (text) facts.push(text);
-  }
-
   return facts;
 }
 

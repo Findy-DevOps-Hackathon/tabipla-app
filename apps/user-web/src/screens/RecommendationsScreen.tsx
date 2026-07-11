@@ -21,6 +21,8 @@ type RecommendationsScreenProps = {
   onStartDiagnosis: () => void;
   /** 「好みを再学習する」タップ時。 */
   onRestart: () => void;
+  /** 深掘り診断（追加の好み診断）を完了済みか。 */
+  detailedDiagnosisComplete?: boolean;
   /** 「ホームに戻る」タップ時。 */
   onGoHome: () => void;
   /** スポット詳細を開く。 */
@@ -45,6 +47,7 @@ export function RecommendationsScreen({
   diagnosisComplete,
   onStartDiagnosis,
   onRestart,
+  detailedDiagnosisComplete = false,
   onGoHome,
   onOpenSpot,
   aiIntroMessage = "",
@@ -280,18 +283,20 @@ export function RecommendationsScreen({
                     </button>
                   </article>
 
-                  {(index + 1) % 10 === 0 && visibleRecommendations.length > 10 && (
-                    <div className="col-span-2 py-2">
-                      <button
-                        type="button"
-                        onClick={onRestart}
-                        className={`${PRIMARY_BUTTON} relative h-8 shrink-0 overflow-hidden py-8 text-[15px] tracking-[1.6px]`}
-                      >
-                        <CardsIcon className="pointer-events-none absolute left-4 top-3/5 size-24 -translate-y-1/2 text-white/30 opacity-50" />
-                        <span className="relative text-shadow-md">好み診断を追加で行う</span>
-                      </button>
-                    </div>
-                  )}
+                  {(index + 1) % 10 === 0 &&
+                    visibleRecommendations.length > 10 &&
+                    !detailedDiagnosisComplete && (
+                      <div className="col-span-2 py-2">
+                        <button
+                          type="button"
+                          onClick={onRestart}
+                          className={`${PRIMARY_BUTTON} relative h-8 shrink-0 overflow-hidden py-8 text-[15px] tracking-[1.6px]`}
+                        >
+                          <CardsIcon className="pointer-events-none absolute left-4 top-3/5 size-24 -translate-y-1/2 text-white/30 opacity-50" />
+                          <span className="relative text-shadow-md">好み診断を追加で行う</span>
+                        </button>
+                      </div>
+                    )}
                 </Fragment>
               );
             })}
@@ -308,16 +313,18 @@ export function RecommendationsScreen({
 
         {visibleRecommendations.length > 0 && !hasMore && (
           <div className="mt-2 flex flex-col gap-3">
-            {diagnosisComplete && visibleRecommendations.length <= 10 && (
-              <button
-                type="button"
-                onClick={onRestart}
-                className={`${PRIMARY_BUTTON} relative h-14 w-full overflow-hidden text-[15px] tracking-[1.2px]`}
-              >
-                <CardsIcon className="pointer-events-none absolute left-4 top-1/2 size-20 -translate-y-1/2 text-white/30 opacity-50" />
-                <span className="relative text-shadow-md">好みをより深く設定する</span>
-              </button>
-            )}
+            {diagnosisComplete &&
+              visibleRecommendations.length <= 10 &&
+              !detailedDiagnosisComplete && (
+                <button
+                  type="button"
+                  onClick={onRestart}
+                  className={`${PRIMARY_BUTTON} relative h-14 w-full overflow-hidden text-[15px] tracking-[1.2px]`}
+                >
+                  <CardsIcon className="pointer-events-none absolute left-4 top-1/2 size-20 -translate-y-1/2 text-white/30 opacity-50" />
+                  <span className="relative text-shadow-md">好みをより深く設定する</span>
+                </button>
+              )}
             <button
               type="button"
               onClick={onGoHome}

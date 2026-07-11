@@ -172,6 +172,25 @@ export async function readSpotImageFile(file: File): Promise<{ mimeType: string;
   return { mimeType: file.type, data };
 }
 
+function spotImageMimeToExtension(mimeType: string): string {
+  if (mimeType === "image/webp") return "webp";
+  if (mimeType === "image/png") return "png";
+  return "jpg";
+}
+
+function blobToSpotImageFile(blob: Blob, fileName: string): File {
+  const mimeType = blob.type || "image/jpeg";
+  if (!SPOT_IMAGE_ACCEPT.split(",").includes(mimeType)) {
+    throw new Error("JPEG / PNG / WebP のみアップロードできます。");
+  }
+  if (blob.size > SPOT_IMAGE_MAX_BYTES) {
+    throw new Error("画像サイズは 5MB 以下にしてください。");
+  }
+  const ext = spotImageMimeToExtension(mimeType);
+  const baseName = fileName.replace(/\.[^.]+$/, "") || "spot";
+  return new File([blob], `${baseName}.${ext}`, { type: mimeType });
+}
+
 async function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -193,6 +212,52 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+/** Base64 画像をトリミング用 File に変換する。 */
+export function spotImageBase64ToFile(mimeType: string, data: string, fileName = "spot"): File {
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return blobToSpotImageFile(new Blob([bytes], { type: mimeType }), fileName);
+}
+
+async function fetchSpotImageBlob(params: { imageUrl: string; spotId?: string }): Promise<Blob> {
+  const cleanUrl = params.imageUrl.split("?")[0]?.trim();
+  if (!cleanUrl) {
+    throw new Error("画像 URL が不正です");
+  }
+
+  const src = resolveSpotImageSrc({ id: params.spotId ?? "preview", imageUrl: cleanUrl });
+  if (!src) {
+    throw new Error("画像 URL が不正です");
+  }
+
+  const headers = new Headers(authHeaders());
+  const res = await fetchWithTimeout(src, { headers, cache: "no-store" }, IMAGE_FETCH_TIMEOUT_MS);
+  if (!res.ok) {
+    throw new Error("画像の取得に失敗しました");
+  }
+
+  return res.blob();
+}
+
+/** 表示中のスポット画像をトリミング用 File として取得する。 */
+export async function fetchSpotImageAsFile(params: {
+  pendingFile?: File | null;
+  imageUrl?: string;
+  spotId?: string;
+  fileName?: string;
+}): Promise<File | undefined> {
+  if (params.pendingFile) {
+    return params.pendingFile;
+  }
+
+  const cleanUrl = params.imageUrl?.split("?")[0]?.trim();
+  if (!cleanUrl) return undefined;
+
+  const blob = await fetchSpotImageBlob({ imageUrl: cleanUrl, spotId: params.spotId });
+  return blobToSpotImageFile(blob, params.fileName ?? "spot");
+}
+
 /** イラスト生成用に、アップロード済み画像を referenceImage 形式で取得する。 */
 export async function resolveReferenceImageForGenerate(params: {
   pendingFile?: File | null;
@@ -206,23 +271,13 @@ export async function resolveReferenceImageForGenerate(params: {
   const cleanUrl = params.imageUrl?.split("?")[0]?.trim();
   if (!cleanUrl) return undefined;
 
-  const src = resolveSpotImageSrc({ id: params.spotId ?? "preview", imageUrl: cleanUrl });
-  if (!src) return undefined;
-
-  const headers = new Headers(authHeaders());
-  const res = await fetchWithTimeout(src, { headers, cache: "no-store" }, IMAGE_FETCH_TIMEOUT_MS);
-  if (!res.ok) {
-    throw new Error("アップロード画像の取得に失敗しました");
-  }
-
-  const blob = await res.blob();
-  if (blob.size > SPOT_IMAGE_MAX_BYTES) {
-    throw new Error("画像サイズは 5MB 以下にしてください。");
-  }
-
+  const blob = await fetchSpotImageBlob({ imageUrl: cleanUrl, spotId: params.spotId });
   const mimeType = blob.type || "image/jpeg";
   if (!SPOT_IMAGE_ACCEPT.split(",").includes(mimeType)) {
     throw new Error("JPEG / PNG / WebP のみアップロードできます。");
+  }
+  if (blob.size > SPOT_IMAGE_MAX_BYTES) {
+    throw new Error("画像サイズは 5MB 以下にしてください。");
   }
 
   const data = await blobToBase64(blob);
@@ -346,6 +401,8 @@ export type GenerateSpotImageParams = {
   address?: string;
   /** アップロード済み写真を参考にイラスト化する場合に指定 */
   referenceImage?: { mimeType: string; data: string };
+  /** 指定時はキャンセル可能（タイムアウトと併用） */
+  signal?: AbortSignal;
 };
 
 export type GenerateSpotImageResult = {
@@ -373,6 +430,12 @@ export async function uploadSpotImageBase64(
   });
 }
 
+/** fetch の AbortError（ユーザーによるキャンセル）かどうか。 */
+export function isAbortError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  return error instanceof Error && error.name === "AbortError";
+}
+
 /** スケッチ風観光イラストを agent 経由で生成する（16:11 WebP）。 */
 export async function generateSpotImage(
   params: GenerateSpotImageParams,
@@ -380,12 +443,16 @@ export async function generateSpotImage(
   const name = params.name.trim() || (params.referenceImage ? "観光スポット" : "");
   if (!name) throw new Error("観光地名を入力してください");
 
+  const timeoutSignal = AbortSignal.timeout(AGENT_REQUEST_TIMEOUT_MS);
+  const signal = params.signal ? AbortSignal.any([params.signal, timeoutSignal]) : timeoutSignal;
+
   const res = await fetchWithTimeout(
     `${AGENT_BASE}/v1/generate-spot-image`,
     {
       method: "POST",
       headers: agentHeaders({ "Content-Type": "application/json" }),
       cache: "no-store",
+      signal,
       body: JSON.stringify({
         name,
         prefecture: params.prefecture,

@@ -66,7 +66,7 @@ export function SpotDetailModal({
   const keyboardInset = Math.max(0, layoutHeight - viewport.height - viewport.offsetTop);
   const keyboardOpen = keyboardInset > 100;
   const highlights = (rec.highlights ?? []).filter(Boolean);
-  const initialGuideText = "このスポットについて、気になることを聞いてみてください。";
+  const initialGuideText = "このスポットについて、気になることを聞いてみてね";
 
   // チャット用のローカルステート
   const [textInput, setTextInput] = useState("");

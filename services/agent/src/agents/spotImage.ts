@@ -48,7 +48,21 @@ const NO_TEXT_RULES = [
   "文字のないイラストのみを出力する。",
 ].join("\n");
 
-/** 旅行スケッチブック風イラストの共通プロンプト本文。 */
+/** スケッチブック風の描き方・トーン指定（スポット名・調査結果は含めない）。 */
+function buildSketchBookStyleOnly(): string {
+  return [
+    "細めの手描きインク線、少しかすれた線、透明水彩と色鉛筆による着彩。",
+    "完全に写実的にはせず、形を少し単純化する。",
+    "落ち着いた温かい色合い、紙の質感、ゆったりした余白。",
+    "旅先で偶然見つけた風景を記録したような親しみのある雰囲気。",
+    "人物を入れる場合は小さく、顔の詳細は描き込まない。",
+    "観光パンフレット、写真、3DCG、過度にリアルな表現にはしない。",
+    "横長のWebサイト用イラスト。",
+    NO_TEXT_RULES,
+  ].join("\n");
+}
+
+/** 旅行スケッチブック風イラストの共通プロンプト本文（テキストのみ生成向け）。 */
 function buildSketchBookPromptBody(
   spot: string,
   location: string,
@@ -82,14 +96,7 @@ function buildSketchBookPromptBody(
     compositionLine,
     atmosphereLine,
     avoidLine,
-    "細めの手描きインク線、少しかすれた線、透明水彩と色鉛筆による着彩。",
-    "完全に写実的にはせず、形を少し単純化する。",
-    "落ち着いた温かい色合い、紙の質感、ゆったりした余白。",
-    "旅先で偶然見つけた風景を記録したような親しみのある雰囲気。",
-    "人物を入れる場合は小さく、顔の詳細は描き込まない。",
-    "観光パンフレット、写真、3DCG、過度にリアルな表現にはしない。",
-    "横長のWebサイト用イラスト。",
-    NO_TEXT_RULES,
+    buildSketchBookStyleOnly(),
     briefBlock,
   ]
     .filter(Boolean)
@@ -115,24 +122,19 @@ export function buildTextOnlyPrompt(
   return `${buildSketchBookPromptBody(spot, location, brief, wikipediaIntro)}${addressLine}\n\n${spot}の観光イラストを作成して`;
 }
 
-/** 参考写真ベース生成向けプロンプト（1枚目=スポット写真）。 */
-export function buildStylizePrompt(
-  input: SpotImageInput,
-  brief: SpotVisualBrief | null = null,
-  wikipediaIntro: string | null = null,
-): string {
-  const spot = input.name.trim();
-  const location = spotLocationLabel(input.prefecture, input.municipality);
+/** 参考写真ベース生成向けプロンプト（写真の内容だけをスタイル変換する）。 */
+export function buildStylizePrompt(): string {
   return [
     "添付した参考写真をもとに、以下のスタイルでイラスト化してください。",
-    "参考写真の構図・建物・地形・木々の配置は維持し、描き方だけ変えてください。",
+    "参考写真の構図・建物・地形・木々・空の配置は維持し、描き方だけ変えてください。",
     "参考写真にない建物や物体は追加しないでください。",
     "参考写真に写っている看板・文字・標識はすべて除去し、無地の面に置き換えてください。",
-    "調査結果の必須要素がある場合は、参考写真と矛盾しない範囲で反映してください。",
+    "スポット名・地名・説明文などのテキスト情報は無視し、写真の内容だけを忠実にイラスト化してください。",
     "",
-    buildSketchBookPromptBody(spot, location, brief, wikipediaIntro),
+    "日本の旅行スケッチブックに描かれたようなイラスト。",
+    buildSketchBookStyleOnly(),
     "",
-    `${spot}の観光イラストを作成して`,
+    "参考写真をスケッチブック風イラストに変換して",
   ].join("\n");
 }
 
@@ -243,13 +245,12 @@ async function generateTextOnlySpotImage(
   return { ...generated, prompt };
 }
 
-async function stylizeReferencePhoto(
-  input: SpotImageInput,
-  reference: { buffer: Buffer; mimeType: string; sourceUrl: string },
-  brief: SpotVisualBrief | null,
-  wikipediaIntro: string | null,
-): Promise<SpotImageResult> {
-  const prompt = buildStylizePrompt(input, brief, wikipediaIntro);
+async function stylizeReferencePhoto(reference: {
+  buffer: Buffer;
+  mimeType: string;
+  sourceUrl: string;
+}): Promise<SpotImageResult> {
+  const prompt = buildStylizePrompt();
   const preparedReference = await prepareReferenceForSketch(reference.buffer);
 
   const generated = await generateFromGeminiContent(
@@ -290,19 +291,18 @@ export async function generateSpotImage(input: SpotImageInput): Promise<SpotImag
     address: input.address?.trim() || undefined,
   };
 
-  const { brief, wikipediaIntro } = await researchSpotVisualBrief(searchInput);
-
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       if (input.referenceImage) {
         const reference = parseUploadedReference(input.referenceImage);
-        const result = await stylizeReferencePhoto(input, reference, brief, wikipediaIntro);
+        const result = await stylizeReferencePhoto(reference);
         console.info(`[spot-image] ${name} model=${getSpotImageModel()} mode=upload`);
         console.info(`[spot-image] ${name} prompt: ${result.prompt.slice(0, 240)}…`);
         return result;
       }
 
       if (mode === "text-only") {
+        const { brief, wikipediaIntro } = await researchSpotVisualBrief(searchInput);
         const result = await generateTextOnlySpotImage(input, brief, wikipediaIntro);
         console.info(`[spot-image] ${name} model=${getSpotImageModel()} mode=text-only`);
         console.info(`[spot-image] ${name} prompt: ${result.prompt.slice(0, 240)}…`);
@@ -311,7 +311,7 @@ export async function generateSpotImage(input: SpotImageInput): Promise<SpotImag
 
       if (mode === "photo") {
         const reference = await findReferencePhoto(searchInput);
-        const result = await stylizeReferencePhoto(input, reference, brief, wikipediaIntro);
+        const result = await stylizeReferencePhoto(reference);
         console.info(
           `[spot-image] ${name} model=${getSpotImageModel()} mode=photo ref=${reference.sourceUrl}`,
         );
@@ -322,7 +322,7 @@ export async function generateSpotImage(input: SpotImageInput): Promise<SpotImag
       // auto: 参考写真が取れれば photo、なければ text-only（調査結果付き）
       const reference = await tryFindReferencePhoto(searchInput);
       if (reference) {
-        const result = await stylizeReferencePhoto(input, reference, brief, wikipediaIntro);
+        const result = await stylizeReferencePhoto(reference);
         console.info(
           `[spot-image] ${name} model=${getSpotImageModel()} mode=auto→photo ref=${reference.sourceUrl}`,
         );
@@ -331,6 +331,7 @@ export async function generateSpotImage(input: SpotImageInput): Promise<SpotImag
       }
 
       console.info(`[spot-image] ${name} mode=auto→text-only (no reference photo)`);
+      const { brief, wikipediaIntro } = await researchSpotVisualBrief(searchInput);
       const result = await generateTextOnlySpotImage(input, brief, wikipediaIntro);
       console.info(`[spot-image] ${name} model=${getSpotImageModel()} mode=auto→text-only`);
       console.info(`[spot-image] ${name} prompt: ${result.prompt.slice(0, 240)}…`);

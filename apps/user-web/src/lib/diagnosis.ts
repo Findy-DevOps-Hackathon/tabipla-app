@@ -36,3 +36,12 @@ export function markDetailedDiagnosisComplete(): void {
     // localStorage 不可時はセッション内 state のみに依存する。
   }
 }
+
+/** 深掘り診断の完了状態をリセットする（ホームに戻ったときなど）。 */
+export function resetDetailedDiagnosisComplete(): void {
+  try {
+    localStorage.removeItem(DETAILED_KEY);
+  } catch {
+    // localStorage 不可時はセッション内 state のみに依存する。
+  }
+}

@@ -6,8 +6,8 @@ import { presentPlanError } from "../lib/planError.ts";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "../lib/ui.ts";
 
 type ProcessingScreenProps = {
-  /** 比較した件数（本文に表示）。 */
-  count: number;
+  /** 好み比較の回数（自由記述テキストは含めない）。 */
+  comparisonCount: number;
   /** 分析完了時。 */
   onDone: () => void;
   /** APIフェッチが完了したか */
@@ -32,7 +32,7 @@ type ProcessingScreenProps = {
 
 /** フロー 4: 好みを分析中であることを示す画面（ai-processing）。 */
 export function ProcessingScreen({
-  count,
+  comparisonCount,
   onDone,
   isFetchDone = false,
   apiError = null,
@@ -134,7 +134,7 @@ export function ProcessingScreen({
             </div>
           </div>
         ) : showRefinePrompt ? (
-          <div className="flex w-full max-w-[320px] flex-col items-center gap-6">
+          <div className="flex w-full max-w-[320px] flex-col items-center gap-16">
             <div className="flex w-full items-end gap-1">
               <AiGuideAvatar size={40} className="shrink-0" />
               <AiGuideSpeechBubble>
@@ -144,12 +144,12 @@ export function ProcessingScreen({
                 </span>
               </AiGuideSpeechBubble>
             </div>
-            <div className="flex w-full flex-col gap-2.5">
+            <div className="flex w-full flex-col gap-5.5">
               {onRefineMore && (
                 <button
                   type="button"
                   onClick={onRefineMore}
-                  className={`${PRIMARY_BUTTON} px-6 py-3 text-[14px]`}
+                  className={`${PRIMARY_BUTTON} px-6 h-14 text-[14px]`}
                 >
                   もう少し選んで絞り込む
                 </button>
@@ -157,7 +157,7 @@ export function ProcessingScreen({
               <button
                 type="button"
                 onClick={onDone}
-                className={`${SECONDARY_BUTTON} px-6 py-3 text-[14px]`}
+                className={`${SECONDARY_BUTTON} px-6 h-14 text-[14px]`}
               >
                 このままおすすめを見る
               </button>
@@ -170,9 +170,9 @@ export function ProcessingScreen({
             </div>
 
             <div className="flex flex-col items-center gap-3">
-              <p className="text-[18px] font-semibold text-[#0f172a]">回答を基に診断中…</p>
-              <p className="text-center text-[14px] leading-[1.6] text-[#64748b]">
-                回答 {count} 件をもとに
+              <p className="text-[18px] font-semibold text-[#0f172a]">診断中…</p>
+              <p className="text-center text-[16px] leading-[1.6] text-[#64748b]">
+                {comparisonCount} 件をもとに
                 <br />
                 あなたに合うおすすめを選んでいます。
               </p>

@@ -8,7 +8,7 @@ export type FlowSession = {
   likeWeights: Record<string, number>;
   travelMemory: string;
   refining: boolean;
-  swipedCount: number;
+  comparisonCount: number;
   runId: number;
   swipeDeckIds: string[];
   selectedDestinationNames: string[];
@@ -34,7 +34,7 @@ const DEFAULT_SESSION: FlowSession = {
   likeWeights: {},
   travelMemory: "",
   refining: false,
-  swipedCount: 0,
+  comparisonCount: 0,
   runId: 0,
   swipeDeckIds: [],
   selectedDestinationNames: [],
@@ -69,12 +69,17 @@ function normalizeLikeWeights(value: unknown): Record<string, number> {
   return next;
 }
 
+type StoredFlowSession = Partial<FlowSession> & {
+  /** comparisonCount 改名前の localStorage 互換フィールド */
+  swipedCount?: number;
+};
+
 function normalizeSession(value: unknown): FlowSession {
   if (!value || typeof value !== "object") {
     return { ...DEFAULT_SESSION, step: readLegacyStep() };
   }
 
-  const raw = value as Partial<FlowSession>;
+  const raw = value as StoredFlowSession;
   const step =
     raw.step && (FLOW_STEPS as string[]).includes(raw.step) ? raw.step : readLegacyStep();
 
@@ -85,7 +90,12 @@ function normalizeSession(value: unknown): FlowSession {
     likeWeights: normalizeLikeWeights(raw.likeWeights),
     travelMemory: typeof raw.travelMemory === "string" ? raw.travelMemory : "",
     refining: raw.refining === true,
-    swipedCount: typeof raw.swipedCount === "number" && raw.swipedCount >= 0 ? raw.swipedCount : 0,
+    comparisonCount:
+      typeof raw.comparisonCount === "number" && raw.comparisonCount >= 0
+        ? raw.comparisonCount
+        : typeof raw.swipedCount === "number" && raw.swipedCount >= 0
+          ? raw.swipedCount
+          : 0,
     runId: typeof raw.runId === "number" && raw.runId >= 0 ? raw.runId : 0,
     swipeDeckIds: normalizeStringArray(raw.swipeDeckIds),
     selectedDestinationNames: normalizeStringArray(raw.selectedDestinationNames),

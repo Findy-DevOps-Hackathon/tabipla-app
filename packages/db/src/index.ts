@@ -38,8 +38,6 @@ export {
   upsertSpot,
   upsertSpots,
 } from "./repository/spots.js";
-// リポジトリ（蘊蓄）
-export { getUnchikuFactsBySpotId, upsertUnchikuFact } from "./repository/unchiku.js";
 // リポジトリ（会員ユーザー）
 export { createUser, deleteUserById, getUserByEmail } from "./repository/users.js";
 // スキーマ / 型
@@ -54,14 +52,12 @@ export type {
   NewSpotRow,
   NewTripFeedbackRow,
   NewTripPlanRow,
-  NewUnchikuFactRow,
   NewUserPreferenceRow,
   NewUserRow,
   SpotFeedbackRow,
   SpotRow,
   TripFeedbackRow,
   TripPlanRow,
-  UnchikuFactRow,
   UserPreferenceRow,
   UserRow,
 } from "./schema.js";
@@ -73,7 +69,6 @@ export {
   spots,
   tripFeedbacks,
   tripPlans,
-  unchikuFacts,
   userPreferences,
   users,
 } from "./schema.js";

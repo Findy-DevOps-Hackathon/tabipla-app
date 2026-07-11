@@ -27,7 +27,7 @@ Elasticsearch を用いた検索ロジックを集約する共通ライブラリ
 | `id` | string | yes | 一意なID（ES の _id） |
 | `name` | string | yes | スポット名（全文検索の主対象） |
 | `description` | string | yes | 説明・本文 |
-| `category` | string | no | カテゴリ（観光 / グルメ / 宿泊 / 自然 等） |
+| `category` | string | no | カテゴリ（観光 / グルメ / 自然 / 歴史 等） |
 | `area` | string | no | エリア・地域名（例: 京都市） |
 | `prefecture` | string | no | 都道府県 |
 | `address` | string | no | 住所 |

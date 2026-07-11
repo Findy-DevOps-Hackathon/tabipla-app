@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -39,6 +39,19 @@ function formatSelectionLabel(selected: string[]): string {
   return formatDestinationSelectionLabel(selected);
 }
 
+/** QR 入口などで優先都道府県があるとき、それ以外を折りたたんだ初期状態を作る。 */
+function buildInitialCollapsedPrefectures(preferredPrefecture?: string | null): Set<string> {
+  if (!preferredPrefecture) return new Set();
+
+  const prefectures = new Set(
+    AVAILABLE_DESTINATIONS.map((place) => place.prefecture).filter(
+      (prefecture): prefecture is string => Boolean(prefecture),
+    ),
+  );
+  prefectures.delete(preferredPrefecture);
+  return prefectures;
+}
+
 /** フロー 2: 目的地（市区町村・都道府県）を入力する画面（frame-2-input）。 */
 export function InputScreen({
   afterDiagnosis = false,
@@ -50,7 +63,17 @@ export function InputScreen({
 }: InputScreenProps) {
   const [value, setValue] = useState("");
   const [selected, setSelected] = useState<string[]>(initialSelected);
-  const [collapsedPrefectures, setCollapsedPrefectures] = useState<Set<string>>(() => new Set());
+  const [collapsedPrefectures, setCollapsedPrefectures] = useState<Set<string>>(() =>
+    buildInitialCollapsedPrefectures(preferredPrefecture),
+  );
+
+  const appliedInitialRef = useRef(initialSelected.length > 0);
+
+  useEffect(() => {
+    if (!afterDiagnosis || appliedInitialRef.current || initialSelected.length === 0) return;
+    setSelected(initialSelected);
+    appliedInitialRef.current = true;
+  }, [afterDiagnosis, initialSelected]);
   const location = value.trim();
   const placeMatches = afterDiagnosis
     ? AVAILABLE_DESTINATIONS
@@ -72,7 +95,6 @@ export function InputScreen({
   const selectedPrefecture = useMemo(() => getSelectedPrefecture(selected), [selected]);
   const destinationGroups = groupDestinationsByPrefecture(
     afterDiagnosis ? AVAILABLE_DESTINATIONS : placeMatches,
-    preferredPrefecture,
   );
 
   const toggleDestination = (name: string) => {

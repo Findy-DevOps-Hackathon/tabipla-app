@@ -3,19 +3,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
 import { API_BASE } from "./config.ts";
+import { COMPARISON_EXPLORE_SPOTS } from "./data/comparisonSpots.ts";
 import {
   getAllSupportedDestinations,
   readQrDestinationNamesFromLocation,
   resolveTripDestinations,
 } from "./data/places.ts";
 import {
-  EXPLORE_SPOTS,
   RECOMMENDATIONS_PAGE_SIZE,
   type Recommendation,
   SWIPE_LIMIT,
   SWIPE_LIMIT_REFINE,
-  SWIPE_SPOTS,
-  SWIPE_SPOTS_REFINE,
   type SwipeSpot,
 } from "./data/spots.ts";
 import {
@@ -23,6 +21,7 @@ import {
   formatAiGuideAnswer,
   isAiGuideLoadingMessage,
 } from "./lib/aiGuide.ts";
+import { pickRandomComparisonDeck, resolveComparisonDeckFromIds } from "./lib/comparisonDeck.ts";
 import {
   formatDestinationLabel,
   getCurrentDestinations,
@@ -34,6 +33,7 @@ import {
   isDiagnosisComplete,
   markDetailedDiagnosisComplete,
   markDiagnosisComplete,
+  resetDetailedDiagnosisComplete,
 } from "./lib/diagnosis.ts";
 import { isSystemFacingError, sanitizeUserFacingError } from "./lib/planError.ts";
 import { preloadImages } from "./lib/preloadImage.ts";
@@ -44,6 +44,7 @@ import {
   refreshRecommendationImages,
   resolveSpotById,
 } from "./lib/spotCatalog.ts";
+import { isDisplayableRecommendation } from "./lib/spotCompleteness.ts";
 import { readSpotIdFromLocation, setSpotIdInLocation } from "./lib/spotLink.ts";
 import { InputScreen } from "./screens/InputScreen.tsx";
 import { MemoryScreen } from "./screens/MemoryScreen.tsx";
@@ -83,6 +84,10 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function totalComparisonCount(wins: Record<string, number>): number {
+  return Object.values(wins).reduce((sum, count) => sum + count, 0);
+}
+
 /** 匿名ユーザー向け user-web の体験フロー。 */
 type Step = FlowStep;
 
@@ -91,21 +96,14 @@ const RECOMMENDATIONS_KEY = "tabipla-recommendations";
 const PLAN_MESSAGE_KEY = "tabipla-plan-message";
 const PLAN_PROFILE_SUMMARY_KEY = "tabipla-plan-profile-summary";
 const PLAN_TOTAL_KEY = "tabipla-plan-total";
-const QR_ENTRY_SESSION_KEY = "tabipla-qr-entry-url";
+
+/** Strict Mode の二重マウントでも同じ QR 初期値を返すためのモジュールキャッシュ。 */
+let cachedQrDestinationNames: string[] | null = null;
 
 function readInitialQrDestinationNames(): string[] {
-  const names = readQrDestinationNamesFromLocation();
-  if (names.length === 0) return [];
-
-  try {
-    const currentUrl = window.location.href;
-    if (sessionStorage.getItem(QR_ENTRY_SESSION_KEY) === currentUrl) return [];
-    sessionStorage.setItem(QR_ENTRY_SESSION_KEY, currentUrl);
-  } catch {
-    // sessionStorage 不可環境では QR の初期化を通常通り適用する。
-  }
-
-  return names;
+  if (cachedQrDestinationNames !== null) return cachedQrDestinationNames;
+  cachedQrDestinationNames = readQrDestinationNamesFromLocation();
+  return cachedQrDestinationNames;
 }
 
 /** 保存済みのおすすめ結果を読み出す（未保存・不正値なら空配列）。 */
@@ -115,7 +113,9 @@ function readStoredRecommendations(): Recommendation[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return (parsed as Recommendation[]).filter((rec) => isDestinationSpot(rec));
+    return (parsed as Recommendation[])
+      .filter((rec) => isDestinationSpot(rec))
+      .filter(isDisplayableRecommendation);
   } catch {
     return [];
   }
@@ -172,29 +172,15 @@ function viewKey(s: ViewSnapshot): string {
 /** history.state 内に画面スナップショットを格納するためのキー。 */
 const HISTORY_STATE_KEY = "tabiplaNav";
 
-function resolveSwipeDeckFromIds(
-  ids: string[],
-  isRefining: boolean,
-  catalog: SwipeSpot[],
-  refineCatalog: SwipeSpot[],
-): SwipeSpot[] {
-  const fallback = isRefining ? SWIPE_SPOTS_REFINE : SWIPE_SPOTS;
-  const pool =
-    (isRefining ? refineCatalog : catalog).length > 0
-      ? isRefining
-        ? refineCatalog
-        : catalog
-      : fallback;
+function resolveSwipeDeckFromIds(ids: string[], isRefining: boolean): SwipeSpot[] {
   const limit = isRefining ? SWIPE_LIMIT_REFINE : SWIPE_LIMIT;
 
   if (ids.length > 0) {
-    const restored = ids
-      .map((id) => pool.find((spot) => spot.id === id))
-      .filter((spot): spot is SwipeSpot => spot !== undefined);
+    const restored = resolveComparisonDeckFromIds(ids);
     if (restored.length >= 2) return restored;
   }
 
-  return pool.slice(0, limit);
+  return pickRandomComparisonDeck(limit);
 }
 
 /**
@@ -213,20 +199,21 @@ export default function App() {
   const initialQrPreferredPrefecture =
     resolveTripDestinations(initialQrDestinationNames)[0]?.prefecture ?? null;
   const initialSpotId = readInitialSpotIdFromUrl();
-  const [step, setStep] = useState<Step>(
-    initialQrDestinationNames.length > 0 ? "welcome" : initialFlow.step,
-  );
+  const initialStep: Step =
+    initialQrDestinationNames.length > 0 || initialFlow.step === "processing"
+      ? "welcome"
+      : initialFlow.step;
+  const [step, setStep] = useState<Step>(initialStep);
   const [, setLocation] = useState("");
-  const [swipedCount, setSwipedCount] = useState(initialFlow.swipedCount);
+  const [comparisonCount, setComparisonCount] = useState(initialFlow.comparisonCount);
   const [runId, setRunId] = useState(initialFlow.runId);
-  const [catalog, setCatalog] = useState<SwipeSpot[]>([]);
-  const [refineCatalog, setRefineCatalog] = useState<SwipeSpot[]>([]);
   const [exploreSpots, setExploreSpots] = useState<Recommendation[]>([]);
-  const [homeFeaturedSpots, setHomeFeaturedSpots] = useState<Recommendation[]>(EXPLORE_SPOTS);
+  const [homeFeaturedSpots, setHomeFeaturedSpots] =
+    useState<Recommendation[]>(COMPARISON_EXPLORE_SPOTS);
   const [swipeDeck, setSwipeDeck] = useState<SwipeSpot[]>([]);
   const [refining, setRefining] = useState(initialFlow.refining);
   const [diagnosisComplete, setDiagnosisComplete] = useState(isDiagnosisComplete);
-  const [, setDetailedComplete] = useState(isDetailedDiagnosisComplete);
+  const [detailedComplete, setDetailedComplete] = useState(isDetailedDiagnosisComplete);
 
   const [likes, setLikes] = useState<string[]>(initialFlow.likes);
   const [likeWeights, setLikeWeights] = useState<Record<string, number>>(initialFlow.likeWeights);
@@ -253,27 +240,21 @@ export default function App() {
     initialSelectedDestinationNames,
   );
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
-  const detailReturnStepRef = useRef<Step>(initialSpotId ? initialFlow.step : "recommendations");
+  const detailReturnStepRef = useRef<Step>(initialSpotId ? initialStep : "recommendations");
   const pendingSwipeDeckIdsRef = useRef(initialFlow.swipeDeckIds);
+  const lastInitialDeckIdsRef = useRef<string[]>([]);
   const shellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
     void loadSpotCatalogBundle(30, getAllSupportedDestinations()).then(
-      ({ docs, swipeSpots, exploreSpots: loadedExploreSpots }) => {
+      ({ docs, exploreSpots: loadedExploreSpots }) => {
         if (!active) return;
 
-        const featured = loadedExploreSpots.length > 0 ? loadedExploreSpots : EXPLORE_SPOTS;
+        const featured =
+          loadedExploreSpots.length > 0 ? loadedExploreSpots : COMPARISON_EXPLORE_SPOTS;
         setHomeFeaturedSpots(featured);
         setExploreSpots(featured);
-
-        if (swipeSpots.length > 0) {
-          setCatalog(swipeSpots);
-          setRefineCatalog(swipeSpots.slice(SWIPE_LIMIT));
-        } else {
-          setCatalog(SWIPE_SPOTS);
-          setRefineCatalog(SWIPE_SPOTS_REFINE);
-        }
 
         setRecommendations((prev) => refreshRecommendationImages(prev, docs));
         preloadImages(featured.slice(0, 3).map((spot) => spot.image));
@@ -294,14 +275,8 @@ export default function App() {
 
   useEffect(() => {
     if (step !== "swipe" || swipeDeck.length > 0) return;
-    if (catalog.length === 0 && refineCatalog.length === 0) return;
 
-    const restored = resolveSwipeDeckFromIds(
-      pendingSwipeDeckIdsRef.current,
-      refining,
-      catalog,
-      refineCatalog,
-    );
+    const restored = resolveSwipeDeckFromIds(pendingSwipeDeckIdsRef.current, refining);
     pendingSwipeDeckIdsRef.current = [];
 
     if (restored.length >= 2) {
@@ -310,7 +285,7 @@ export default function App() {
     }
 
     setStep(refining && isDiagnosisComplete() ? "recommendations" : "welcome");
-  }, [step, swipeDeck.length, catalog, refineCatalog, refining]);
+  }, [step, swipeDeck.length, refining]);
 
   useEffect(() => {
     if (!initialSpotId) return;
@@ -407,7 +382,7 @@ export default function App() {
       likeWeights,
       travelMemory,
       refining,
-      swipedCount,
+      comparisonCount,
       runId,
       swipeDeckIds: swipeDeck.map((spot) => spot.id),
       selectedDestinationNames,
@@ -420,7 +395,7 @@ export default function App() {
     likeWeights,
     travelMemory,
     refining,
-    swipedCount,
+    comparisonCount,
     runId,
     swipeDeck,
     selectedDestinationNames,
@@ -449,9 +424,10 @@ export default function App() {
   }, [detailRec]);
 
   const beginSwipe = useCallback(() => {
-    const pool = catalog.length > 0 ? catalog : SWIPE_SPOTS;
     pendingSwipeDeckIdsRef.current = [];
-    setSwipeDeck(pool.slice(0, SWIPE_LIMIT));
+    const deck = pickRandomComparisonDeck(SWIPE_LIMIT);
+    lastInitialDeckIdsRef.current = deck.map((spot) => spot.id);
+    setSwipeDeck(deck);
     setLikes([]);
     setLikeWeights({});
     setNopes([]);
@@ -465,7 +441,7 @@ export default function App() {
     setRefining(false);
     setRunId((id) => id + 1);
     setStep("swipe");
-  }, [catalog]);
+  }, []);
 
   const selectDestination = useCallback((locations: string[]) => {
     const destinations = resolveTripDestinations(locations);
@@ -478,14 +454,20 @@ export default function App() {
   }, []);
 
   const refinePreferences = useCallback(() => {
-    const pool = refineCatalog.length > 0 ? refineCatalog : SWIPE_SPOTS_REFINE;
     pendingSwipeDeckIdsRef.current = [];
     setPlanNeedsRefinement(false);
-    setSwipeDeck(pool.slice(0, SWIPE_LIMIT_REFINE));
+    setSwipeDeck(pickRandomComparisonDeck(SWIPE_LIMIT_REFINE, lastInitialDeckIdsRef.current));
     setRefining(true);
     setRunId((id) => id + 1);
     setStep("swipe");
-  }, [refineCatalog]);
+  }, []);
+
+  const goHome = useCallback(() => {
+    setDetailedComplete(false);
+    resetDetailedDiagnosisComplete();
+    setRefining(false);
+    setStep("welcome");
+  }, []);
 
   const handleSwipeComplete = useCallback(
     ({ likedIds, wins }: { likedIds: string[]; wins: Record<string, number> }) => {
@@ -515,7 +497,7 @@ export default function App() {
         return next;
       });
 
-      setSwipedCount(swipeDeck.length);
+      setComparisonCount(totalComparisonCount(wins));
       if (refining) {
         setDetailedComplete(true);
         markDetailedDiagnosisComplete();
@@ -808,7 +790,7 @@ export default function App() {
 
       {step === "processing" && (
         <ProcessingScreen
-          count={swipedCount}
+          comparisonCount={comparisonCount}
           onDone={() => {
             setDiagnosisComplete(true);
             markDiagnosisComplete();
@@ -834,7 +816,8 @@ export default function App() {
           diagnosisComplete={diagnosisComplete}
           onStartDiagnosis={beginSwipe}
           onRestart={refinePreferences}
-          onGoHome={() => setStep("welcome")}
+          detailedDiagnosisComplete={detailedComplete}
+          onGoHome={goHome}
           onOpenSpot={openSpotDetail}
           aiIntroMessage={planMessage}
           preferenceSummary={planProfileSummary}
