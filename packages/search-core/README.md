@@ -5,8 +5,8 @@ Elasticsearch を用いた検索ロジックを集約する共通ライブラリ
 検索処理を特定のアプリに依存させず、このパッケージに集約することで、
 `backend-api` / `agent` など複数の利用者が同じ検索基盤を共有できるようにします。
 
-> **重要:** `apps/*`（管理画面・ユーザー画面）や AI エージェントは Elasticsearch に
-> 直接アクセスしません。必ず API 層を経由して本パッケージを利用してください。
+> **重要:** `apps/*`（管理画面・ユーザー画面）は Elasticsearch に直接アクセスしません。
+> 必ず `backend-api` 等の API 層を経由してください。`services/agent` は本パッケージを直接利用します。
 
 ---
 
@@ -54,6 +54,7 @@ Elasticsearch を用いた検索ロジックを集約する共通ライブラリ
 | キーワード検索 | `keywordSearch` |
 | ベクトル検索 (kNN) | `vectorSearch` |
 | ハイブリッド検索 | `hybridSearch` |
+| 候補スポット検索 | `searchCandidateSpots` |
 
 ---
 

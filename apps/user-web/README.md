@@ -97,7 +97,7 @@ pnpm run deploy
 3. **目的地入力**（`InputScreen`）— 市区町村・都道府県を入力、サジェスト表示
 4. **旅の記憶**（`MemoryScreen`）— 過去の旅行体験を自由記述
 5. **分析中**（`ProcessingScreen`）— `POST /api/v1/personalized/plan` でおすすめ生成
-6. **おすすめ一覧**（`RecommendationsScreen`）— おすすめ理由・相性スコア付きカード
+6. **おすすめ一覧**（`RecommendationsScreen`）— AI 紹介文・おすすめカード
 7. **スポット詳細モーダル**（`SpotDetailModal`）— AI ガイド（`POST /api/v1/spots/:id/ask`）
 
 ---
@@ -131,5 +131,4 @@ pnpm run deploy
 ## 注意 / 未実装範囲
 
 - **会員機能なし**。訪問履歴はブラウザ localStorage のみ。
-- **現在地取得（Geolocation）** はブラウザ API + OpenStreetMap Nominatim の逆ジオコーディング（`src/lib/geolocation.ts`）。
-- 公開スポットは `isPublicDisplayableRow` の条件を満たすもののみ表示されます（説明・住所・画像が揃っていること）。
+- 公開スポットは `isDisplayableSpot` の条件を満たすもののみ表示されます（名前・説明・住所・画像・カテゴリ・おすすめポイントが揃っていること）。

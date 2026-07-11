@@ -52,7 +52,6 @@ async function main(): Promise<void> {
     }));
     const seedAdminUsers: SeedAdminUser[] = adminUserRows.map((row) => ({
       id: row.id,
-      email: row.email,
       municipalityName: row.municipalityName,
     }));
     const seedSpots = spotRows.map(stripSpotForSeed);

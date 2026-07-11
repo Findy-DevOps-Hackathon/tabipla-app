@@ -126,11 +126,11 @@ pnpm --filter @tabipla/backend-api run deploy
 | GET | `/geocode?q=` | 住所 → 座標 |
 | GET | `/places/lookup?name=` | スポット名 → 住所・座標 |
 
-### 検索
+### 検索（`/indices` のみ JWT 必須）
 
 | メソッド | パス | 説明 |
 |---|---|---|
-| POST | `/indices` | index 作成 |
+| POST | `/indices` | index 作成（JWT 必須） |
 | GET | `/search?q=` | キーワード検索 |
 | POST | `/search/vector` | ベクトル検索 |
 | POST | `/search/hybrid` | ハイブリッド検索 |
@@ -167,7 +167,7 @@ curl localhost:3001/health
 # 管理画面ログイン
 curl -X POST localhost:3001/auth/login \
   -H 'content-type: application/json' \
-  -d '{"email":"admin@example.com","password":"test-admin-password"}'
+  -d '{"email":"<admin-email>","password":"<password>"}'
 
 # スポット登録（JWT 必須）
 curl -X POST 'localhost:3001/spots?refresh=true' \

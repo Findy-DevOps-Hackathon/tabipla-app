@@ -36,9 +36,9 @@ admin-web ──▶ agent（/v1/collect-spots, /v1/describe-spot, /v1/generate-s
 | `PORT` | `8080` | 待ち受けポート |
 | `GOOGLE_GENAI_USE_VERTEXAI` | — | `TRUE` で Vertex AI 経由 |
 | `GOOGLE_CLOUD_PROJECT` | — | GCP プロジェクト ID |
-| `GOOGLE_CLOUD_LOCATION` | `asia-northeast1` | Vertex AI リージョン |
-| `BACKEND_API_URL` | `http://localhost:3001` | backend-api のベース URL |
-| `ES_NODE` | `http://localhost:9200` | Elasticsearch 接続先 |
+| `GOOGLE_CLOUD_LOCATION` | —（`.env.example` で `asia-northeast1`） | Vertex AI リージョン |
+| `BACKEND_API_URL` | —（`.env.example` 参照） | backend-api のベース URL |
+| `ES_NODE` | —（`.env.example` 参照） | Elasticsearch 接続先 |
 | `ADMIN_JWT_SECRET` | 開発用既定値 | 管理向け API の JWT 署名鍵（本番必須） |
 
 詳細は `.env.example` を参照してください。

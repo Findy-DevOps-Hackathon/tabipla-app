@@ -100,8 +100,7 @@ pnpm dev:user
 
 管理画面の開発用ログイン:
 
-- email: `admin@example.com`
-- password: `test-admin-password`（seed 後）
+- seed 実行後、`seed-data/admin-users.json` の id に対応する `ADMIN_*_EMAIL` と `ADMIN_*_SEED_PASSWORD` でログイン
 
 ## よくある起動トラブル
 

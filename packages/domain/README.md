@@ -18,6 +18,7 @@ DB や API に依存せず、カテゴリ・エリア・収集上限などの共
 
 - `apps/admin-web`
 - `apps/user-web`
+- `packages/db`
 - `services/agent`
 - `services/backend-api`
 

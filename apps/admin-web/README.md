@@ -126,6 +126,7 @@ Web 収集のセットアップは [`docs/setup-collect-agent.md`](../../docs/se
 | `src/auth.ts` | JWT セッション（localStorage） |
 | `src/api.ts` | backend-api / agent クライアント |
 | `src/config.ts` | `API_BASE` / `AGENT_BASE` |
+| `src/master/index.ts` | ログイン自治体プロファイル（小諸市・能登半島） |
 | `src/pages/SpotListPage.tsx` | 一覧・検索・削除 |
 | `src/pages/SpotAddPage.tsx` | 追加タブ（個別 / CSV / AI） |
 | `src/pages/SpotFormPage.tsx` | 登録・編集フォーム |
@@ -137,6 +138,6 @@ Web 収集のセットアップは [`docs/setup-collect-agent.md`](../../docs/se
 
 ## 注意 / 未実装範囲
 
-- **自治体マスタは現状ハードコード**（小諸市・能登・都心エリア等は `@tabipla/domain` で管理）。
-  実運用ではログインユーザーに紐づく自治体情報を API から取得する想定。
+- **自治体プロファイルは `src/master/index.ts` にハードコード**（小諸市・能登半島。ログインユーザーの `municipalityName` で切り替え）。
+  未登録の自治体名は長野県・市区町村名フォールバック。実運用では API から取得する想定。
 - **認証は JWT のみ**（localStorage）。リフレッシュトークン・ロールベース ACL は未実装。

@@ -56,7 +56,7 @@ PostgreSQL (正本)  ──reindex──▶  Elasticsearch (検索用の写し)
 | `created_at` / `updated_at` | timestamptz | yes | 作成・更新日時（既定 now()） |
 
 > `embedding`（ベクトル）は本テーブルでは保持しません。ベクトルは Elasticsearch 側で管理し、
-> 生成・投入は RAG パイプライン側（別タスク）で行います。
+> `backend-api` の登録・`embed-spots`・`reindex` で生成・投入します。
 
 ---
 
@@ -92,7 +92,7 @@ pnpm -C packages/db db:push
 
 ## シードデータ投入
 
-`packages/db/seed-data/` に、ローカル DB から書き出した小諸市スポット 24 件と画像が入っています。
+`packages/db/seed-data/` に、ローカル DB から書き出したスポット（現状 56 件、`manifest.json` 参照）と画像が入っています。
 
 ```bash
 pnpm -C packages/db seed
@@ -100,9 +100,14 @@ pnpm -C packages/db seed
 
 自治体・管理ユーザー・スポット・クーポンを冪等に upsert し、`seed-data/images/` の画像を `services/backend-api/data/uploads/spots/` へコピーします。`GCS_BUCKET` が設定されている場合は画像を GCS の `GCS_OBJECT_PREFIX`（既定 `spots`）へアップロードし、DB の `imageUrl` には公開 URL を保存します。
 
-管理画面ログイン（パスワードは `ADMIN_SEED_PASSWORD`、未設定時 `test-admin-password`）:
+管理画面ログイン（`seed-data/admin-users.json` の id 参照）:
 
-- `seed-data/admin-users.json` の email を参照
+| 種別 | メール環境変数 | パスワード環境変数 |
+|---|---|---|
+| 小諸市 (`admin-komoro`) | `ADMIN_KOMORO_EMAIL` | `ADMIN_KOMORO_SEED_PASSWORD` |
+| 能登半島 (`admin-noto`) | `ADMIN_NOTO_EMAIL` | `ADMIN_SEED_PASSWORD` |
+
+いずれも seed 実行前に必須です。
 
 ### ローカル DB から seed-data を更新する
 
@@ -169,5 +174,5 @@ await db.$client.end(); // スクリプト終了時に接続をクローズ
 ## 注意 / 未実装範囲
 
 - **認証・認可** は本パッケージの責務外です（API 層で実施）。
-- **Embedding 生成 / RAG パイプライン** は対象外です（別タスク）。
+- **Embedding 生成** は本パッケージの責務外です（`backend-api` / `agent` が生成）。
 - `infra/docker` の PostgreSQL は **ローカル開発専用** です。本番用の認証・TLS・冗長化は含みません。

@@ -8,14 +8,13 @@ paths = [
   '''(?i)README\.md$''',
   '''(?i)^docs/''',
   '''(?i)seed-data/''',
+  '''(?i)packages/db/src/seed\.ts$''',
   '''(?i)pnpm-lock\.yaml$''',
   '''(?i)\.credentials\.example$''',
 ]
 regexes = [
   '''(?i)tabipla-dev-(admin|user)-secret''',
-  '''(?i)test-admin-password''',
   '''(?i)your-gcp-project-id''',
   '''(?i)your-project''',
   '''(?i)postgresql://tabipla:tabipla@''',
-  '''(?i)admin@example\.com''',
 ]
