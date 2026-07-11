@@ -16,7 +16,6 @@ import {
 import { getTravelTimes, type TravelTimesParams } from "@tabipla/maps-core";
 import {
   createElasticsearchClient,
-  deleteSpot as deleteSpotInElasticsearch,
   type ElasticsearchClient,
   ensureIndex,
   hybridSearch,
@@ -32,7 +31,11 @@ import { normalizeApiPath, registerApiMirrorRoutes } from "./apiPrefix.js";
 import { extractBearerToken, isAdminApiPath, issueAdminToken, verifyAdminToken } from "./auth.js";
 import { registerCors } from "./cors.js";
 import { embedText, formatEmbeddingError, requireSpotEmbedding } from "./embedding.js";
-import { patchSpotInElasticsearch, upsertSpotInElasticsearch } from "./esSync.js";
+import {
+  startEsSyncWorker,
+  withEsSyncStatus,
+  writeThroughSpotToElasticsearch,
+} from "./esOutbox.js";
 import { fetchWithTimeout } from "./fetchWithTimeout.js";
 import { geocodeAddressQuery } from "./geocode.js";
 import { mergeSpotRow, type SpotPatch, toNewSpotRow, toSpotDocument } from "./mapper.js";
@@ -150,6 +153,8 @@ export type BuildServerOptions = {
   client?: ElasticsearchClient;
   /** 既存の DB 接続を注入する場合に指定（テスト用途など）。 */
   db?: Database;
+  /** ES outbox のバックグラウンド再試行を無効化する（テスト用途など）。 */
+  disableEsSyncWorker?: boolean;
 };
 
 /**
@@ -472,28 +477,17 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       const row = await upsertSpot(db, rowInput);
       const document = toSpotDocument(row);
 
-      try {
-        await upsertSpotInElasticsearch(
-          client,
-          { ...document, embedding: embeddedDocument.embedding },
-          {
-            refresh,
-          },
-        );
-      } catch (error) {
-        app.log.error(
-          { err: error, spotId: document.id },
-          "POST /spots: Elasticsearch への反映に失敗",
-        );
-        return reply.code(502).send({
-          error:
-            error instanceof Error
-              ? error.message
-              : `スポット ${document.id} の Elasticsearch 反映に失敗しました。`,
-        });
-      }
+      const syncResult = await writeThroughSpotToElasticsearch({
+        client,
+        db,
+        log: app.log,
+        spotId: document.id,
+        operation: "upsert",
+        payload: { embedding: embeddedDocument.embedding },
+        refresh,
+      });
 
-      return document;
+      return withEsSyncStatus(document, syncResult);
     },
   );
 
@@ -512,9 +506,15 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
     }
     const row = await upsertSpot(db, mergeSpotRow(existing, req.body));
     const document = toSpotDocument(row);
-    const { id, ...partial } = document;
-    await patchSpotInElasticsearch(client, id, partial, { refresh });
-    return document;
+    const syncResult = await writeThroughSpotToElasticsearch({
+      client,
+      db,
+      log: app.log,
+      spotId: document.id,
+      operation: "patch",
+      refresh,
+    });
+    return withEsSyncStatus(document, syncResult);
   });
 
   // ---- スポット画像アップロード（管理画面） ----------------------------------
@@ -533,9 +533,15 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       const imageUrl = await saveSpotImage(req.params.id, req.body.mimeType, req.body.data);
       const row = await upsertSpot(db, mergeSpotRow(existing, { imageUrl }));
       const document = toSpotDocument(row);
-      const { id, ...partial } = document;
-      await patchSpotInElasticsearch(client, id, partial, { refresh });
-      return document;
+      const syncResult = await writeThroughSpotToElasticsearch({
+        client,
+        db,
+        log: app.log,
+        spotId: document.id,
+        operation: "patch",
+        refresh,
+      });
+      return withEsSyncStatus(document, syncResult);
     } catch (error) {
       const message = error instanceof Error ? error.message : "画像の保存に失敗しました";
       return reply.code(400).send({ error: message });
@@ -555,9 +561,15 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       await deleteSpotImageFiles(req.params.id);
       const row = await upsertSpot(db, { ...mergeSpotRow(existing, {}), imageUrl: null });
       const document = toSpotDocument(row);
-      const { id, ...partial } = document;
-      await patchSpotInElasticsearch(client, id, partial, { refresh });
-      return document;
+      const syncResult = await writeThroughSpotToElasticsearch({
+        client,
+        db,
+        log: app.log,
+        spotId: document.id,
+        operation: "patch",
+        refresh,
+      });
+      return withEsSyncStatus(document, syncResult);
     },
   );
 
@@ -598,6 +610,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         prepared.map((entry) => entry.rowInput),
       );
       const documents = rows.map(toSpotDocument);
+      const syncedDocuments = [];
 
       for (const [i, document] of documents.entries()) {
         const isLast = i === documents.length - 1;
@@ -608,29 +621,19 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
           });
         }
 
-        try {
-          await upsertSpotInElasticsearch(
-            client,
-            { ...document, embedding },
-            {
-              refresh: refresh && isLast,
-            },
-          );
-        } catch (error) {
-          app.log.error(
-            { err: error, spotId: document.id },
-            "POST /spots/bulk: Elasticsearch への反映に失敗",
-          );
-          return reply.code(502).send({
-            error:
-              error instanceof Error
-                ? error.message
-                : `スポット ${document.id} の Elasticsearch 反映に失敗しました。`,
-          });
-        }
+        const syncResult = await writeThroughSpotToElasticsearch({
+          client,
+          db,
+          log: app.log,
+          spotId: document.id,
+          operation: "upsert",
+          payload: { embedding },
+          refresh: refresh && isLast,
+        });
+        syncedDocuments.push(withEsSyncStatus(document, syncResult));
       }
 
-      return { count: documents.length, spots: documents };
+      return { count: syncedDocuments.length, spots: syncedDocuments };
     },
   );
 
@@ -643,10 +646,20 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       const refresh = req.query.refresh === "true";
       await deleteSpotImageFiles(req.params.id);
       await deleteSpot(db, req.params.id);
-      const result = await deleteSpotInElasticsearch(client, req.params.id, {
+      const syncResult = await writeThroughSpotToElasticsearch({
+        client,
+        db,
+        log: app.log,
+        spotId: req.params.id,
+        operation: "delete",
         refresh,
       });
-      return result;
+      return {
+        index: "spots",
+        id: req.params.id,
+        deleted: true,
+        ...(syncResult.synced ? {} : { esSyncPending: true }),
+      };
     },
   );
 
@@ -1059,6 +1072,10 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       });
     },
   );
+
+  if (!options.disableEsSyncWorker) {
+    startEsSyncWorker({ client, db, log: app.log });
+  }
 
   return app;
 }

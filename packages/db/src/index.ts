@@ -24,6 +24,14 @@ export {
 } from "./destinationMatching.js";
 export { hashPassword, verifyPassword } from "./password.js";
 export { getAdminUserByEmail, upsertAdminUser } from "./repository/adminUsers.js";
+export type { EsSyncOperation, EsSyncOutboxPayload } from "./repository/esSyncOutbox.js";
+export {
+  countPendingEsSync,
+  enqueueEsSync,
+  listPendingEsSync,
+  markEsSyncCompleted,
+  markEsSyncFailed,
+} from "./repository/esSyncOutbox.js";
 export type { ListSpotsOptions } from "./repository/spots.js";
 // リポジトリ（spots）
 export {
@@ -41,8 +49,10 @@ export { createUser, deleteUserById, getUserByEmail } from "./repository/users.j
 // スキーマ / 型
 export type {
   AdminUserRow,
+  EsSyncOutboxRow,
   MunicipalityRow,
   NewAdminUserRow,
+  NewEsSyncOutboxRow,
   NewMunicipalityRow,
   NewSpotFeedbackRow,
   NewSpotRow,
@@ -59,6 +69,7 @@ export type {
 } from "./schema.js";
 export {
   adminUsers,
+  esSyncOutbox,
   municipalities,
   spotFeedbacks,
   spots,

@@ -192,6 +192,42 @@ export type SpotFeedbackRow = typeof spotFeedbacks.$inferSelect;
 export type NewSpotFeedbackRow = typeof spotFeedbacks.$inferInsert;
 
 /**
+ * es_sync_outbox テーブル（Elasticsearch 同期の再試行キュー）。
+ *
+ * PG への書き込み成功後に ES 反映が失敗した場合、ここに積んでバックグラウンドで再試行する。
+ * 同一 spot_id の pending が既にある場合は最新の操作で上書きする（古い pending は破棄）。
+ */
+export const esSyncOutbox = pgTable(
+  "es_sync_outbox",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    spotId: text("spot_id")
+      .notNull()
+      .references(() => spots.id, { onDelete: "cascade" }),
+    /** upsert | patch | delete */
+    operation: text("operation").notNull(),
+    /** upsert 時の embedding（PG では保持しないため outbox にのみ保存）。 */
+    payload: jsonb("payload"),
+    /** pending | completed */
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }).defaultNow().notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => ({
+    pendingRetryIdx: index("es_sync_outbox_pending_retry_idx").on(table.status, table.nextRetryAt),
+    spotIdIdx: index("es_sync_outbox_spot_id_idx").on(table.spotId),
+  }),
+);
+
+export type EsSyncOutboxRow = typeof esSyncOutbox.$inferSelect;
+export type NewEsSyncOutboxRow = typeof esSyncOutbox.$inferInsert;
+
+/**
  * trip_feedbacks テーブル（旅行全体のフィードバック）。
  */
 export const tripFeedbacks = pgTable(

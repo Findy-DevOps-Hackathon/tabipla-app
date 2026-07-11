@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "reindex": "tsx --env-file-if-exists=.env src/reindex.ts",
+    "sync-es-outbox": "tsx --env-file-if-exists=.env src/sync-es-outbox.ts",
     "embed-spots": "tsx --env-file-if-exists=.env src/embed-spots.ts",
     "cluster-reference-spots": "tsx --env-file-if-exists=.env src/cluster-reference-spots.ts",
     "clean": "rm -rf dist",
