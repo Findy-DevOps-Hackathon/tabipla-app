@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { GridBackdrop } from "../components/GridBackdrop.tsx";
 import { ChevronRightIcon } from "../components/icons.tsx";
 import { SpotImage } from "../components/SpotImage.tsx";
-import { EXPLORE_SPOTS, type Recommendation } from "../data/spots.ts";
+import { COMPARISON_EXPLORE_SPOTS } from "../data/comparisonSpots.ts";
+import type { Recommendation } from "../data/spots.ts";
 import { preloadImage } from "../lib/preloadImage.ts";
 import { spotPreviewText } from "../lib/spotMapper.ts";
 import { PRIMARY_BUTTON } from "../lib/ui.ts";
@@ -97,9 +98,9 @@ type WelcomeScreenProps = {
 export function WelcomeScreen({
   onStartDiagnosis,
   onOpenSpot,
-  featuredSpots = EXPLORE_SPOTS,
+  featuredSpots = COMPARISON_EXPLORE_SPOTS,
 }: WelcomeScreenProps) {
-  const featuredSpotsList = featuredSpots.length > 0 ? featuredSpots : EXPLORE_SPOTS;
+  const featuredSpotsList = featuredSpots.length > 0 ? featuredSpots : COMPARISON_EXPLORE_SPOTS;
   // ホーム中央に置くおすすめ観光スポット。一定時間ごとに次の候補へ外枠ごと入れ替える。
   const [featuredIndex, setFeaturedIndex] = useState(0);
   // 入れ替え中に左へ送り出している前のカードのインデックス（null なら入れ替えなし）。

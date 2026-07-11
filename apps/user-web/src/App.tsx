@@ -3,19 +3,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PhoneShell } from "./components/PhoneShell.tsx";
 import { SpotDetailModal } from "./components/SpotDetailModal.tsx";
 import { API_BASE } from "./config.ts";
+import { COMPARISON_EXPLORE_SPOTS } from "./data/comparisonSpots.ts";
 import {
   getAllSupportedDestinations,
   readQrDestinationNamesFromLocation,
   resolveTripDestinations,
 } from "./data/places.ts";
 import {
-  EXPLORE_SPOTS,
   RECOMMENDATIONS_PAGE_SIZE,
   type Recommendation,
   SWIPE_LIMIT,
   SWIPE_LIMIT_REFINE,
-  SWIPE_SPOTS,
-  SWIPE_SPOTS_REFINE,
   type SwipeSpot,
 } from "./data/spots.ts";
 import {
@@ -23,6 +21,7 @@ import {
   formatAiGuideAnswer,
   isAiGuideLoadingMessage,
 } from "./lib/aiGuide.ts";
+import { pickRandomComparisonDeck, resolveComparisonDeckFromIds } from "./lib/comparisonDeck.ts";
 import {
   formatDestinationLabel,
   getCurrentDestinations,
@@ -175,29 +174,15 @@ function viewKey(s: ViewSnapshot): string {
 /** history.state 内に画面スナップショットを格納するためのキー。 */
 const HISTORY_STATE_KEY = "tabiplaNav";
 
-function resolveSwipeDeckFromIds(
-  ids: string[],
-  isRefining: boolean,
-  catalog: SwipeSpot[],
-  refineCatalog: SwipeSpot[],
-): SwipeSpot[] {
-  const fallback = isRefining ? SWIPE_SPOTS_REFINE : SWIPE_SPOTS;
-  const pool =
-    (isRefining ? refineCatalog : catalog).length > 0
-      ? isRefining
-        ? refineCatalog
-        : catalog
-      : fallback;
+function resolveSwipeDeckFromIds(ids: string[], isRefining: boolean): SwipeSpot[] {
   const limit = isRefining ? SWIPE_LIMIT_REFINE : SWIPE_LIMIT;
 
   if (ids.length > 0) {
-    const restored = ids
-      .map((id) => pool.find((spot) => spot.id === id))
-      .filter((spot): spot is SwipeSpot => spot !== undefined);
+    const restored = resolveComparisonDeckFromIds(ids);
     if (restored.length >= 2) return restored;
   }
 
-  return pool.slice(0, limit);
+  return pickRandomComparisonDeck(limit);
 }
 
 /**
@@ -224,10 +209,9 @@ export default function App() {
   const [, setLocation] = useState("");
   const [swipedCount, setSwipedCount] = useState(initialFlow.swipedCount);
   const [runId, setRunId] = useState(initialFlow.runId);
-  const [catalog, setCatalog] = useState<SwipeSpot[]>([]);
-  const [refineCatalog, setRefineCatalog] = useState<SwipeSpot[]>([]);
   const [exploreSpots, setExploreSpots] = useState<Recommendation[]>([]);
-  const [homeFeaturedSpots, setHomeFeaturedSpots] = useState<Recommendation[]>(EXPLORE_SPOTS);
+  const [homeFeaturedSpots, setHomeFeaturedSpots] =
+    useState<Recommendation[]>(COMPARISON_EXPLORE_SPOTS);
   const [swipeDeck, setSwipeDeck] = useState<SwipeSpot[]>([]);
   const [refining, setRefining] = useState(initialFlow.refining);
   const [diagnosisComplete, setDiagnosisComplete] = useState(isDiagnosisComplete);
@@ -260,25 +244,19 @@ export default function App() {
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
   const detailReturnStepRef = useRef<Step>(initialSpotId ? initialStep : "recommendations");
   const pendingSwipeDeckIdsRef = useRef(initialFlow.swipeDeckIds);
+  const lastInitialDeckIdsRef = useRef<string[]>([]);
   const shellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
     void loadSpotCatalogBundle(30, getAllSupportedDestinations()).then(
-      ({ docs, swipeSpots, exploreSpots: loadedExploreSpots }) => {
+      ({ docs, exploreSpots: loadedExploreSpots }) => {
         if (!active) return;
 
-        const featured = loadedExploreSpots.length > 0 ? loadedExploreSpots : EXPLORE_SPOTS;
+        const featured =
+          loadedExploreSpots.length > 0 ? loadedExploreSpots : COMPARISON_EXPLORE_SPOTS;
         setHomeFeaturedSpots(featured);
         setExploreSpots(featured);
-
-        if (swipeSpots.length > 0) {
-          setCatalog(swipeSpots);
-          setRefineCatalog(swipeSpots.slice(SWIPE_LIMIT));
-        } else {
-          setCatalog(SWIPE_SPOTS);
-          setRefineCatalog(SWIPE_SPOTS_REFINE);
-        }
 
         setRecommendations((prev) => refreshRecommendationImages(prev, docs));
         preloadImages(featured.slice(0, 3).map((spot) => spot.image));
@@ -299,14 +277,8 @@ export default function App() {
 
   useEffect(() => {
     if (step !== "swipe" || swipeDeck.length > 0) return;
-    if (catalog.length === 0 && refineCatalog.length === 0) return;
 
-    const restored = resolveSwipeDeckFromIds(
-      pendingSwipeDeckIdsRef.current,
-      refining,
-      catalog,
-      refineCatalog,
-    );
+    const restored = resolveSwipeDeckFromIds(pendingSwipeDeckIdsRef.current, refining);
     pendingSwipeDeckIdsRef.current = [];
 
     if (restored.length >= 2) {
@@ -315,7 +287,7 @@ export default function App() {
     }
 
     setStep(refining && isDiagnosisComplete() ? "recommendations" : "welcome");
-  }, [step, swipeDeck.length, catalog, refineCatalog, refining]);
+  }, [step, swipeDeck.length, refining]);
 
   useEffect(() => {
     if (!initialSpotId) return;
@@ -454,9 +426,10 @@ export default function App() {
   }, [detailRec]);
 
   const beginSwipe = useCallback(() => {
-    const pool = catalog.length > 0 ? catalog : SWIPE_SPOTS;
     pendingSwipeDeckIdsRef.current = [];
-    setSwipeDeck(pool.slice(0, SWIPE_LIMIT));
+    const deck = pickRandomComparisonDeck(SWIPE_LIMIT);
+    lastInitialDeckIdsRef.current = deck.map((spot) => spot.id);
+    setSwipeDeck(deck);
     setLikes([]);
     setLikeWeights({});
     setNopes([]);
@@ -470,7 +443,7 @@ export default function App() {
     setRefining(false);
     setRunId((id) => id + 1);
     setStep("swipe");
-  }, [catalog]);
+  }, []);
 
   const selectDestination = useCallback((locations: string[]) => {
     const destinations = resolveTripDestinations(locations);
@@ -483,14 +456,13 @@ export default function App() {
   }, []);
 
   const refinePreferences = useCallback(() => {
-    const pool = refineCatalog.length > 0 ? refineCatalog : SWIPE_SPOTS_REFINE;
     pendingSwipeDeckIdsRef.current = [];
     setPlanNeedsRefinement(false);
-    setSwipeDeck(pool.slice(0, SWIPE_LIMIT_REFINE));
+    setSwipeDeck(pickRandomComparisonDeck(SWIPE_LIMIT_REFINE, lastInitialDeckIdsRef.current));
     setRefining(true);
     setRunId((id) => id + 1);
     setStep("swipe");
-  }, [refineCatalog]);
+  }, []);
 
   const handleSwipeComplete = useCallback(
     ({ likedIds, wins }: { likedIds: string[]; wins: Record<string, number> }) => {

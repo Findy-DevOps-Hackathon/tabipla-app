@@ -1,5 +1,10 @@
 import { API_BASE } from "../config.ts";
-import type { Recommendation, SpotCategory, SwipeSpot } from "../data/spots.ts";
+import type {
+  DiagnosisSpotCategory,
+  Recommendation,
+  SpotCategory,
+  SwipeSpot,
+} from "../data/spots.ts";
 import type { SpotDocument } from "../types.ts";
 import {
   getCurrentDestination,
@@ -63,6 +68,31 @@ export function spotImageUrl(doc: Pick<SpotDocument, "id" | "imageUrl">): string
   return SPOT_IMAGE_PLACEHOLDER;
 }
 
+const DIAGNOSIS_DB_CATEGORIES = new Set<string>(["都市", "芸術", "レジャー・スポーツ"]);
+
+/** 好み診断用：都市・芸術・レジャーは DB カテゴリをそのまま、それ以外は従来4分類。 */
+export function displayDiagnosisCategory(
+  doc: Pick<SpotDocument, "category">,
+): DiagnosisSpotCategory {
+  for (const c of normalizeCategories(doc.category)) {
+    if (DIAGNOSIS_DB_CATEGORIES.has(c)) {
+      return c as "都市" | "芸術" | "レジャー・スポーツ";
+    }
+  }
+  return displayCategory(doc);
+}
+
+/** SpotDocument → 好み診断の比較カード用スポット。 */
+export function documentToComparisonSwipeSpot(
+  doc: SpotDocument,
+  dest: TripDestination = getCurrentDestination(),
+): SwipeSpot {
+  return {
+    ...documentToSwipeSpot(doc, dest),
+    category: displayDiagnosisCategory(doc),
+  };
+}
+
 /** SpotDocument → スワイプ用スポット。 */
 export function documentToSwipeSpot(
   doc: SpotDocument,
@@ -85,8 +115,10 @@ export function documentToRecommendation(
   doc: SpotDocument,
   dest: TripDestination = getCurrentDestination(),
 ): Recommendation {
+  const swipe = documentToSwipeSpot(doc, dest);
   return {
-    ...documentToSwipeSpot(doc, dest),
+    ...swipe,
+    category: displayCategory(doc),
     reason: "",
     match: 0,
     memberOnly: false,
