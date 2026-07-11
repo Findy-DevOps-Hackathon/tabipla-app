@@ -213,9 +213,11 @@ export default function App() {
   const initialQrPreferredPrefecture =
     resolveTripDestinations(initialQrDestinationNames)[0]?.prefecture ?? null;
   const initialSpotId = readInitialSpotIdFromUrl();
-  const [step, setStep] = useState<Step>(
-    initialQrDestinationNames.length > 0 ? "welcome" : initialFlow.step,
-  );
+  const initialStep: Step =
+    initialQrDestinationNames.length > 0 || initialFlow.step === "processing"
+      ? "welcome"
+      : initialFlow.step;
+  const [step, setStep] = useState<Step>(initialStep);
   const [, setLocation] = useState("");
   const [swipedCount, setSwipedCount] = useState(initialFlow.swipedCount);
   const [runId, setRunId] = useState(initialFlow.runId);
@@ -253,7 +255,7 @@ export default function App() {
     initialSelectedDestinationNames,
   );
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
-  const detailReturnStepRef = useRef<Step>(initialSpotId ? initialFlow.step : "recommendations");
+  const detailReturnStepRef = useRef<Step>(initialSpotId ? initialStep : "recommendations");
   const pendingSwipeDeckIdsRef = useRef(initialFlow.swipeDeckIds);
   const shellRef = useRef<HTMLDivElement>(null);
 
