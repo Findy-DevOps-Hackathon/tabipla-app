@@ -1007,7 +1007,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         result: `${destinations.map((dest) => dest.area).join("・")}の観光スポットが登録されていません。`,
         total: 0,
         page: body.page ?? 1,
-        limit: body.limit ?? 20,
+        limit: body.limit ?? 10,
       };
     }
 

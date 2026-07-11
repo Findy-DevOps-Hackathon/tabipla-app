@@ -67,7 +67,7 @@ const LLM_INTRO_POOL = 15;
 const GLOBAL_KNN_LIMIT = 15;
 
 const DEFAULT_PAGE = 1;
-const DEFAULT_LIMIT = 20;
+const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
 
 type EsSpotRecord = Record<string, unknown> & {
