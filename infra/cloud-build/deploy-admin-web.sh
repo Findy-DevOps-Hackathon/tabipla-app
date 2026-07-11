@@ -51,8 +51,9 @@ echo "=== Deploy admin-web → ${ADMIN_FIREBASE_PROJECT} ==="
 echo "  VITE_API_BASE=${VITE_API_BASE}"
 echo "  VITE_AGENT_BASE=${VITE_AGENT_BASE}"
 
+cd "$ROOT"
+VITE_API_BASE="${VITE_API_BASE}" VITE_AGENT_BASE="${VITE_AGENT_BASE}" pnpm --filter @tabipla/admin-web... build
 cd "$ROOT/apps/admin-web"
-VITE_API_BASE="${VITE_API_BASE}" VITE_AGENT_BASE="${VITE_AGENT_BASE}" pnpm build
 pnpm exec firebase deploy --only hosting --project "${ADMIN_FIREBASE_PROJECT}" --non-interactive
 
 echo "Deployed: https://${ADMIN_FIREBASE_PROJECT}.web.app"
