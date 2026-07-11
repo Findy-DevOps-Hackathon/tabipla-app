@@ -38,12 +38,12 @@ function FeaturedCard({
   imageFadeIn?: boolean;
 }) {
   const inner = (
-    <div className={`relative ${FEATURED_CARD_IMAGE_H} w-full`}>
+    <div className={`relative overflow-hidden bg-slate-200 ${FEATURED_CARD_IMAGE_H} w-full`}>
       <SpotImage
         src={spot.image}
         alt=""
         draggable={false}
-        className="pointer-events-none absolute inset-0 size-full object-cover"
+        className="pointer-events-none absolute inset-0 size-full object-cover object-center"
         priority={priority}
         lazy={lazy}
         fadeIn={imageFadeIn}
@@ -178,9 +178,8 @@ export function WelcomeScreen({
                 key={featured.id}
                 spot={featured}
                 onClick={() => onOpenSpot(featured)}
-                className="absolute inset-0 animate-card-enter"
+                className={`absolute inset-0${leavingIndex !== null ? " animate-card-enter" : ""}`}
                 priority
-                imageFadeIn
               />
             </div>
           </div>

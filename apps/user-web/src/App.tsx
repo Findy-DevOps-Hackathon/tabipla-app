@@ -427,6 +427,7 @@ export default function App() {
     pendingSwipeDeckIdsRef.current = [];
     const deck = pickRandomComparisonDeck(SWIPE_LIMIT);
     lastInitialDeckIdsRef.current = deck.map((spot) => spot.id);
+    preloadImages(deck.slice(0, 4).map((spot) => spot.image));
     setSwipeDeck(deck);
     setLikes([]);
     setLikeWeights({});
@@ -456,7 +457,9 @@ export default function App() {
   const refinePreferences = useCallback(() => {
     pendingSwipeDeckIdsRef.current = [];
     setPlanNeedsRefinement(false);
-    setSwipeDeck(pickRandomComparisonDeck(SWIPE_LIMIT_REFINE, lastInitialDeckIdsRef.current));
+    const deck = pickRandomComparisonDeck(SWIPE_LIMIT_REFINE, lastInitialDeckIdsRef.current);
+    preloadImages(deck.slice(0, 4).map((spot) => spot.image));
+    setSwipeDeck(deck);
     setRefining(true);
     setRunId((id) => id + 1);
     setStep("swipe");
