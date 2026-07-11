@@ -1,25 +1,27 @@
-# 立ち上げ方法
+# ローカル開発環境の立ち上げ
+
+管理画面の AI 収集を含む、ローカル開発に必要な手順です。
 
 ## 前提
 
 - Node.js 22 以上
 - pnpm（`corepack enable` で有効化）
 - Docker Desktop
-- gcloud CLI
-- GCP プロジェクトで Vertex AI API が有効
-- 実行ユーザーに Vertex AI ユーザー（`roles/aiplatform.user`）が付与済み
+- gcloud CLI（AI 機能を使う場合）
+- GCP プロジェクトで Vertex AI API が有効（AI 機能を使う場合）
+- 実行ユーザーに Vertex AI ユーザー（`roles/aiplatform.user`）が付与済み（AI 機能を使う場合）
 
 ## 初回セットアップ
 
 ```bash
 # リポジトリルート
 corepack enable
-corepack pnpm install
-corepack pnpm build
+pnpm install
+pnpm build
 ```
 
 ```bash
-# Google 認証
+# Google 認証（AI 機能を使う場合）
 gcloud auth application-default login
 ```
 
@@ -48,13 +50,13 @@ cp .env.example .env
 
 ```bash
 # リポジトリルート
-corepack pnpm docker:up
+pnpm docker:up
 ```
 
 ```bash
 # packages/db
-corepack pnpm db:migrate
-corepack pnpm seed
+pnpm -C packages/db db:migrate
+pnpm -C packages/db seed
 ```
 
 ## アプリ起動
@@ -63,39 +65,42 @@ corepack pnpm seed
 
 ```bash
 # backend-api
-cd services/backend-api
-corepack pnpm dev
+pnpm -C services/backend-api dev
 ```
 
 ```bash
-# agent
-cd services/agent
-corepack pnpm dev
+# agent（AI 収集・おすすめ・ガイド）
+pnpm -C services/agent dev
 ```
 
 ```bash
 # admin-web
-cd apps/admin-web
-corepack pnpm dev
+pnpm -C apps/admin-web dev
 ```
 
 ```bash
 # user-web
-cd apps/user-web
-corepack pnpm dev
+pnpm -C apps/user-web dev
+```
+
+または user-web 一式をまとめて起動:
+
+```bash
+pnpm dev:user
 ```
 
 ## 動作確認
 
-- backend-api: `http://localhost:3001/health`
-- agent: `http://localhost:8080/healthz`
-- admin-web: `http://localhost:5174`
-- user-web: `http://localhost:5173`
+| サービス | URL |
+|---|---|
+| backend-api | http://localhost:3001/health |
+| agent | http://localhost:8080/healthz |
+| admin-web | http://localhost:5174 |
+| user-web | http://localhost:5173 |
 
 管理画面の開発用ログイン:
 
-- email: `admin@example.com`
-- password: `test-admin-password`
+- seed 実行後、`seed-data/admin-users.json` の id に対応する `ADMIN_*_EMAIL` と `ADMIN_*_SEED_PASSWORD` でログイン
 
 ## よくある起動トラブル
 
@@ -107,3 +112,4 @@ corepack pnpm dev
 | `Failed to fetch` | backend-api / agent / Vite dev server の起動状況を確認 |
 | `EADDRINUSE` | 既に同じポートを使っているプロセスを停止して再起動 |
 | 登録や検索で失敗 | Docker の PostgreSQL / Elasticsearch 起動状況を確認 |
+| AI 収集で 401 | backend-api にログインして JWT を取得しているか確認 |

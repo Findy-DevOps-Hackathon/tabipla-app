@@ -27,7 +27,8 @@ export type SeedMunicipality = {
 
 export type SeedAdminUser = {
   id: string;
-  email: string;
+  /** seed:export では書き出さない。seed 時は ADMIN_*_EMAIL 環境変数で解決。 */
+  email?: string;
   municipalityName?: string | null;
 };
 

@@ -1,8 +1,8 @@
 # @tabipla/maps-core
 
-Google Maps Routes API を用いた移動時間・距離計算ライブラリ。
+Google Maps Routes API を用いた移動時間・距離計算ライブラリです。
 
-A4 タスク（`getTravelTimes`）の実装。A5 推薦エージェントが FunctionTool として利用する。
+`backend-api` の `POST /travel-times` から利用されます。
 
 ---
 
@@ -68,19 +68,19 @@ for (const leg of result.results.DRIVE ?? []) {
 
 ---
 
-## A5 FunctionTool 化（agent-api 側の実装例）
+## backend-api からの呼び出し
 
-```typescript
-import { getTravelTimes, type TravelTimesParams } from "@tabipla/maps-core";
-
-// ADK FunctionTool のラッパ例
-export const travelTimesTool = {
-  name: "getTravelTimes",
-  description: "拠点から複数スポットへの移動手段別所要時間・距離を返す",
-  parameters: { /* JSON Schema */ },
-  execute: async (params: TravelTimesParams) => getTravelTimes(params),
-};
+```bash
+curl -X POST localhost:3001/travel-times \
+  -H 'content-type: application/json' \
+  -d '{
+    "origin": { "lat": 36.331, "lon": 138.425 },
+    "destinations": [{ "lat": 36.329, "lon": 138.424 }],
+    "modes": ["DRIVE"]
+  }'
 ```
+
+`GOOGLE_MAPS_API_KEY` は `services/backend-api/.env` に設定します。
 
 ---
 
@@ -92,7 +92,7 @@ packages/maps-core/
 │   ├── client/
 │   │   └── routes.client.ts   # Routes API HTTP クライアント
 │   ├── types/
-│   │   └── travelTimes.ts     # 契約型定義（S4）
+│   │   └── travelTimes.ts     # 契約型定義
 │   ├── getTravelTimes.ts      # コア関数
 │   └── index.ts               # 公開 API
 ├── scripts/
@@ -107,8 +107,7 @@ packages/maps-core/
 - Routes API は従量課金。`maxDestinations` を必ず確認して呼び出すこと。
 - `TRANSIT` は `departureTime` の指定推奨（未指定だと Routes API が現在時刻を使用）。
 - 本番運用前に API キー制限（HTTP リファラ制限 or サーバー IP 制限）を設定すること。
-- `getTravelTimes` は1手段の呼び出しが失敗しても他手段の結果を返す（デモ向け部分成功方針）。
-  本番化の際はエラーポリシーを再検討すること。
+- `getTravelTimes` は1手段の呼び出しが失敗しても他手段の結果を返す（部分成功方針）。
 
 ---
 
@@ -117,4 +116,3 @@ packages/maps-core/
 - キャッシュ（同じ origin×destinations×mode の結果をキャッシュしてAPI呼び出しを削減）
 - リトライ・レート制限ハンドリング
 - `TRANSIT` の乗り換え詳細（途中経由地の時刻表など）
-- agent-api 側の FunctionTool JSON Schema 定義（A5 担当）

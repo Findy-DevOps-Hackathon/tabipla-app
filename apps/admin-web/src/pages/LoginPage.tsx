@@ -8,7 +8,7 @@ import { Input } from "../components/ui/Input.tsx";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@example.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -56,7 +56,7 @@ export default function LoginPage() {
             type="email"
             value={email}
             onChange={setEmail}
-            placeholder="admin@example.com"
+            placeholder="name@example.com"
           />
           <Input
             label="パスワード"

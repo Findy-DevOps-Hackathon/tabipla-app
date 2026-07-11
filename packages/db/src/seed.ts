@@ -4,8 +4,30 @@ import { upsertAdminUser } from "./repository/adminUsers.js";
 import { upsertCoupon } from "./repository/coupons.js";
 import { upsertSpots } from "./repository/spots.js";
 import { municipalities } from "./schema.js";
-import { loadSeedBundle, seedSpotToRow } from "./seedData.js";
+import { loadSeedBundle, type SeedAdminUser, seedSpotToRow } from "./seedData.js";
 import { installSeedImages } from "./seedInstallImages.js";
+
+function resolveAdminEmail(adminUser: SeedAdminUser): string {
+  if (adminUser.email?.trim()) return adminUser.email.trim().toLowerCase();
+  const email =
+    adminUser.id === "admin-komoro"
+      ? process.env.ADMIN_KOMORO_EMAIL?.trim()
+      : process.env.ADMIN_NOTO_EMAIL?.trim();
+  if (!email) {
+    throw new Error(
+      `${adminUser.id} のメールアドレスが未設定です。ADMIN_KOMORO_EMAIL / ADMIN_NOTO_EMAIL を設定してください。`,
+    );
+  }
+  return email.toLowerCase();
+}
+
+function resolveAdminPassword(
+  adminUser: SeedAdminUser,
+  komoroPassword: string,
+  defaultPassword: string,
+): string {
+  return adminUser.id === "admin-komoro" ? komoroPassword : defaultPassword;
+}
 
 /**
  * 開発用シードデータ投入スクリプト。
@@ -16,26 +38,33 @@ import { installSeedImages } from "./seedInstallImages.js";
  * backend-api の uploads へ反映する。冪等（同一 id は upsert）。
  *
  * 管理ユーザー:
- *   email: seed-data/admin-users.json 参照
- *   admin@example.com: ADMIN_KOMORO_SEED_PASSWORD（未設定時 test-admin-password）
- *   その他: ADMIN_SEED_PASSWORD（未設定時 Zaq12wsx#）
+ *   id: seed-data/admin-users.json 参照
+ *   email: ADMIN_KOMORO_EMAIL / ADMIN_NOTO_EMAIL（必須）
+ *   パスワード: ADMIN_KOMORO_SEED_PASSWORD / ADMIN_SEED_PASSWORD（必須）
  */
 async function main(): Promise<void> {
   const bundle = await loadSeedBundle();
   const db = createDatabase();
 
   try {
-    const komoroPassword = process.env.ADMIN_KOMORO_SEED_PASSWORD ?? "test-admin-password";
-    const defaultPassword = process.env.ADMIN_SEED_PASSWORD ?? "Zaq12wsx#";
+    const komoroPassword = process.env.ADMIN_KOMORO_SEED_PASSWORD?.trim();
+    const defaultPassword = process.env.ADMIN_SEED_PASSWORD?.trim();
+    if (!komoroPassword || !defaultPassword) {
+      throw new Error(
+        "ADMIN_KOMORO_SEED_PASSWORD と ADMIN_SEED_PASSWORD を設定してから seed を実行してください。",
+      );
+    }
 
     for (const municipality of bundle.municipalities) {
       await db.insert(municipalities).values(municipality).onConflictDoNothing();
     }
 
     for (const adminUser of bundle.adminUsers) {
-      const password = adminUser.email === "admin@example.com" ? komoroPassword : defaultPassword;
+      const email = resolveAdminEmail(adminUser);
+      const password = resolveAdminPassword(adminUser, komoroPassword, defaultPassword);
       await upsertAdminUser(db, {
         ...adminUser,
+        email,
         passwordHash: await hashPassword(password),
       });
     }
@@ -53,8 +82,7 @@ async function main(): Promise<void> {
         `スポット ${rows.length} 件（画像 ${imageInstall.installed} 件/${imageInstall.target}）、クーポン ${counts.coupons} 件を upsert しました。`,
     );
     for (const adminUser of bundle.adminUsers) {
-      const password = adminUser.email === "admin@example.com" ? komoroPassword : defaultPassword;
-      console.log("[db] ログイン:", adminUser.email, "/", password);
+      console.log(`[db] 管理ユーザー upsert: ${adminUser.id} (${resolveAdminEmail(adminUser)})`);
     }
   } finally {
     await db.$client.end();
