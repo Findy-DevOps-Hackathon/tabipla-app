@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { UndoIcon } from "../components/icons.tsx";
 import { SpotImage } from "../components/SpotImage.tsx";
 import { COMPARISON_ROUNDS, COMPARISON_ROUNDS_REFINE, type SwipeSpot } from "../data/spots.ts";
+import { preloadImage } from "../lib/preloadImage.ts";
 import { spotPreviewText } from "../lib/spotMapper.ts";
 
 const MAX_WINS_PER_SPOT = 3;
@@ -211,12 +212,12 @@ function ComparisonCard({
         position === "top" ? "origin-top" : "origin-bottom"
       } ${wiggleClass}`}
     >
-      <div className="relative h-[230px] w-full">
+      <div className="relative h-[230px] w-full overflow-hidden bg-slate-200">
         <SpotImage
           src={spot.image}
           alt=""
           draggable={false}
-          className="pointer-events-none absolute inset-0 size-full object-cover"
+          className="pointer-events-none absolute inset-0 size-full object-cover object-center"
           priority
         />
         <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/10 from-30% to-black/80" />
@@ -255,6 +256,11 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
   const challenger = spots.find((spot) => spot.id === challengerId);
   const currentTop = champion;
   const currentBottom = challenger;
+
+  useEffect(() => {
+    if (currentTop?.image) preloadImage(currentTop.image);
+    if (currentBottom?.image) preloadImage(currentBottom.image);
+  }, [currentTop?.image, currentBottom?.image]);
 
   useEffect(() => {
     if (spots.length < 2 || (champion && challenger)) return;

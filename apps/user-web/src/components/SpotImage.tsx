@@ -43,16 +43,13 @@ export function SpotImage({
     setVisible(false);
     const img = imgRef.current;
     if (img?.complete && img.naturalWidth > 0) {
-      const frame = requestAnimationFrame(() => {
-        requestAnimationFrame(() => setVisible(true));
-      });
-      return () => cancelAnimationFrame(frame);
+      setVisible(true);
     }
   }, [fadeIn, src]);
 
   function reveal() {
     if (!fadeIn) return;
-    requestAnimationFrame(() => setVisible(true));
+    setVisible(true);
   }
 
   return (
@@ -62,7 +59,7 @@ export function SpotImage({
       alt={alt}
       className={`${className ?? ""}${
         fadeIn
-          ? ` transition-opacity duration-1200 ease-out ${visible ? "opacity-100" : "opacity-0"}`
+          ? ` transition-opacity duration-[1200ms] ease-out ${visible ? "opacity-100" : "opacity-0"}`
           : ""
       }`}
       draggable={draggable}
