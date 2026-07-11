@@ -10,8 +10,10 @@ export type SpotCategory = "観光" | "グルメ" | "自然" | "歴史";
 /** 好み診断の比較カード専用。DB カテゴリ（都市・芸術・レジャー）をそのまま使う。 */
 export type DiagnosisSpotCategory = SpotCategory | "都市" | "芸術" | "レジャー・スポーツ";
 
-export const SWIPE_LIMIT = 9; // 初回は8件スワイプ
-export const SWIPE_LIMIT_REFINE = 6; // 追加ラウンドは5件
+export const SWIPE_LIMIT = 11; // 好み診断デッキのスポット数（比較回数より多めに確保）
+export const COMPARISON_ROUNDS = 8; // 初回の比較回数
+export const SWIPE_LIMIT_REFINE = 6; // 深掘りデッキのスポット数
+export const COMPARISON_ROUNDS_REFINE = 5; // 深掘りの比較回数
 
 export type SwipeSpot = {
   id: string;

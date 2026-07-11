@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UndoIcon } from "../components/icons.tsx";
 import { SpotImage } from "../components/SpotImage.tsx";
-import type { SwipeSpot } from "../data/spots.ts";
+import { COMPARISON_ROUNDS, COMPARISON_ROUNDS_REFINE, type SwipeSpot } from "../data/spots.ts";
 import { spotPreviewText } from "../lib/spotMapper.ts";
 
 const MAX_WINS_PER_SPOT = 3;
@@ -39,13 +39,14 @@ function createInitialMatch(spots: SwipeSpot[]): SwipeMatch | null {
   return { championId: champion.id, challengerId: challenger.id, searchIndex: 2 };
 }
 
-function findNextChallenger(
+function findNextChallengerInRange(
   spots: SwipeSpot[],
   championId: string,
-  startIndex: number,
+  from: number,
+  to: number,
   wins: Record<string, number>,
 ): SwipeSpot | null {
-  for (let index = startIndex; index < spots.length; index++) {
+  for (let index = from; index < to; index++) {
     const spot = spots[index];
     if (!spot || spot.id === championId || isRetired(spot.id, wins)) continue;
     return spot;
@@ -53,13 +54,27 @@ function findNextChallenger(
   return null;
 }
 
-function findFreshPair(
+/** searchIndex 以降に候補がなければ先頭から再探索し、規定ラウンド数まで比較を続けられるようにする。 */
+function findNextChallenger(
   spots: SwipeSpot[],
+  championId: string,
   startIndex: number,
+  wins: Record<string, number>,
+): SwipeSpot | null {
+  const fromStart = findNextChallengerInRange(spots, championId, startIndex, spots.length, wins);
+  if (fromStart) return fromStart;
+  if (startIndex === 0) return null;
+  return findNextChallengerInRange(spots, championId, 0, startIndex, wins);
+}
+
+function findFreshPairInRange(
+  spots: SwipeSpot[],
+  from: number,
+  to: number,
   wins: Record<string, number>,
 ): { top: SwipeSpot; bottom: SwipeSpot; nextIndex: number } | null {
   let first: SwipeSpot | null = null;
-  for (let index = startIndex; index < spots.length; index++) {
+  for (let index = from; index < to; index++) {
     const spot = spots[index];
     if (!spot || isRetired(spot.id, wins)) continue;
     if (!first) {
@@ -69,6 +84,18 @@ function findFreshPair(
     return { top: first, bottom: spot, nextIndex: index + 1 };
   }
   return null;
+}
+
+/** searchIndex 以降にペアがなければ先頭から再探索する。 */
+function findFreshPair(
+  spots: SwipeSpot[],
+  startIndex: number,
+  wins: Record<string, number>,
+): { top: SwipeSpot; bottom: SwipeSpot; nextIndex: number } | null {
+  const fromStart = findFreshPairInRange(spots, startIndex, spots.length, wins);
+  if (fromStart) return fromStart;
+  if (startIndex === 0) return null;
+  return findFreshPairInRange(spots, 0, startIndex, wins);
 }
 
 /** 勝者決定後の次の対戦カードを決める。3勝したスポットは退場し、以降は別ペアを組む。 */
@@ -197,7 +224,7 @@ function ComparisonCard({
 /** フロー 3: 2つのスポットを比較して好みを伝える画面。 */
 export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: SwipeScreenProps) {
   const initialMatch = createInitialMatch(spots);
-  const totalRounds = Math.max(1, spots.length - 1);
+  const totalRounds = refine ? COMPARISON_ROUNDS_REFINE : COMPARISON_ROUNDS;
   const [roundNumber, setRoundNumber] = useState(1);
   const [championId, setChampionId] = useState(() => initialMatch?.championId ?? "");
   const [challengerId, setChallengerId] = useState(() => initialMatch?.challengerId ?? "");

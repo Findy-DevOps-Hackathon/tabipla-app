@@ -10,6 +10,8 @@ import {
   resolveTripDestinations,
 } from "./data/places.ts";
 import {
+  COMPARISON_ROUNDS,
+  COMPARISON_ROUNDS_REFINE,
   RECOMMENDATIONS_PAGE_SIZE,
   type Recommendation,
   SWIPE_LIMIT,
@@ -492,7 +494,7 @@ export default function App() {
         return next;
       });
 
-      setSwipedCount(swipeDeck.length);
+      setSwipedCount(refining ? COMPARISON_ROUNDS_REFINE : COMPARISON_ROUNDS);
       if (refining) {
         setDetailedComplete(true);
         markDetailedDiagnosisComplete();
