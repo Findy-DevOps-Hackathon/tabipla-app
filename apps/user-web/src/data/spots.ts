@@ -1,5 +1,4 @@
-/**
- * スワイプ型レコメンド体験の型定義と定数。
+/** 比較タップ型レコメンド体験の型定義と定数。
  *
  * スポットデータは comparisonSpots.ts（seed-data 由来）および API から取得する。
  */
@@ -23,8 +22,6 @@ export type SwipeSpot = {
   description: string;
   /** DB のおすすめポイント（最大3件） */
   highlights?: string[];
-  /** デモデータ用の補足テキスト（highlights がない場合のフォールバック） */
-  trivia?: string;
   image: string;
 };
 

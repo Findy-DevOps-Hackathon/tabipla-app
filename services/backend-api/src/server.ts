@@ -4,7 +4,6 @@ import {
   type Database,
   deleteSpot,
   getAdminUserByEmail,
-  getCouponsBySpotId,
   getSpotById,
   hashPassword,
   listSpots,
@@ -76,7 +75,6 @@ import {
   ensureIndexSchema,
   geocodeSchema,
   getSpotByIdSchema,
-  getSpotCouponsSchema,
   getSpotSchema,
   hybridSearchSchema,
   keywordSearchSchema,
@@ -804,42 +802,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
         return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
       }
 
-      const dbCoupons = await getCouponsBySpotId(db, req.params.id);
-      const coupons = dbCoupons.map((c) => ({
-        id: c.id,
-        spotId: c.spotId,
-        title: c.title,
-        description: c.description ?? undefined,
-        discount: c.discount,
-        conditions: c.conditions ?? undefined,
-        validUntil: c.validUntil ?? undefined,
-      }));
-
-      return { spot: toSpotDocument(dbSpot), coupons };
-    },
-  );
-
-  app.get<{ Params: { id: string } }>(
-    "/v1/spots/:id/coupons",
-    { schema: getSpotCouponsSchema },
-    async (req, reply) => {
-      const dbSpot = await getSpotById(db, req.params.id);
-      if (!dbSpot) {
-        return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
-      }
-
-      const dbCoupons = await getCouponsBySpotId(db, req.params.id);
-      const coupons = dbCoupons.map((c) => ({
-        id: c.id,
-        spotId: c.spotId,
-        title: c.title,
-        description: c.description ?? undefined,
-        discount: c.discount,
-        conditions: c.conditions ?? undefined,
-        validUntil: c.validUntil ?? undefined,
-      }));
-
-      return { coupons };
+      return { spot: toSpotDocument(dbSpot) };
     },
   );
 

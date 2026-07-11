@@ -1,6 +1,6 @@
 # tabipla-app
 
-tabipla は自治体向けの観光コンテンツ管理と、ユーザー向けのスワイプ型おすすめ体験を提供するモノレポです。
+tabipla は自治体向けの観光コンテンツ管理と、ユーザー向けの比較タップ型おすすめ体験を提供するモノレポです。
 Elasticsearch 連携は `packages/search-core` に集約し、**`backend-api` と `agent` が利用**します。`apps/*` は API 層のみ呼び出し、Elasticsearch には直接アクセスしません。
 
 ```text
@@ -23,7 +23,7 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
 | パス | 説明 |
 |---|---|
 | `apps/admin-web` | 自治体向け管理画面（観光地 CRUD・CSV一括・AI収集） |
-| `apps/user-web` | ユーザー向け Web フロント（スワイプ型おすすめ） |
+| `apps/user-web` | ユーザー向け Web フロント（比較タップ型おすすめ） |
 | `services/backend-api` | HTTP API（認証・DB・検索連携・agent プロキシ） |
 | `services/agent` | AI エージェント（収集・おすすめ・ガイド） |
 | `packages/search-core` | Elasticsearch 共通モジュール |
@@ -87,7 +87,7 @@ pnpm -C apps/admin-web run deploy
 
 **主な機能**
 
-- スワイプ型の好み診断
+- 比較タップ型の好み診断
 - 目的地・旅の記憶に基づく AI おすすめ生成
 - スポット詳細と AI ガイド（質問応答）
 - 会員登録・ログインなし（訪問履歴は localStorage のみ）

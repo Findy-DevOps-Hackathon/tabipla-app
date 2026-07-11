@@ -385,11 +385,6 @@ export const getSpotByIdSchema = {
   params: idParams,
 } as const;
 
-/** GET /v1/spots/:id/coupons */
-export const getSpotCouponsSchema = {
-  params: idParams,
-} as const;
-
 const spotIdParams = {
   type: "object",
   required: ["spotId"],

@@ -17,7 +17,7 @@
   /* AI 演出（おすすめ理由・分析中）。teal-100/700 系で自然バッジと色を分ける */
   --ai-fg: #0f766e;
   --ai-bg: #ccfbf1;
-  /* 会員限定（プレミアム）アクセント。だれでもクーポン（--brand）と対で使う。 */
+  /* 会員限定（プレミアム）アクセント。ブランド（--brand）と対で使う。 */
   --member: #7c3aed;
   /* ページ背景（全画面で統一） */
   --page: #f8fafc;
@@ -28,27 +28,6 @@ body {
   font-family:
     "Noto Sans JP", system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif;
   -webkit-font-smoothing: antialiased;
-}
-
-/** スワイプカード初回表示時の左右揺れ（操作ヒント）。 */
-@keyframes swipe-hint-wiggle {
-  0%,
-  100% {
-    transform: translateX(0) rotate(0deg);
-  }
-  28% {
-    transform: translateX(7px) rotate(1.5deg);
-  }
-  57% {
-    transform: translateX(-7px) rotate(-1.5deg);
-  }
-  85% {
-    transform: translateX(3px) rotate(0.6deg);
-  }
-}
-
-.animate-swipe-hint {
-  animation: swipe-hint-wiggle 0.85s ease-in-out;
 }
 
 /** 比較カード初回表示時のごく弱い揺れ（操作ヒント）。 */

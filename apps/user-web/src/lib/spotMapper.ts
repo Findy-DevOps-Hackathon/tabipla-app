@@ -187,16 +187,10 @@ export function planItemToRecommendation(
   };
 }
 
-/** スワイプ比較カード用の短いプレビュー文。 */
-export function spotPreviewText(
-  spot: Pick<SwipeSpot, "highlights" | "trivia" | "description">,
-): string {
+/** 比較カード用の短いプレビュー文。 */
+export function spotPreviewText(spot: Pick<SwipeSpot, "highlights" | "description">): string {
   const firstHighlight = spot.highlights?.find(Boolean);
   if (firstHighlight) return firstHighlight;
-  if (spot.trivia) {
-    const end = spot.trivia.indexOf("。");
-    return end === -1 ? spot.trivia : spot.trivia.slice(0, end + 1);
-  }
   const end = spot.description.indexOf("。");
   return end === -1 ? spot.description : spot.description.slice(0, end + 1);
 }

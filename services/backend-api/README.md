@@ -142,8 +142,7 @@ pnpm --filter @tabipla/backend-api run deploy
 | メソッド | パス | 説明 |
 |---|---|---|
 | GET | `/v1/spots` | 公開スポット一覧（表示可能なもののみ） |
-| GET | `/v1/spots/:id` | スポット詳細 + クーポン |
-| GET | `/v1/spots/:id/coupons` | クーポン一覧 |
+| GET | `/v1/spots/:id` | スポット詳細 |
 | POST | `/v1/personalized/plan` | おすすめ生成（DB カタログ付与 → agent プロキシ） |
 | POST | `/v1/spots/:spotId/ask` | AI ガイド質問（DB ファクト付与 → agent プロキシ） |
 

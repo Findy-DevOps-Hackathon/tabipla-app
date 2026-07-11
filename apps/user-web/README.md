@@ -1,6 +1,6 @@
 # @tabipla/user-web
 
-tabipla のユーザー向け Web フロントエンドです。スワイプ型の好み診断と、AI によるおすすめ生成・スポットガイドを提供します。
+tabipla のユーザー向け Web フロントエンドです。比較タップ型の好み診断と、AI によるおすすめ生成・スポットガイドを提供します。
 
 **検索ロジックは持たず**、Elasticsearch / `@tabipla/search-core` には直接アクセスしません。
 API は開発時に Vite dev server が `/api` を `backend-api` へプロキシします。
@@ -90,10 +90,10 @@ pnpm run deploy
 
 ## 画面・機能
 
-スワイプ型のレコメンド体験（モバイルファースト 390×844）。
+比較タップ型のレコメンド体験（モバイルファースト 390×844）。
 
 1. **ようこそ**（`WelcomeScreen`）— 挨拶、「好み診断を始める」
-2. **スワイプ**（`SwipeScreen`）— スポットカードを左右スワイプ（好き / 興味なし）
+2. **好み診断**（`SwipeScreen`）— 2つのスポットを比較してタップで選択
 3. **目的地入力**（`InputScreen`）— 市区町村・都道府県を入力、サジェスト表示
 4. **旅の記憶**（`MemoryScreen`）— 過去の旅行体験を自由記述
 5. **分析中**（`ProcessingScreen`）— `POST /api/v1/personalized/plan` でおすすめ生成
@@ -107,7 +107,7 @@ pnpm run deploy
 | 用途 | データソース |
 |---|---|
 | 好み診断の比較カード | `src/data/comparisonSpots.ts`（`packages/db/seed-data/spots.json` 由来） |
-| 目的地内のスワイプ・おすすめ | `GET /api/v1/spots`（`src/lib/spotCatalog.ts`） |
+| 目的地内の探索・おすすめ | `GET /api/v1/spots`（`src/lib/spotCatalog.ts`） |
 | おすすめ生成 | `POST /api/v1/personalized/plan`（backend-api → agent） |
 
 ---

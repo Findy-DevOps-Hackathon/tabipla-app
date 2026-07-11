@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import {
-  date,
   doublePrecision,
   index,
   integer,
@@ -88,26 +87,6 @@ export type SpotRow = typeof spots.$inferSelect;
 export type NewSpotRow = typeof spots.$inferInsert;
 
 /**
- * coupons テーブル（クーポン・特典）。
- */
-export const coupons = pgTable("coupons", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => randomUUID()),
-  spotId: text("spot_id").references(() => spots.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  description: text("description"),
-  discount: text("discount").notNull(),
-  conditions: text("conditions"),
-  validUntil: date("valid_until"),
-});
-
-/** SELECT 時の行型。 */
-export type CouponRow = typeof coupons.$inferSelect;
-/** INSERT 時の入力型。 */
-export type NewCouponRow = typeof coupons.$inferInsert;
-
-/**
  * 管理画面ログインユーザー。
  *
  * 自治体ごとに1アカウント想定（デモ: 小諸市）。
@@ -135,7 +114,7 @@ export type NewAdminUserRow = typeof adminUsers.$inferInsert;
 /**
  * 旅行者（user-web）の会員アカウント。
  *
- * クーポン利用や「行った履歴」の保存に使う。パスワードは scrypt でハッシュ化して保持する。
+ * 「行った履歴」などの保存に使う。パスワードは scrypt でハッシュ化して保持する。
  */
 export const users = pgTable(
   "users",
