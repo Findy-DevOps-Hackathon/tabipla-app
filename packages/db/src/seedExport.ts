@@ -11,26 +11,9 @@ import {
   type SeedCoupon,
   type SeedManifest,
   type SeedMunicipality,
-  type SeedSpot,
   seedImageFilename,
+  stripSpotForSeed,
 } from "./seedData.js";
-
-function stripSpot(row: typeof spots.$inferSelect): SeedSpot {
-  return {
-    id: row.id,
-    municipalityId: row.municipalityId,
-    name: row.name,
-    description: row.description,
-    category: row.category,
-    area: row.area,
-    prefecture: row.prefecture,
-    address: row.address,
-    highlights: row.highlights,
-    lat: row.lat,
-    lon: row.lon,
-    imageUrl: row.imageUrl,
-  };
-}
 
 function stripCoupon(row: typeof coupons.$inferSelect): SeedCoupon {
   return {
@@ -72,7 +55,7 @@ async function main(): Promise<void> {
       email: row.email,
       municipalityName: row.municipalityName,
     }));
-    const seedSpots = spotRows.map(stripSpot);
+    const seedSpots = spotRows.map(stripSpotForSeed);
     const seedCoupons = couponRows.map(stripCoupon);
 
     await mkdir(SEED_DATA_DIR, { recursive: true });

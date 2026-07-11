@@ -4,7 +4,7 @@ import { upsertAdminUser } from "./repository/adminUsers.js";
 import { upsertCoupon } from "./repository/coupons.js";
 import { upsertSpots } from "./repository/spots.js";
 import { municipalities } from "./schema.js";
-import { loadSeedBundle } from "./seedData.js";
+import { loadSeedBundle, seedSpotToRow } from "./seedData.js";
 import { installSeedImages } from "./seedInstallImages.js";
 
 /**
@@ -41,7 +41,7 @@ async function main(): Promise<void> {
     }
 
     const imageInstall = await installSeedImages(bundle.spots);
-    const rows = await upsertSpots(db, imageInstall.spots);
+    const rows = await upsertSpots(db, imageInstall.spots.map(seedSpotToRow));
 
     for (const coupon of bundle.coupons) {
       await upsertCoupon(db, coupon);
