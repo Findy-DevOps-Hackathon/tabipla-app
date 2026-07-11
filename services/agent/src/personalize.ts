@@ -12,8 +12,8 @@ const MIN_LIKES_FOR_FOCUS = 3;
 export const BUBBLE_THEME_LIMIT = 2;
 const MAX_FOCUSED_THEMES = BUBBLE_THEME_LIMIT;
 const MIN_THEME_COUNT_FOR_REFINE = 5;
-const VECTOR_FOCUS_COHESION = 0.68;
-const VECTOR_SCATTER_COHESION = 0.55;
+/** この値以上なら好みが絞れているとみなし、追加診断を促さない。 */
+const VECTOR_FOCUS_COHESION = 0.56;
 const VECTOR_SUMMARY_TOP_K = 8;
 /** SwipeScreen の MAX_WINS_PER_SPOT と揃える */
 const MAX_COMPARE_WINS = 3;
@@ -582,19 +582,8 @@ export function assessProfileFocus(
     vectorCohesion = computeLikedEmbeddingsCohesion(vector.likedEmbeddings);
   }
 
-  let needsRefinement = false;
-
-  if (vectorCohesion !== null) {
-    if (vectorCohesion >= VECTOR_FOCUS_COHESION) {
-      needsRefinement = false;
-    } else if (vectorCohesion < VECTOR_SCATTER_COHESION) {
-      needsRefinement = true;
-    } else {
-      needsRefinement = ruleFallback.needsRefinement;
-    }
-  } else {
-    needsRefinement = ruleFallback.needsRefinement;
-  }
+  const needsRefinement =
+    vectorCohesion !== null ? vectorCohesion < VECTOR_FOCUS_COHESION : ruleFallback.needsRefinement;
 
   if (!usedVectorSummary) {
     const positiveThemes = topThemesWithScores(profile);
@@ -662,7 +651,7 @@ function formatBroadPreferenceHint(assessment: ProfileFocusAssessment): string {
     return "わくわくする体験、いろいろ広がりそうですが、";
   }
   const label = formatThemesLabel(themes);
-  if (assessment.vectorCohesion !== null && assessment.vectorCohesion < VECTOR_SCATTER_COHESION) {
+  if (assessment.vectorCohesion !== null && assessment.vectorCohesion < VECTOR_FOCUS_COHESION) {
     return `${label}など、ときめきがいろいろ散らばっている感じですが、`;
   }
   return `${label}にも心が動きそうですが、`;
