@@ -549,7 +549,8 @@ export default function App() {
         return next;
       });
 
-      setComparisonCount(totalComparisonCount(wins));
+      const roundCount = totalComparisonCount(wins);
+      setComparisonCount((prev) => (refining ? prev + roundCount : roundCount));
       if (refining) {
         setDetailedComplete(true);
         markDetailedDiagnosisComplete();

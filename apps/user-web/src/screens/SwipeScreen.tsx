@@ -242,7 +242,11 @@ function ComparisonCard({
 /** フロー 3: 2つのスポットを比較して好みを伝える画面。 */
 export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: SwipeScreenProps) {
   const initialMatch = createInitialMatch(spots);
-  const totalRounds = refine ? COMPARISON_ROUNDS_REFINE : COMPARISON_ROUNDS;
+  const sessionRounds = refine ? COMPARISON_ROUNDS_REFINE : COMPARISON_ROUNDS;
+  const roundOffset = refine ? COMPARISON_ROUNDS : 0;
+  const totalDisplayRounds = refine
+    ? COMPARISON_ROUNDS + COMPARISON_ROUNDS_REFINE
+    : COMPARISON_ROUNDS;
   const [roundNumber, setRoundNumber] = useState(1);
   const [championId, setChampionId] = useState(() => initialMatch?.championId ?? "");
   const [challengerId, setChallengerId] = useState(() => initialMatch?.challengerId ?? "");
@@ -323,7 +327,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
 
     const nextWins = { ...wins, [winnerId]: (wins[winnerId] ?? 0) + 1 };
     const nextRoundNumber = roundNumber + 1;
-    const isLastRound = roundNumber >= totalRounds;
+    const isLastRound = roundNumber >= sessionRounds;
 
     setHistory((prev) => [...prev, { championId, challengerId, searchIndex, wins, roundNumber }]);
 
@@ -375,7 +379,8 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
     );
   }
 
-  const progress = totalRounds > 0 ? (roundNumber / totalRounds) * 100 : 0;
+  const displayRound = roundOffset + Math.min(roundNumber, sessionRounds);
+  const progress = totalDisplayRounds > 0 ? (displayRound / totalDisplayRounds) * 100 : 0;
   const canUndo = history.length > 0 && !locked;
   const isFirstRound = roundNumber === 1;
 
@@ -396,7 +401,7 @@ export function SwipeScreen({ spots, onComplete, refine = false, onCancel }: Swi
             </div>
             <div className="flex items-center gap-3">
               <p className="text-[13px] text-[#64748b]">
-                {Math.min(roundNumber, totalRounds)} / {totalRounds}
+                {displayRound} / {totalDisplayRounds}
               </p>
               <button
                 type="button"
