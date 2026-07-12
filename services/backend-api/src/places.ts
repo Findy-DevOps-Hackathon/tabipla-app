@@ -21,6 +21,14 @@ function isNotoRegionContext(context: MunicipalityContext): boolean {
   );
 }
 
+function municipalityNameVariants(municipality: string): string[] {
+  const base = municipality.replace(/\s+/g, "");
+  const variants = new Set<string>([base]);
+  const withoutSuffix = base.replace(/[市区町村]$/, "");
+  if (withoutSuffix) variants.add(withoutSuffix);
+  return [...variants];
+}
+
 /** 住所が指定自治体内かどうか（都道府県・市区町村名の両方を含むか）。 */
 function isAddressInMunicipality(
   address: string | undefined,
@@ -34,7 +42,66 @@ function isAddressInMunicipality(
     return extractNotoAreaFromAddress(normalized) !== "";
   }
 
-  return normalized.includes(context.municipality);
+  return municipalityNameVariants(context.municipality).some((variant) =>
+    normalized.includes(variant),
+  );
+}
+
+function normalizePlaceLabel(value: string): string {
+  return value.replace(/\s+/g, "").toLowerCase();
+}
+
+function isMatchingPlaceName(displayName: string | undefined, spotName: string): boolean {
+  if (!displayName?.trim()) return false;
+  const normalizedDisplay = normalizePlaceLabel(displayName);
+  const normalizedSpot = normalizePlaceLabel(spotName);
+  return normalizedDisplay.includes(normalizedSpot) || normalizedSpot.includes(normalizedDisplay);
+}
+
+type GooglePlaceCandidate = {
+  displayName?: { text?: string };
+  formattedAddress?: string;
+  types?: string[];
+  editorialSummary?: { text?: string };
+};
+
+type LegacyPlaceCandidate = {
+  formatted_address?: string;
+  name?: string;
+  types?: string[];
+};
+
+function pickGooglePlace(
+  places: GooglePlaceCandidate[],
+  spotName: string,
+  context: MunicipalityContext,
+): GooglePlaceCandidate | undefined {
+  const inMunicipality = places.find((place) =>
+    isAddressInMunicipality(place.formattedAddress, context),
+  );
+  if (inMunicipality) return inMunicipality;
+
+  return places.find(
+    (place) =>
+      isMatchingPlaceName(place.displayName?.text, spotName) &&
+      Boolean(place.formattedAddress?.trim()),
+  );
+}
+
+function pickLegacyPlace(
+  candidates: LegacyPlaceCandidate[],
+  spotName: string,
+  context: MunicipalityContext,
+): LegacyPlaceCandidate | undefined {
+  const inMunicipality = candidates.find((candidate) =>
+    isAddressInMunicipality(candidate.formatted_address, context),
+  );
+  if (inMunicipality) return inMunicipality;
+
+  return candidates.find(
+    (candidate) =>
+      isMatchingPlaceName(candidate.name, spotName) && Boolean(candidate.formatted_address?.trim()),
+  );
 }
 
 /** スポット名検索の結果（管理画面フォーム自動入力用） */
@@ -72,12 +139,20 @@ function mapGoogleTypesToCategory(types: string[] = []): string | undefined {
     return "ショッピング";
   }
   if (set.has("stadium") || set.has("amusement_park")) return "レジャー・スポーツ";
-  if (set.has("tourist_attraction") || set.has("locality")) return "都市";
+  if (
+    set.has("tourist_attraction") ||
+    set.has("locality") ||
+    set.has("train_station") ||
+    set.has("transit_station")
+  ) {
+    return "都市";
+  }
   return undefined;
 }
 
 async function lookupViaPlacesApiNew(
   query: string,
+  spotName: string,
   key: string,
   context: MunicipalityContext,
 ): Promise<PlaceLookupResult | null> {
@@ -103,16 +178,9 @@ async function lookupViaPlacesApiNew(
 
   if (!res.ok) return null;
 
-  const data = (await res.json()) as {
-    places?: Array<{
-      displayName?: { text?: string };
-      formattedAddress?: string;
-      types?: string[];
-      editorialSummary?: { text?: string };
-    }>;
-  };
-
-  const place = data.places?.find((p) => isAddressInMunicipality(p.formattedAddress, context));
+  const data = (await res.json()) as { places?: GooglePlaceCandidate[] };
+  const places = data.places ?? [];
+  const place = pickGooglePlace(places, spotName, context);
   if (!place) return null;
 
   return {
@@ -125,6 +193,7 @@ async function lookupViaPlacesApiNew(
 
 async function lookupViaFindPlace(
   query: string,
+  spotName: string,
   key: string,
   context: MunicipalityContext,
 ): Promise<PlaceLookupResult | null> {
@@ -138,17 +207,9 @@ async function lookupViaFindPlace(
   const res = await fetchWithTimeout(url, {}, GOOGLE_PLACES_TIMEOUT_MS);
   if (!res.ok) return null;
 
-  const data = (await res.json()) as {
-    candidates?: Array<{
-      formatted_address?: string;
-      name?: string;
-      types?: string[];
-    }>;
-  };
-
-  const candidate = data.candidates?.find((c) =>
-    isAddressInMunicipality(c.formatted_address, context),
-  );
+  const data = (await res.json()) as { candidates?: LegacyPlaceCandidate[] };
+  const candidates = data.candidates ?? [];
+  const candidate = pickLegacyPlace(candidates, spotName, context);
   if (!candidate) return null;
 
   return {
@@ -173,7 +234,7 @@ export async function lookupPlaceByName(
   if (!key) return null;
 
   return (
-    (await lookupViaPlacesApiNew(query, key, context)) ??
-    (await lookupViaFindPlace(query, key, context))
+    (await lookupViaPlacesApiNew(query, trimmed, key, context)) ??
+    (await lookupViaFindPlace(query, trimmed, key, context))
   );
 }

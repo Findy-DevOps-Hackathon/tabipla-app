@@ -345,11 +345,19 @@ export async function collectSpots(params: CollectSpotsParams): Promise<Collecte
 }
 
 export type PlaceLookupResult = {
+  found?: boolean;
   name?: string;
   address?: string;
   category?: string | string[];
   description?: string;
 };
+
+function isPlaceLookupHit(
+  result: PlaceLookupResult | null | undefined,
+): result is PlaceLookupResult {
+  if (!result || result.found === false) return false;
+  return Boolean(result.name?.trim() || result.address?.trim());
+}
 
 export async function lookupPlaceByName(
   name: string,
@@ -363,7 +371,8 @@ export async function lookupPlaceByName(
   if (params.municipality) qs.set("municipality", params.municipality);
 
   try {
-    return await request<PlaceLookupResult>(`/places/lookup?${qs}`);
+    const result = await request<PlaceLookupResult>(`/places/lookup?${qs}`);
+    return isPlaceLookupHit(result) ? result : null;
   } catch {
     return null;
   }

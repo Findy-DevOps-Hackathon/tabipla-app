@@ -394,7 +394,7 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
       };
     }
 
-    return reply.code(404).send({ error: "スポット名から情報を取得できませんでした" });
+    return { found: false as const };
   });
 
   // ---- スポット一覧（管理画面） --------------------------------------------
