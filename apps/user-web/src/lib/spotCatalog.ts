@@ -48,7 +48,7 @@ export async function resolveSpotById(
   if (cached) return cached;
 
   try {
-    const doc = await fetchSpotById(id);
+    const doc = await fetchSpotById(id, { skipDestinationCheck: true });
     return documentToRecommendation(doc);
   } catch {
     return null;
