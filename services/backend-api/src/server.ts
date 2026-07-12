@@ -15,6 +15,7 @@ import {
 } from "@tabipla/db";
 import {
   createElasticsearchClient,
+  deleteSpot as deleteSpotInElasticsearch,
   type ElasticsearchClient,
   ensureIndex,
   hybridSearch,
@@ -618,26 +619,33 @@ export function buildServer(options: BuildServerOptions = {}): FastifyInstance {
 
   // ---- スポット削除 --------------------------------------------------------
   // 正本(PG)から削除し、ES の写しも削除する。
+  // delete 時は outbox（spot_id FK）を使わず ES を先に削除してから PG を消す。
   app.delete<{ Params: { id: string }; Querystring: { refresh?: string } }>(
     "/spots/:id",
     { schema: deleteSpotSchema },
-    async (req) => {
+    async (req, reply) => {
       const refresh = req.query.refresh === "true";
+      const existing = await getSpotById(db, req.params.id);
+      if (!existing) {
+        return reply.code(404).send({ error: `スポットが見つかりません: ${req.params.id}` });
+      }
+
       await deleteSpotImageFiles(req.params.id);
+
+      let esSynced = true;
+      try {
+        await deleteSpotInElasticsearch(client, req.params.id, { refresh });
+      } catch (error) {
+        app.log.warn({ err: error, spotId: req.params.id }, "ES 削除に失敗しました");
+        esSynced = false;
+      }
+
       await deleteSpot(db, req.params.id);
-      const syncResult = await writeThroughSpotToElasticsearch({
-        client,
-        db,
-        log: app.log,
-        spotId: req.params.id,
-        operation: "delete",
-        refresh,
-      });
       return {
         index: "spots",
         id: req.params.id,
         deleted: true,
-        ...(syncResult.synced ? {} : { esSyncPending: true }),
+        ...(esSynced ? {} : { esSyncPending: true }),
       };
     },
   );
