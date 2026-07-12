@@ -19,6 +19,12 @@ pnpm --filter @tabipla/backend-api run deploy
 #    → DB の imageUrl が https://storage.googleapis.com/... に更新される
 ```
 
+コードデプロイを待たずに GCS 環境変数だけ Cloud Run へ反映する場合:
+
+```bash
+bash infra/gcs/apply-cloud-run.sh
+```
+
 GCS バケットのロケーションは作成後に変更できません。既定名のバケットが
 `US` など東京以外に既にある場合、`setup.sh` は
 `{project}-spot-images-asia-northeast1` を東京リージョン用に作成します。

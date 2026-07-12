@@ -17,18 +17,32 @@ if [[ -z "$CLOUD_SQL_INSTANCE" || "$CLOUD_SQL_INSTANCE" == *'PROJECT_ID'* ]]; th
 fi
 CORS_ORIGINS="${_CORS_ORIGINS:-https://tabipla-admin-web.web.app,https://tabipla-admin-web.firebaseapp.com,https://tabipla-user-web.web.app,https://tabipla-user-web.firebaseapp.com}"
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+CREDS_FILE="$ROOT/infra/agent-platform/.credentials"
+AGENT_PLATFORM_LOCATION="${_REGION:-asia-northeast1}"
+
+AGENT_PLATFORM_RESOURCE=""
+if [[ -f "$CREDS_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$CREDS_FILE"
+  set +a
+fi
+
 AGENT_URL=""
-if gcloud run services describe tabipla-agent \
-  --project="${PROJECT_ID}" \
-  --region="${REGION}" \
-  --format='value(status.url)' >/dev/null 2>&1; then
-  AGENT_URL="$(gcloud run services describe tabipla-agent \
+if [[ -z "${AGENT_PLATFORM_RESOURCE:-}" ]]; then
+  if gcloud run services describe tabipla-agent \
     --project="${PROJECT_ID}" \
     --region="${REGION}" \
-    --format='value(status.url)')"
-fi
-if [[ -z "$AGENT_URL" ]]; then
-  echo "WARNING: tabipla-agent が未デプロイです。AGENT_API_URL は設定されません。" >&2
+    --format='value(status.url)' >/dev/null 2>&1; then
+    AGENT_URL="$(gcloud run services describe tabipla-agent \
+      --project="${PROJECT_ID}" \
+      --region="${REGION}" \
+      --format='value(status.url)')"
+  fi
+  if [[ -z "$AGENT_URL" ]]; then
+    echo "WARNING: Agent Platform / tabipla-agent が未デプロイです。" >&2
+  fi
 fi
 
 SECRETS=()
@@ -64,9 +78,15 @@ IFS=','; SECRETS_CSV="${SECRETS[*]}"; unset IFS
 ENV_VARS_FILE="$(mktemp)"
 trap 'rm -f "$ENV_VARS_FILE"' EXIT
 {
-  echo "GOOGLE_CLOUD_PROJECT: \"${PROJECT_ID}\""
-  echo "VERTEX_EMBEDDING_LOCATION: \"${_VERTEX_EMBEDDING_LOCATION:-us-central1}\""
+  echo "DATABASE_URL: \"${DATABASE_URL}\""
   echo "CORS_ORIGINS: \"${CORS_ORIGINS}\""
+  echo "GOOGLE_GENAI_USE_VERTEXAI: \"TRUE\""
+  echo "GOOGLE_CLOUD_PROJECT: \"${PROJECT_ID}\""
+  echo "GOOGLE_CLOUD_LOCATION: \"${REGION}\""
+  echo "GEMINI_EMBEDDING_MODEL: \"${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}\""
+  echo "EMBEDDING_PROVIDER: \"gemini\""
+  [[ -n "${AGENT_PLATFORM_RESOURCE:-}" ]] && echo "AGENT_PLATFORM_RESOURCE: \"${AGENT_PLATFORM_RESOURCE}\""
+  [[ -n "${AGENT_PLATFORM_LOCATION:-}" ]] && echo "AGENT_PLATFORM_LOCATION: \"${AGENT_PLATFORM_LOCATION}\""
   [[ -n "$AGENT_URL" ]] && echo "AGENT_API_URL: \"${AGENT_URL}\""
   [[ -n "${_GCS_BUCKET:-}" ]] && echo "GCS_BUCKET: \"${_GCS_BUCKET}\""
   [[ -n "${_GCS_PUBLIC_BASE_URL:-}" ]] && echo "GCS_PUBLIC_BASE_URL: \"${_GCS_PUBLIC_BASE_URL}\""

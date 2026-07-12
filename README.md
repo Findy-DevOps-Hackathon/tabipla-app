@@ -25,12 +25,22 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
 | `apps/admin-web` | 自治体向け管理画面（観光地 CRUD・CSV一括・AI収集） |
 | `apps/user-web` | ユーザー向け Web フロント（比較タップ型おすすめ） |
 | `services/backend-api` | HTTP API（認証・DB・検索連携・agent プロキシ） |
-| `services/agent` | AI エージェント（収集・おすすめ・ガイド） |
+| `services/agent` | AI エージェント（Agent Platform + Vertex/ADC） |
 | `packages/search-core` | Elasticsearch 共通モジュール |
 | `packages/db` | PostgreSQL スキーマ・マイグレーション |
 | `packages/domain` | カテゴリ・エリア等の横断ドメイン定数 |
 | `packages/maps-core` | Google Maps Routes API（移動時間計算） |
 | `infra/` | Docker / Cloud SQL / GCS / 監視 等 |
+
+### AI 構成（Vertex/ADC + Agent Platform）
+
+| レイヤー | 技術 |
+|---|---|
+| エージェント実行（本番） | Gemini Enterprise Agent Platform Runtime |
+| モデル呼び出し | Vertex AI + ADC（`GOOGLE_CLOUD_PROJECT`、API キー不要） |
+| backend-api → agent | Reasoning Engine API（ADC） |
+
+ローカル開発: `gcloud auth application-default login` + Hono agent（`:8080`）
 
 ---
 
@@ -52,10 +62,7 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
 2. backend-api に `CORS_ORIGINS` 設定 + 再デプロイ
 3. admin-web を再デプロイ: `pnpm -C apps/admin-web run deploy`
 
-| 項目 | 値 |
-|---|---|
-| 小諸市 ID | `admin@example.com` |
-| 小諸市 PW | `test-admin-password` |
+管理画面のログイン情報（メール・パスワード）はリポジトリに含めません。`packages/db/.env`（ローカル）または Secret Manager で管理してください。
 
 **主な機能**
 
@@ -105,7 +112,7 @@ pnpm -C apps/user-web run deploy
 | コンポーネント | ホスティング | 設定 |
 |---|---|---|
 | backend-api | Cloud Run | プロジェクト `tabipla-user-web`、サービス名 `tabipla-backend-api` |
-| agent | Cloud Run | プロジェクト `tabipla-user-web`、サービス名 `tabipla-agent` |
+| agent | Agent Platform Runtime | プロジェクト `tabipla-user-web`、Reasoning Engine `tabipla-agent` |
 
 - backend-api: [`services/backend-api/README.md`](services/backend-api/README.md)
 - agent: [`services/agent/README.md`](services/agent/README.md)

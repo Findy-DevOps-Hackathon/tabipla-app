@@ -1,14 +1,17 @@
 # @tabipla/agent
 
 ADK（`@google/adk`）と Hono で動く AI エージェントサービスです。
-ユーザー向けのおすすめ生成・スポット質問、管理画面向けの Web 収集・文案生成・画像生成を担います。
+本番は **Gemini Enterprise Agent Platform Runtime**（Agent Runtime / BYOC）上で動作します。
+Gemini モデル呼び出しは **Vertex AI + ADC**（API キー不要）です。
 
 ```text
-user-web  ──▶ backend-api ──▶ agent（/v1/personalized/plan, /v1/spots/:id/ask）
-admin-web ──▶ backend-api ──▶ agent（/v1/collect-spots, /v1/describe-spot, /v1/generate-spot-image）
+user-web  ──▶ backend-api ──▶ Agent Platform Runtime（personalizedPlan, askSpot）
+admin-web ──▶ backend-api ──▶ Agent Platform Runtime（collectSpots, describeSpot, generateSpotImage）
+                              └─ ADK / @google/genai → Vertex AI（ADC）
 ```
 
-`/v1/*` は `AGENT_INTERNAL_SECRET` によるサービス間認証が必須です（直接 curl 不可）。
+ローカル開発時は Hono の `/v1/*` を直接呼び出します（`AGENT_API_URL=http://localhost:8080`）。
+本番の backend-api は `AGENT_PLATFORM_RESOURCE` 経由で Reasoning Engine API を呼び出します。
 
 検索は `@tabipla/search-core` を直接利用します（`personalizedPlan` の候補ランキングなど）。
 
@@ -18,7 +21,10 @@ admin-web ──▶ backend-api ──▶ agent（/v1/collect-spots, /v1/describ
 
 | パス | 役割 |
 |---|---|
-| `src/server.ts` | Hono API（`/healthz`, `/v1/*`） |
+| `src/server.ts` | Hono API（`/healthz`, `/v1/*`, `/api/reasoning_engine`） |
+| `src/handlers.ts` | 各 API のビジネスロジック |
+| `src/vertexConfig.ts` | Vertex AI + ADC クライアント |
+| `src/agentPlatform/` | Agent Platform Runtime 向け class_methods |
 | `src/agents/collect.ts` | 指定市区町村の観光地 Web 収集 |
 | `src/agents/describe.ts` | 紹介文・おすすめポイント生成 |
 | `src/agents/introduce.ts` | スポットに関するマルチモーダル Q&A |
@@ -26,8 +32,7 @@ admin-web ──▶ backend-api ──▶ agent（/v1/collect-spots, /v1/describ
 | `src/agents/intro.ts` | おすすめ一覧の導入文生成 |
 | `src/agents/spotImage.ts` | スポット用スケッチ風イラスト生成 |
 | `src/personalize.ts` | 好みプロファイル・スコアリング（決定的ロジック） |
-| `src/fixtures/spots.ts` | `packages/db/seed-data/spots.json` 由来のモックカタログ |
-| `src/internalAuth.ts` | backend-api からのサービス間トークン検証 |
+| `src/internalAuth.ts` | backend-api からのサービス間トークン検証（ローカル / Cloud Run 互換） |
 
 ---
 
@@ -36,12 +41,19 @@ admin-web ──▶ backend-api ──▶ agent（/v1/collect-spots, /v1/describ
 | 変数名 | 既定値 | 説明 |
 |---|---|---|
 | `PORT` | `8080` | 待ち受けポート |
-| `GOOGLE_GENAI_USE_VERTEXAI` | — | `TRUE` で Vertex AI 経由 |
+| `GOOGLE_GENAI_USE_VERTEXAI` | `TRUE` | ADK の Vertex backend を有効化 |
 | `GOOGLE_CLOUD_PROJECT` | — | GCP プロジェクト ID |
-| `GOOGLE_CLOUD_LOCATION` | —（`.env.example` で `asia-northeast1`） | Vertex AI リージョン |
-| `BACKEND_API_URL` | —（`.env.example` 参照） | backend-api のベース URL |
+| `GOOGLE_CLOUD_LOCATION` | `asia-northeast1` | Vertex リージョン |
+| `BACKEND_API_URL` | — | backend-api のベース URL |
 | `ES_NODE` | —（`.env.example` 参照） | Elasticsearch 接続先 |
-| `AGENT_INTERNAL_SECRET` | 開発用既定値 | backend-api からの内部トークン（本番必須） |
+| `AGENT_INTERNAL_SECRET` | 開発用既定値 | ローカル / Cloud Run 互換モード用 |
+
+backend-api 側（本番）:
+
+| 変数名 | 説明 |
+|---|---|
+| `AGENT_PLATFORM_RESOURCE` | `projects/.../reasoningEngines/...` |
+| `AGENT_PLATFORM_LOCATION` | 例: `asia-northeast1` |
 
 詳細は `.env.example` を参照してください。
 
@@ -50,70 +62,75 @@ admin-web ──▶ backend-api ──▶ agent（/v1/collect-spots, /v1/describ
 ## 起動
 
 ```bash
-cp .env.example .env   # GOOGLE_CLOUD_PROJECT を設定
-gcloud auth application-default login   # ローカル開発用 ADC
+gcloud auth application-default login
+gcloud config set project tabipla-user-web
+cp .env.example .env
 pnpm --filter @tabipla/agent dev
 # → http://localhost:8080/healthz
 ```
 
 ---
 
-## API エンドポイント
+## API
 
-### `/v1/*`（backend-api からの内部トークン必須）
+### Agent Platform Runtime（本番）
+
+| class_method | 説明 |
+|---|---|
+| `personalizedPlan` | 好みからおすすめ一覧を生成 |
+| `askSpot` | スポット Q&A |
+| `collectSpots` | 観光地 Web 収集 |
+| `describeSpot` | 紹介文 / highlights 生成 |
+| `generateSpotImage` | スポット用イラスト生成 |
+
+### `/v1/*`（ローカル開発 / Cloud Run 互換）
 
 | メソッド | パス | 説明 |
 |---|---|---|
-| POST | `/v1/personalized/plan` | 好みからおすすめ一覧を生成（`catalog` 必須） |
-| POST | `/v1/spots/:id/ask` | スポットに関するテキスト・画像・音声質問 |
-| POST | `/v1/collect-spots` | 市区町村の観光地 Web 収集 |
-| POST | `/v1/describe-spot` | 紹介文またはおすすめポイント生成 |
+| POST | `/v1/personalized/plan` | 好みからおすすめ一覧を生成 |
+| POST | `/v1/spots/:id/ask` | スポット Q&A |
+| POST | `/v1/collect-spots` | 観光地 Web 収集 |
+| POST | `/v1/describe-spot` | 紹介文 / highlights 生成 |
 | POST | `/v1/generate-spot-image` | スポット用イラスト生成 |
-
-通常は `backend-api` がプロキシします。`X-Tabipla-Agent-Token` ヘッダー（`AGENT_INTERNAL_SECRET`）が必要です。
-
-### 公開（ヘルスチェックのみ）
-
-| メソッド | パス | 説明 |
-|---|---|---|
-| GET | `/healthz` | 稼働確認 |
 
 ---
 
-## デプロイ（Cloud Run / GCP）
+## デプロイ（Gemini Enterprise Agent Platform）
 
 ```bash
 gcloud config set project tabipla-user-web
 pnpm --filter @tabipla/agent run deploy
 ```
 
-`pnpm run deploy` は `package.json` の `deploy`（= `bash scripts/deploy.sh`）です。
-`run` を省いた `pnpm deploy` は pnpm の組み込みコマンドと衝突するため、必ず `pnpm run deploy` を使います。
+`deploy` は Agent Platform Runtime（BYOC）へデプロイします。
+デプロイ後、`infra/agent-platform/.credentials` に `AGENT_PLATFORM_RESOURCE` が保存されます。
+
+Cloud Run へ直接デプロイする互換モード:
+
+```bash
+pnpm --filter @tabipla/agent run deploy:cloud-run
+```
 
 ### backend-api との接続
 
-`services/backend-api` は `AGENT_API_URL` と `AGENT_INTERNAL_SECRET` 経由で agent を呼び出します。
+本番（Agent Platform）:
 
 ```bash
-AGENT_API_URL=https://tabipla-agent-xxxxx-an.a.run.app
+AGENT_PLATFORM_RESOURCE=projects/.../locations/asia-northeast1/reasoningEngines/...
+AGENT_PLATFORM_LOCATION=asia-northeast1
 ```
 
-### ローカルで Docker イメージを試す
+ローカル / Cloud Run 互換:
 
 ```bash
-# リポジトリルートで
-docker build -f services/agent/Dockerfile -t tabipla-agent .
-docker run --rm -p 8080:8080 \
-  -e GOOGLE_GENAI_USE_VERTEXAI=TRUE \
-  -e GOOGLE_CLOUD_PROJECT=your-project \
-  -e GOOGLE_CLOUD_LOCATION=asia-northeast1 \
-  tabipla-agent
+AGENT_API_URL=http://localhost:8080
+AGENT_INTERNAL_SECRET=...
 ```
 
 ---
 
 ## エラーハンドリング
 
-- モデル API の 429 / quota エラーはユーザー向けに「混み合っています」等へ変換します。
+- モデル API の 429 / quota エラーはユーザー向けに分かりやすい文言へ変換します。
 - 技術詳細はサーバーログにのみ出力し、レスポンスには含めません。
 - `personalizedPlan` は ES ランキングが空の場合、ルールベース推薦へフォールバックします。

@@ -7,9 +7,8 @@
 - Node.js 22 以上
 - pnpm（`corepack enable` で有効化）
 - Docker Desktop
-- gcloud CLI（AI 機能を使う場合）
-- GCP プロジェクトで Vertex AI API が有効（AI 機能を使う場合）
-- 実行ユーザーに Vertex AI ユーザー（`roles/aiplatform.user`）が付与済み（AI 機能を使う場合）
+- [Google Cloud プロジェクト](https://console.cloud.google.com/)（`tabipla-user-web` 等）
+- ローカル: `gcloud auth application-default login`（Vertex/ADC 用）
 
 ## 初回セットアップ
 
@@ -18,25 +17,22 @@
 corepack enable
 pnpm install
 pnpm build
-```
-
-```bash
-# Google 認証（AI 機能を使う場合）
 gcloud auth application-default login
+gcloud config set project tabipla-user-web
 ```
 
 ```bash
 # agent
 cd services/agent
 cp .env.example .env
-# .env の GOOGLE_CLOUD_PROJECT を実プロジェクトIDに変更
+# GOOGLE_CLOUD_PROJECT 等を確認
 ```
 
 ```bash
 # backend-api
 cd services/backend-api
 cp .env.example .env
-# .env の DATABASE_URL / GOOGLE_MAPS_API_KEY を環境に合わせて設定
+# DATABASE_URL / GOOGLE_CLOUD_PROJECT を環境に合わせて設定
 ```
 
 ```bash
@@ -106,9 +102,9 @@ pnpm dev:user
 
 | 症状 | 対処 |
 |---|---|
-| `Could not load the default credentials` | `gcloud auth application-default login` を再実行 |
-| `Permission denied` / 403 | GCP IAM で Vertex AI ユーザー権限を確認 |
-| 429 / quota エラー | 少し待って再実行 |
+| `GOOGLE_CLOUD_PROJECT が未設定` | `services/agent/.env` と `services/backend-api/.env` に Vertex 設定を追加 |
+| `Could not load the default credentials` | `gcloud auth application-default login` を実行 |
+| 429 / quota エラー | GCP クォータまたは Vertex のレート制限を確認 |
 | `Failed to fetch` | backend-api / agent / Vite dev server の起動状況を確認 |
 | `EADDRINUSE` | 既に同じポートを使っているプロセスを停止して再起動 |
 | 登録や検索で失敗 | Docker の PostgreSQL / Elasticsearch 起動状況を確認 |

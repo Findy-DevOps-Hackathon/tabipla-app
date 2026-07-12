@@ -33,20 +33,9 @@ steps:
     env:
       - PROJECT_ID=${PROJECT_ID}
 
-  - name: gcr.io/cloud-builders/docker
-    id: build-agent
-    waitFor: ['-']
-    args:
-      - build
-      - -f
-      - services/agent/Dockerfile
-      - -t
-      - gcr.io/${PROJECT_ID}/tabipla-agent
-      - .
-
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-agent
-    waitFor: [build-agent]
+    waitFor: ['-']
     entrypoint: bash
     args:
       - infra/cloud-build/deploy-agent.sh
@@ -85,10 +74,8 @@ steps:
       - _ES_INDEX=${_ES_INDEX}
       - _ES_VECTOR_DIMS=${_ES_VECTOR_DIMS}
       - _EMBEDDING_PROVIDER=${_EMBEDDING_PROVIDER}
-      - _VERTEX_EMBEDDING_LOCATION=${_VERTEX_EMBEDDING_LOCATION}
 
 images:
-  - gcr.io/${PROJECT_ID}/tabipla-agent
   - gcr.io/${PROJECT_ID}/tabipla-backend-api
 
 substitutions:
@@ -102,7 +89,6 @@ substitutions:
   _ES_INDEX: ""
   _ES_VECTOR_DIMS: ""
   _EMBEDDING_PROVIDER: ""
-  _VERTEX_EMBEDDING_LOCATION: us-central1
 
 availableSecrets:
   secretManager:

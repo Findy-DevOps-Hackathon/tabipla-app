@@ -59,29 +59,46 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
   exit 1
 fi
 
-# .env の localhost 用 AGENT_API_URL は Cloud Run では使えないため本番 URL を自動取得
+# Gemini Enterprise Agent Platform Runtime を優先。未設定時のみ Cloud Run URL にフォールバック。
 if [[ "${AGENT_API_URL:-}" == *localhost* ]] || [[ "${AGENT_API_URL:-}" == *127.0.0.1* ]]; then
   AGENT_API_URL=""
 fi
-if [[ -z "${AGENT_API_URL:-}" ]]; then
-  AGENT_API_URL="$(gcloud run services describe tabipla-agent \
-    --project="$PROJECT" \
-    --region="$REGION" \
-    --format='value(status.url)' 2>/dev/null || true)"
+
+AGENT_PLATFORM_CREDS_FILE="$ROOT/infra/agent-platform/.credentials"
+if [[ -f "$AGENT_PLATFORM_CREDS_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$AGENT_PLATFORM_CREDS_FILE"
+  set +a
 fi
-if [[ -z "${AGENT_API_URL:-}" ]]; then
-  echo "AGENT_API_URL が取得できません。tabipla-agent を ${REGION} にデプロイしてください。" >&2
-  exit 1
+
+if [[ -z "${AGENT_PLATFORM_RESOURCE:-}" ]]; then
+  if [[ -z "${AGENT_API_URL:-}" ]]; then
+    AGENT_API_URL="$(gcloud run services describe tabipla-agent \
+      --project="$PROJECT" \
+      --region="$REGION" \
+      --format='value(status.url)' 2>/dev/null || true)"
+  fi
+  if [[ -z "${AGENT_API_URL:-}" ]]; then
+    echo "AGENT_PLATFORM_RESOURCE または AGENT_API_URL が必要です。" >&2
+    echo "  Agent Platform: pnpm -C services/agent run deploy" >&2
+    echo "  Cloud Run 互換: pnpm -C services/agent run deploy:cloud-run" >&2
+    exit 1
+  fi
+  echo "  AGENT_API_URL=${AGENT_API_URL}"
+else
+  AGENT_PLATFORM_LOCATION="${AGENT_PLATFORM_LOCATION:-$REGION}"
+  echo "  AGENT_PLATFORM_RESOURCE=${AGENT_PLATFORM_RESOURCE}"
+  echo "  AGENT_PLATFORM_LOCATION=${AGENT_PLATFORM_LOCATION}"
 fi
-echo "  AGENT_API_URL=${AGENT_API_URL}"
 
 ENV_VARS_FILE="$(mktemp)"
 trap 'rm -f "$ENV_VARS_FILE"' EXIT
 
 {
   echo "DATABASE_URL: \"${DATABASE_URL}\""
-  echo "GOOGLE_CLOUD_PROJECT: \"${PROJECT}\""
-  echo "VERTEX_EMBEDDING_LOCATION: \"${VERTEX_EMBEDDING_LOCATION:-us-central1}\""
+  [[ -n "${AGENT_PLATFORM_RESOURCE:-}" ]] && echo "AGENT_PLATFORM_RESOURCE: \"${AGENT_PLATFORM_RESOURCE}\""
+  [[ -n "${AGENT_PLATFORM_LOCATION:-}" ]] && echo "AGENT_PLATFORM_LOCATION: \"${AGENT_PLATFORM_LOCATION}\""
   [[ -n "${AGENT_API_URL:-}" ]] && echo "AGENT_API_URL: \"${AGENT_API_URL}\""
   [[ -n "${ES_NODE:-}" ]] && echo "ES_NODE: \"${ES_NODE}\""
   [[ -n "${ES_API_KEY:-}" ]] && echo "ES_API_KEY: \"${ES_API_KEY}\""
@@ -137,8 +154,7 @@ else
   gcloud run deploy "$SERVICE" \
     --project="$PROJECT" \
     --region="$REGION" \
-    --image="${IMAGE}" \
-    --update-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT},VERTEX_EMBEDDING_LOCATION=${VERTEX_EMBEDDING_LOCATION:-us-central1}"
+    --image="${IMAGE}"
 fi
 
 URL="$(gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format='value(status.url)')"

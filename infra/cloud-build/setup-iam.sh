@@ -72,11 +72,20 @@ for secret in "${SECRETS[@]}"; do
 done
 
 echo ""
-echo "Granting Vertex AI User to Cloud Run SA (agent / backend-api 用)..."
+echo "Granting Agent Platform User to Cloud Run SA (agent / backend-api 用)..."
 gcloud projects add-iam-policy-binding "$PROJECT" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/aiplatform.user" \
   --quiet >/dev/null 2>&1 || true
+
+for sa in \
+  "service-${PROJECT_NUMBER}@gcp-sa-aiplatform.iam.gserviceaccount.com" \
+  "service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"; do
+  gcloud projects add-iam-policy-binding "$PROJECT" \
+    --member="serviceAccount:${sa}" \
+    --role="roles/artifactregistry.reader" \
+    --quiet >/dev/null 2>&1 || true
+done
 
 echo "Granting Secret Manager admin to Cloud Build P4SA (GitHub 連携用)..."
 gcloud projects add-iam-policy-binding "$PROJECT" \

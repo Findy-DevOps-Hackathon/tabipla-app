@@ -22,4 +22,3 @@ substitutions:
   _ES_INDEX: ""
   _ES_VECTOR_DIMS: ""
   _EMBEDDING_PROVIDER: ""
-  _VERTEX_EMBEDDING_LOCATION: us-central1

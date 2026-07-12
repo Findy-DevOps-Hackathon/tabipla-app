@@ -54,7 +54,7 @@ pnpm -C apps/user-web dev          # :5173
 |------|------|
 | `services/backend-api/.env` | `AGENT_API_URL=http://localhost:8080` |
 | `services/agent/.env` | `GOOGLE_CLOUD_PROJECT` 等（`.env.example` 参照） |
-| Gemini | `gcloud auth application-default login` で Vertex AI 認証 |
+| Gemini | ローカル: `gcloud auth application-default login` + Vertex/ADC |
 
 管理画面または seed でスポットが DB に登録されていること。
 

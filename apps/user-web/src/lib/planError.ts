@@ -7,8 +7,12 @@ export type PlanErrorPresentation = {
 const SYSTEM_ERROR_PATTERN =
   /429|quota|rate|gemini|vertex|レート制限|リクエスト上限|services\/|8080|error:|failed query|postgres|database|econnrefused|fetch failed|\[agent|\[backend-api|aiエージェント/i;
 
+function isQuotaError(text: string): boolean {
+  return /429|quota|exceeded your current quota|rate.?limit|利用上限/i.test(text);
+}
+
 function isBusyError(text: string): boolean {
-  return /429|quota|rate|レート制限|リクエスト上限|混み合/i.test(text);
+  return /503|overloaded|capacity|混み合/i.test(text);
 }
 
 /** 技術・システム向けのエラー文言かどうか。 */
@@ -23,6 +27,12 @@ export function sanitizeUserFacingError(raw: string, context: "plan" | "chat" = 
   const text = raw.trim();
   if (!text || !isSystemFacingError(text)) {
     return text.replace(/AIエージェント/g, "おすすめ作成サービス");
+  }
+
+  if (isQuotaError(text)) {
+    return context === "chat"
+      ? "Gemini API の利用上限に達しました。1時間ほど待ってから、もう一度お試しください。"
+      : "Gemini API の利用上限に達しました。";
   }
 
   if (isBusyError(text)) {
@@ -73,6 +83,13 @@ export function presentPlanError(raw: string): PlanErrorPresentation {
 
   if (isSystemFacingError(text)) {
     const message = sanitizeUserFacingError(text, "plan");
+    if (isQuotaError(text)) {
+      return {
+        title: "おすすめを作成できませんでした",
+        message,
+        hint: "Google AI Studio の利用上限です。1時間ほど待つか、課金設定を確認してください。",
+      };
+    }
     if (isBusyError(text)) {
       return {
         title: "おすすめを作成できませんでした",

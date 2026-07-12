@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import {
+  createVertexGenAI,
+  resolveGeminiEmbeddingModel,
+  usesVertexGemini,
+} from "../vertexConfig.js";
 
 export type EmbeddingProvider = "gemini" | "hash";
 
@@ -7,14 +12,14 @@ export function resolveEmbeddingProvider(): EmbeddingProvider {
   if (explicit === "gemini" || explicit === "hash") {
     return explicit;
   }
-  if (process.env.GEMINI_API_KEY) {
+  if (usesVertexGemini()) {
     return "gemini";
   }
   return "hash";
 }
 
 /**
- * テキストをベクトル化する (Gemini API の直接フェッチまたは決定ハッシュ)
+ * テキストをベクトル化する (Vertex Embeddings または決定ハッシュ)
  */
 export async function embedText(
   text: string,
@@ -27,41 +32,26 @@ export async function embedText(
   return embedTextHash(text);
 }
 
-/** Gemini API 経由での埋め込み生成。 */
+/** Vertex AI 経由での埋め込み生成。 */
 async function embedTextGemini(
   text: string,
   taskType: "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT",
 ): Promise<number[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("[agent/embedding] GEMINI_API_KEY が設定されていません。");
-  }
-
-  const model = "gemini-embedding-2";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${apiKey}`;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: `models/${model}`,
-      content: { parts: [{ text }] },
+  const model = resolveGeminiEmbeddingModel();
+  const client = createVertexGenAI();
+  const response = await client.models.embedContent({
+    model,
+    contents: text,
+    config: {
       taskType,
-      // 1536次元に固定
       outputDimensionality: 1536,
-    }),
+    },
   });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`[agent/embedding] Gemini API エラー (${res.status}): ${errText}`);
-  }
-
-  const data = (await res.json()) as { embedding?: { values?: number[] } };
-  const values = data.embedding?.values;
-  if (values?.length !== 1536) {
+  const values = response.embeddings?.[0]?.values;
+  if (!values || values.length !== 1536) {
     throw new Error(
-      `[agent/embedding] 無効なベクトルデータを受信しました (長さ: ${values?.length})`,
+      `[agent/embedding] 無効なベクトルデータを受信しました (長さ: ${values?.length ?? 0})`,
     );
   }
 
@@ -80,7 +70,6 @@ function embedTextHash(text: string): number[] {
     vector[i] = isNegative ? -value : value;
   }
 
-  // L2 正規化 (コサイン類似度が内積と等しくなるようにする)
   let sumSq = 0;
   for (const v of vector) sumSq += v * v;
   const norm = Math.sqrt(sumSq);
