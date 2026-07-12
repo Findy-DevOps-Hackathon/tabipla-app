@@ -54,8 +54,8 @@ apps/user-web  ──(/api)──▶ backend-api ──▶ PostgreSQL / search-c
 
 | 項目 | 値 |
 |---|---|
-| 小諸市 ID | `admin@example.com` |
-| 小諸市 PW | `test-admin-password` |
+| 小諸市 ID | `komoro@example.com` |
+| 小諸市 PW | `your-komoro-password` |
 
 **主な機能**
 

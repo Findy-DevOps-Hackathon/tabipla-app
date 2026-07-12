@@ -29,14 +29,15 @@ if [[ -z "${ES_NODE:-}" ]]; then
   exit 1
 fi
 
+# macOS 標準 bash 3.2 には nameref (local -n) がないため、配列名を eval で更新する。
 collect_optional_secrets() {
-  local -n out="$1"
+  local array_name="$1"
   shift
   for pair in "$@"; do
     local env_name="${pair%%=*}"
     local secret_name="${pair##*=}"
     if gcloud secrets describe "$secret_name" --project="$PROJECT" >/dev/null 2>&1; then
-      out+=("${env_name}=${secret_name}:latest")
+      eval "${array_name}+=(\"${env_name}=${secret_name}:latest\")"
     fi
   done
 }
