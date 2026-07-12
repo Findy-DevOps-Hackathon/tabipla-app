@@ -42,10 +42,10 @@ gcloud builds submit "$ROOT" \
 ENV_VARS_FILE="$(mktemp)"
 trap 'rm -f "$ENV_VARS_FILE"' EXIT
 {
+  [[ -n "${BACKEND_API_URL:-}" ]] && echo "BACKEND_API_URL: \"${BACKEND_API_URL}\""
   echo "GOOGLE_GENAI_USE_VERTEXAI: \"TRUE\""
   echo "GOOGLE_CLOUD_PROJECT: \"${PROJECT}\""
   echo "GOOGLE_CLOUD_LOCATION: \"${REGION}\""
-  [[ -n "${BACKEND_API_URL:-}" ]] && echo "BACKEND_API_URL: \"${BACKEND_API_URL}\""
   [[ -n "${ES_NODE:-}" ]] && echo "ES_NODE: \"${ES_NODE}\""
   [[ -n "${ES_INDEX:-}" ]] && echo "ES_INDEX: \"${ES_INDEX}\""
   [[ -n "${ES_VECTOR_DIMS:-}" ]] && echo "ES_VECTOR_DIMS: \"${ES_VECTOR_DIMS}\""
@@ -55,7 +55,6 @@ SECRETS=()
 for pair in \
   "ADMIN_JWT_SECRET=tabipla-admin-jwt-secret" \
   "AGENT_INTERNAL_SECRET=tabipla-agent-internal-secret" \
-  "GEMINI_API_KEY=tabipla-gemini-api-key" \
   "ES_API_KEY=tabipla-es-api-key" \
   "ES_PASSWORD=tabipla-es-password" \
   "ES_USERNAME=tabipla-es-username"; do

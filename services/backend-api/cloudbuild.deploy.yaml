@@ -26,7 +26,6 @@ steps:
       - _ES_INDEX=${_ES_INDEX}
       - _ES_VECTOR_DIMS=${_ES_VECTOR_DIMS}
       - _EMBEDDING_PROVIDER=${_EMBEDDING_PROVIDER}
-      - _VERTEX_EMBEDDING_LOCATION=${_VERTEX_EMBEDDING_LOCATION}
 
 images:
   - ${_IMAGE}
@@ -43,7 +42,6 @@ substitutions:
   _ES_INDEX: ""
   _ES_VECTOR_DIMS: ""
   _EMBEDDING_PROVIDER: ""
-  _VERTEX_EMBEDDING_LOCATION: us-central1
 
 options:
   logging: CLOUD_LOGGING_ONLY

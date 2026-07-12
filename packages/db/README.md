@@ -99,14 +99,14 @@ pnpm -C packages/db seed
 
 自治体・管理ユーザー・スポットを冪等に upsert し、`seed-data/images/` の画像を `services/backend-api/data/uploads/spots/` へコピーします。`GCS_BUCKET` が設定されている場合は画像を GCS の `GCS_OBJECT_PREFIX`（既定 `spots`）へアップロードし、DB の `imageUrl` には公開 URL を保存します。
 
-管理画面ログイン（`seed-data/admin-users.json` の id 参照）:
+管理画面ログイン（`seed-data/admin-users.json` の並び順に対応）:
 
-| 種別 | メール環境変数 | パスワード環境変数 |
+| インデックス | メール環境変数 | パスワード環境変数 |
 |---|---|---|
-| 小諸市 (`admin-komoro`) | `ADMIN_KOMORO_EMAIL` | `ADMIN_KOMORO_SEED_PASSWORD` |
-| 能登半島 (`admin-noto`) | `ADMIN_NOTO_EMAIL` | `ADMIN_SEED_PASSWORD` |
+| `0` | `ADMIN_SEED_EMAIL_0` | `ADMIN_SEED_PASSWORD_0` |
+| `1` | `ADMIN_SEED_EMAIL_1` | `ADMIN_SEED_PASSWORD_1` |
 
-いずれも seed 実行前に必須です。
+メール・パスワードはリポジトリに含めず、ローカル `packages/db/.env` または Secret Manager で管理してください。seed 実行前に該当インデックス分を必須設定します。
 
 ### ローカル DB から seed-data を更新する
 

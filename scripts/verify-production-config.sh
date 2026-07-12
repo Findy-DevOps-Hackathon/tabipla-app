@@ -102,8 +102,8 @@ fi
 echo ""
 echo "--- 管理画面ログイン（旧パスワードが通らないか） ---"
 # 旧認証情報は環境変数で渡す（リポジトリに含めない）:
-#   VERIFY_LEGACY_KOMORO_EMAIL / VERIFY_LEGACY_KOMORO_PASSWORD
-#   VERIFY_LEGACY_NOTO_EMAIL / VERIFY_LEGACY_NOTO_PASSWORD
+#   VERIFY_LEGACY_ADMIN_0_EMAIL / VERIFY_LEGACY_ADMIN_0_PASSWORD
+#   VERIFY_LEGACY_ADMIN_1_EMAIL / VERIFY_LEGACY_ADMIN_1_PASSWORD
 if [[ -n "${BACKEND_URL:-}" ]]; then
   check_legacy_login() {
     local label="$1"
@@ -127,8 +127,8 @@ if [[ -n "${BACKEND_URL:-}" ]]; then
       warn "${email} の確認失敗（HTTP ${http_code}）。CORS/到達性を確認"
     fi
   }
-  check_legacy_login "komoro" "${VERIFY_LEGACY_KOMORO_EMAIL:-}" "${VERIFY_LEGACY_KOMORO_PASSWORD:-}"
-  check_legacy_login "noto" "${VERIFY_LEGACY_NOTO_EMAIL:-}" "${VERIFY_LEGACY_NOTO_PASSWORD:-}"
+  check_legacy_login "admin-0" "${VERIFY_LEGACY_ADMIN_0_EMAIL:-}" "${VERIFY_LEGACY_ADMIN_0_PASSWORD:-}"
+  check_legacy_login "admin-1" "${VERIFY_LEGACY_ADMIN_1_EMAIL:-}" "${VERIFY_LEGACY_ADMIN_1_PASSWORD:-}"
 else
   warn "backend-api URL がないためログイン確認をスキップ"
 fi

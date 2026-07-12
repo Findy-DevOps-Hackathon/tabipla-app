@@ -1,5 +1,6 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import { Modality } from "@google/genai";
 import sharp from "sharp";
+import { createVertexGenAI, resolveSpotImageLocations } from "../vertexConfig.js";
 import { findReferencePhoto, tryFindReferencePhoto } from "./spotReferencePhoto.js";
 import {
   formatVisualBriefForPrompt,
@@ -138,20 +139,24 @@ export function buildStylizePrompt(): string {
   ].join("\n");
 }
 
-function getSpotImageLocation(): string {
-  return process.env.SPOT_IMAGE_LOCATION?.trim() || "global";
-}
-
-function getGenAiClient(): GoogleGenAI {
-  const project = process.env.GOOGLE_CLOUD_PROJECT?.trim();
-  if (!project) {
-    throw new Error("GOOGLE_CLOUD_PROJECT が未設定です。");
-  }
-  return new GoogleGenAI({ vertexai: true, project, location: getSpotImageLocation() });
-}
-
 function getSpotImageModel(): string {
-  return process.env.SPOT_IMAGE_MODEL?.trim() || "gemini-3-pro-image";
+  // asia-northeast1 では gemini-2.0-flash-preview-image-generation は未提供。
+  return process.env.SPOT_IMAGE_MODEL?.trim() || "gemini-2.5-flash-image";
+}
+
+function isRetryableSpotImageApiError(message: string): boolean {
+  return /429|404|RESOURCE_EXHAUSTED|NOT_FOUND|quota|rate.?limit/i.test(message);
+}
+
+function spotImageRetryDelayMs(message: string, attempt: number): number {
+  if (/429|RESOURCE_EXHAUSTED|quota|rate.?limit/i.test(message)) {
+    return 30_000 * attempt;
+  }
+  return 1500 * attempt;
+}
+
+function getGenAiClient(location: string) {
+  return createVertexGenAI(location);
 }
 
 async function cropToSpotAspect(imageBytes: Buffer): Promise<Buffer> {
@@ -198,41 +203,58 @@ async function generateFromGeminiContent(
   parts: Array<{ inlineData: { mimeType: string; data: string } } | { text: string }>,
   logContext: string,
 ): Promise<Omit<SpotImageResult, "prompt" | "referencePhotoUrl">> {
-  const ai = getGenAiClient();
   const model = getSpotImageModel();
+  const locations = resolveSpotImageLocations();
+  let lastError: unknown;
 
-  console.info(
-    `[spot-image] generateContent model=${model} location=${getSpotImageLocation()} ${logContext}`,
-  );
+  for (const location of locations) {
+    try {
+      const ai = getGenAiClient(location);
+      console.info(
+        `[spot-image] generateContent model=${model} location=${location} ${logContext}`,
+      );
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: [{ role: "user", parts }],
-    config: {
-      responseModalities: [Modality.IMAGE],
-      imageConfig: {
-        aspectRatio: "16:9",
-        imageSize: "2K",
-      },
-    },
-  });
+      const response = await ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts }],
+        config: {
+          responseModalities: [Modality.IMAGE],
+          imageConfig: {
+            aspectRatio: "16:9",
+            imageSize: "2K",
+          },
+        },
+      });
 
-  const imageData = response.data;
-  if (!imageData) {
-    const finishReason = response.candidates?.[0]?.finishReason ?? "unknown";
-    throw new Error(`Gemini 画像モデルから画像が返りませんでした (finishReason=${finishReason})`);
+      const imageData = response.data;
+      if (!imageData) {
+        const finishReason = response.candidates?.[0]?.finishReason ?? "unknown";
+        throw new Error(
+          `Gemini 画像モデルから画像が返りませんでした (finishReason=${finishReason})`,
+        );
+      }
+
+      const rawBytes = Buffer.from(imageData, "base64");
+      const buffer = await cropToSpotAspect(rawBytes);
+      if (buffer.length > 5 * 1024 * 1024) {
+        throw new Error("生成画像が 5MB を超えました");
+      }
+
+      return {
+        mimeType: SPOT_IMAGE_MIME,
+        data: buffer.toString("base64"),
+      };
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isRetryableSpotImageApiError(message)) {
+        throw error;
+      }
+      console.warn(`[spot-image] location=${location} failed: ${message.slice(0, 240)}`);
+    }
   }
 
-  const rawBytes = Buffer.from(imageData, "base64");
-  const buffer = await cropToSpotAspect(rawBytes);
-  if (buffer.length > 5 * 1024 * 1024) {
-    throw new Error("生成画像が 5MB を超えました");
-  }
-
-  return {
-    mimeType: SPOT_IMAGE_MIME,
-    data: buffer.toString("base64"),
-  };
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 async function generateTextOnlySpotImage(
@@ -342,8 +364,10 @@ export async function generateSpotImage(input: SpotImageInput): Promise<SpotImag
       console.error(
         `[spot-image] ${name} mode=${mode} attempt ${attempt}/${MAX_ATTEMPTS} failed: ${message}`,
       );
-      if (attempt < MAX_ATTEMPTS) {
-        await new Promise((r) => setTimeout(r, 1500 * attempt));
+      if (attempt < MAX_ATTEMPTS && isRetryableSpotImageApiError(message)) {
+        const delayMs = spotImageRetryDelayMs(message, attempt);
+        console.info(`[spot-image] ${name} retrying in ${delayMs}ms`);
+        await new Promise((r) => setTimeout(r, delayMs));
       }
     }
   }

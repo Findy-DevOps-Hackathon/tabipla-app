@@ -30,15 +30,17 @@ Elasticsearch と連携します（ES へ直接アクセスしません）。
 | `HOST` | `0.0.0.0` | 待ち受けホスト |
 | `DATABASE_URL` | — | PostgreSQL 接続文字列（書き込み系で必須） |
 | `ES_NODE` ほか | — | Elasticsearch 接続系（`packages/search-core/README.md` 参照） |
-| `GOOGLE_CLOUD_PROJECT` | — | Vertex AI の GCP プロジェクト（Cloud Run では自動設定） |
-| `VERTEX_EMBEDDING_LOCATION` | `us-central1` | Vertex AI Embeddings のリージョン |
-| `VERTEX_EMBEDDING_MODEL` | `gemini-embedding-001` | Vertex AI の埋め込みモデル |
-| `EMBEDDING_PROVIDER` | `vertex`（Cloud Run） | `vertex` / `gemini` / `hash`。ローカルで未指定なら API キー有無に応じて選択 |
-| `GEMINI_API_KEY` | — | Gemini API を明示指定した移行検証・ローカル開発用 |
+| `EMBEDDING_PROVIDER` | `gemini`（`GOOGLE_CLOUD_PROJECT` あり） | `gemini` / `hash` |
+| `GOOGLE_GENAI_USE_VERTEXAI` | `TRUE` | Vertex AI backend を有効化 |
+| `GOOGLE_CLOUD_PROJECT` | — | GCP プロジェクト ID（Vertex/ADC） |
+| `GOOGLE_CLOUD_LOCATION` | `asia-northeast1` | Vertex リージョン |
+| `GEMINI_EMBEDDING_MODEL` | `global` → `gemini-embedding-2`、リージョン → `gemini-embedding-001` | Embeddings モデル名 |
 | `GOOGLE_MAPS_API_KEY` | — | Places lookup（管理画面の住所自動補完） |
 | `ADMIN_JWT_SECRET` | 開発用既定値 | 管理画面 JWT 署名鍵（本番必須） |
 | `CORS_ORIGINS` | — | Firebase Hosting からの CORS 許可オリジン（カンマ区切り） |
-| `AGENT_API_URL` | `http://localhost:8080` | agent サービスのベース URL |
+| `AGENT_PLATFORM_RESOURCE` | — | 本番: Gemini Enterprise Agent Platform の Reasoning Engine リソース名 |
+| `AGENT_PLATFORM_LOCATION` | `asia-northeast1` | Agent Platform リージョン |
+| `AGENT_API_URL` | `http://localhost:8080` | ローカル / Cloud Run 互換モード用 |
 | `AGENT_INTERNAL_SECRET` | 開発用既定値 | agent への内部トークン（本番必須） |
 | `ES_SYNC_WORKER_ENABLED` | `true` | ES outbox のバックグラウンド再試行を有効化 |
 | `ES_SYNC_RETRY_INTERVAL_MS` | `30000` | outbox 再試行のポーリング間隔（ミリ秒） |
@@ -86,7 +88,8 @@ cp services/backend-api/.env.example services/backend-api/.env
 pnpm --filter @tabipla/backend-api run deploy
 ```
 
-`GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` は環境変数で上書きできます。
+本番 Cloud Run ではサービスアカウントの ADC で Vertex AI を呼び出します（API キー不要）。
+ローカルは `gcloud auth application-default login` が必要です。
 `pnpm run deploy` は `package.json` の `deploy`（= `bash scripts/deploy.sh`）です。
 `run` を省いた `pnpm deploy` は pnpm の組み込みコマンドと衝突するため、必ず `pnpm run deploy` を使います。
 

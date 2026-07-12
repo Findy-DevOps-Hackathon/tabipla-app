@@ -52,6 +52,11 @@ AGENT_URL="$(gcloud run services describe tabipla-agent \
   --format='value(status.url)' 2>/dev/null || true)"
 
 backend_env="ES_NODE=${ES_NODE}"
+backend_env="${backend_env},GOOGLE_GENAI_USE_VERTEXAI=TRUE"
+backend_env="${backend_env},GOOGLE_CLOUD_PROJECT=${PROJECT}"
+backend_env="${backend_env},GOOGLE_CLOUD_LOCATION=${REGION}"
+backend_env="${backend_env},GEMINI_EMBEDDING_MODEL=${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}"
+backend_env="${backend_env},EMBEDDING_PROVIDER=gemini"
 [[ -n "${ES_INDEX:-}" ]] && backend_env="${backend_env},ES_INDEX=${ES_INDEX}"
 [[ -n "${ES_VECTOR_DIMS:-}" ]] && backend_env="${backend_env},ES_VECTOR_DIMS=${ES_VECTOR_DIMS}"
 [[ -n "${EMBEDDING_PROVIDER:-}" ]] && backend_env="${backend_env},EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER}"
@@ -61,7 +66,6 @@ backend_secrets=(
   "ADMIN_JWT_SECRET=tabipla-admin-jwt-secret:latest"
 )
 collect_optional_secrets backend_secrets \
-  "GEMINI_API_KEY=tabipla-gemini-api-key" \
   "GOOGLE_MAPS_API_KEY=tabipla-google-maps-api-key" \
   "ES_API_KEY=tabipla-es-api-key" \
   "ES_PASSWORD=tabipla-es-password" \
@@ -75,7 +79,10 @@ gcloud run services update tabipla-backend-api \
   --update-env-vars="$backend_env" \
   --update-secrets="$backend_secrets_csv"
 
-agent_env="GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT},GOOGLE_CLOUD_LOCATION=${REGION}"
+agent_env="GOOGLE_GENAI_USE_VERTEXAI=TRUE"
+agent_env="${agent_env},GOOGLE_CLOUD_PROJECT=${PROJECT}"
+agent_env="${agent_env},GOOGLE_CLOUD_LOCATION=${REGION}"
+agent_env="${agent_env},GEMINI_EMBEDDING_MODEL=${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}"
 agent_env="${agent_env},ES_NODE=${ES_NODE}"
 [[ -n "${ES_INDEX:-}" ]] && agent_env="${agent_env},ES_INDEX=${ES_INDEX}"
 [[ -n "${ES_VECTOR_DIMS:-}" ]] && agent_env="${agent_env},ES_VECTOR_DIMS=${ES_VECTOR_DIMS}"

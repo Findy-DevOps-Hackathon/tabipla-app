@@ -56,7 +56,7 @@ Public 化により以下がコードから読み取れます。
 - Firebase Hosting URL
 
 - [ ] Cloud Monitoring の課金・5xx アラートが有効（`infra/monitoring/`）
-- [ ] Vertex AI / Cloud Run のクォータ・予算アラートを設定
+- [ ] Agent Platform / Cloud Run のクォータ・予算アラートを設定
 - [ ] agent / backend-api の `--allow-unauthenticated` を維持する場合、不正利用を監視
 
 ## GitHub 設定

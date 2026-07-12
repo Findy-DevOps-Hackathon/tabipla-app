@@ -14,7 +14,7 @@ import { toSpotDocument } from "./mapper.js";
  *
  * 環境変数:
  *   - DATABASE_URL, ES_NODE など（reindex と同様）
- *   - GEMINI_API_KEY, EMBEDDING_PROVIDER（reindex と同様）
+ *   - GOOGLE_CLOUD_PROJECT + Vertex/ADC（reindex と同様）
  *   - EMBED_BATCH_SIZE: 1バッチあたりの件数（既定 50）
  */
 

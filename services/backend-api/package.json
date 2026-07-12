@@ -23,6 +23,7 @@
   "dependencies": {
     "@google-cloud/storage": "^7.21.0",
     "@google/genai": "^1.52.0",
+    "google-auth-library": "^10.5.0",
     "@tabipla/db": "workspace:*",
     "@tabipla/domain": "workspace:*",
     "@tabipla/search-core": "workspace:*",
