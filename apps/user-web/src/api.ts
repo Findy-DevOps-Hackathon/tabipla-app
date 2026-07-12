@@ -78,8 +78,18 @@ type SpotDetailResponse = {
   spot: SpotDocument;
 };
 
+export type FetchSpotByIdOptions = {
+  /** 共有リンクなど、受け手の旅先選択に関係なく表示する */
+  skipDestinationCheck?: boolean;
+  signal?: AbortSignal;
+};
+
 /** スポット1件取得（GET /v1/spots/:id）。 */
-export async function fetchSpotById(id: string, signal?: AbortSignal): Promise<SpotDocument> {
+export async function fetchSpotById(
+  id: string,
+  options: FetchSpotByIdOptions = {},
+): Promise<SpotDocument> {
+  const { skipDestinationCheck = false, signal } = options;
   const res = await fetch(`${API_BASE}/v1/spots/${encodeURIComponent(id)}`, {
     headers: { accept: "application/json" },
     signal,
@@ -87,7 +97,7 @@ export async function fetchSpotById(id: string, signal?: AbortSignal): Promise<S
 
   if (!res.ok) await parseApiError(res);
   const data = (await res.json()) as SpotDetailResponse;
-  if (!isDestinationSpot(data.spot)) {
+  if (!skipDestinationCheck && !isDestinationSpot(data.spot)) {
     throw new Error("スポットが見つかりません。");
   }
   if (!isDisplayableDocument(data.spot)) {

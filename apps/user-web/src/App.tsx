@@ -204,8 +204,9 @@ export default function App() {
   const initialQrPreferredPrefecture =
     resolveTripDestinations(initialQrDestinationNames)[0]?.prefecture ?? null;
   const initialSpotId = readInitialSpotIdFromUrl();
+  const deepLinkSpotIdRef = useRef(initialSpotId);
   const initialStep: Step =
-    initialQrDestinationNames.length > 0 || initialFlow.step === "processing"
+    initialSpotId || initialQrDestinationNames.length > 0 || initialFlow.step === "processing"
       ? "welcome"
       : initialFlow.step;
   const [step, setStep] = useState<Step>(initialStep);
@@ -285,6 +286,7 @@ export default function App() {
 
   useEffect(() => {
     if (step !== "swipe" || swipeDeck.length > 0) return;
+    if (deepLinkSpotIdRef.current) return;
 
     const restored = resolveSwipeDeckFromIds(
       pendingSwipeDeckIdsRef.current,
@@ -319,16 +321,26 @@ export default function App() {
   }, [spotCatalogDocs, step]);
 
   useEffect(() => {
-    if (!initialSpotId) return;
+    const spotId = deepLinkSpotIdRef.current;
+    if (!spotId) return;
     let active = true;
     (async () => {
-      const rec = await resolveSpotById(initialSpotId, readStoredRecommendations(), exploreSpots);
-      if (active && rec) setDetailRec(rec);
+      const rec = await resolveSpotById(spotId, readStoredRecommendations(), exploreSpots);
+      if (!active) return;
+      if (rec) {
+        detailReturnStepRef.current = "welcome";
+        setDetailRec(rec);
+        deepLinkSpotIdRef.current = null;
+        return;
+      }
+      if (exploreSpots.length > 0) {
+        deepLinkSpotIdRef.current = null;
+      }
     })();
     return () => {
       active = false;
     };
-  }, [initialSpotId, exploreSpots]);
+  }, [exploreSpots]);
 
   const navSnapshot: ViewSnapshot = {
     step,
@@ -444,12 +456,16 @@ export default function App() {
     }
   }, [recommendations, planMessage, planProfileSummary, planTotal]);
 
+  const hadDetailRecRef = useRef(false);
+
   useEffect(() => {
     if (detailRec) {
+      hadDetailRecRef.current = true;
       setSpotIdInLocation(detailRec.id);
       return;
     }
-    if (readSpotIdFromLocation()) {
+    if (hadDetailRecRef.current) {
+      hadDetailRecRef.current = false;
       setSpotIdInLocation(null);
     }
   }, [detailRec]);
